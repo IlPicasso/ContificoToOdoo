@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .config import get_settings
@@ -32,7 +33,17 @@ def get_password_hash(password: str) -> str:
 
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[models.User]:
-    user = db.query(models.User).filter(models.User.username == username).first()
+    if not isinstance(username, str):
+        return None
+    normalized_username = username.strip()
+    if not normalized_username:
+        return None
+    normalized_username = normalized_username.casefold()
+    user = (
+        db.query(models.User)
+        .filter(func.lower(models.User.username) == normalized_username)
+        .first()
+    )
     if not user or not verify_password(password, user.password_hash):
         return None
     return user
