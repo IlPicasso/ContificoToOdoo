@@ -440,7 +440,7 @@ button.danger.ghost:hover {
 
 button.full-width {
   width: 100%;
-  background: var(--accent);
+  background: var(--primary);
   border: none;
   color: var(--primary-contrast);
   padding: 0.8rem;
@@ -448,6 +448,24 @@ button.full-width {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  box-shadow: 0 10px 24px rgba(var(--shadow-color), 0.18);
+  transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+button.full-width:hover,
+button.full-width:focus-visible {
+  background: var(--primary-dark);
+  outline: none;
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(var(--shadow-color), 0.22);
+}
+
+button.full-width:disabled {
+  background: rgba(17, 17, 17, 0.3);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 button.link-button {
