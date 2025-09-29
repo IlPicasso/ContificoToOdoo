@@ -1751,7 +1751,8 @@ async function bootstrapAuthenticatedSession({ showWelcomeToast = false } = {}) 
 
 async function handleLogin(event) {
   event.preventDefault();
-  const username = document.getElementById('username').value.trim();
+  const usernameInput = document.getElementById('username').value.trim();
+  const username = usernameInput.toLocaleLowerCase();
   const password = document.getElementById('password').value.trim();
   const submitButton = staffLoginForm.querySelector('button[type="submit"]');
   submitButton.disabled = true;
