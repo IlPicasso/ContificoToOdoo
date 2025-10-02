@@ -67,45 +67,6 @@
           </nav>
         </div>
       </div>
-      <div class="category-bar hidden" id="categoryBar">
-        <div class="container category-bar-inner">
-          <nav class="category-nav" aria-label="Atajos del panel administrativo">
-            <button type="button" class="category-pill" data-target-tab="orderListPanel">
-              Órdenes registradas
-            </button>
-            <button type="button" class="category-pill" data-target-tab="orderKanbanPanel">
-              Kanban de órdenes
-            </button>
-            <button
-              type="button"
-              class="category-pill"
-              data-target-tab="orderCreatePanel"
-              data-hide-roles="sastre"
-            >
-              Crear orden
-            </button>
-            <button type="button" class="category-pill" data-target-tab="customersPanel">
-              Clientes
-            </button>
-            <button
-              type="button"
-              class="category-pill"
-              data-target-tab="usersPanel"
-              data-required-role="administrador"
-            >
-              Usuarios
-            </button>
-            <button
-              type="button"
-              class="category-pill"
-              data-target-tab="auditLogPanel"
-              data-required-role="administrador"
-            >
-              Bitácora
-            </button>
-          </nav>
-        </div>
-      </div>
     </header>
 
     <main class="container">
@@ -154,23 +115,7 @@
           </div>
 
           <nav class="dashboard-subnav">
-            <button type="button" class="dashboard-tab active" data-tab="orderListPanel">Órdenes registradas</button>
-            <button
-              type="button"
-              class="dashboard-tab"
-              data-tab="orderKanbanPanel"
-              id="orderKanbanTabButton"
-            >
-              Kanban de órdenes
-            </button>
-            <button
-              type="button"
-              class="dashboard-tab"
-              data-tab="orderCreatePanel"
-              id="orderCreateTabButton"
-            >
-              Crear orden
-            </button>
+            <button type="button" class="dashboard-tab active" data-tab="ordersPanel">Órdenes</button>
             <button type="button" class="dashboard-tab" data-tab="customersPanel">Clientes</button>
             <button
               type="button"
@@ -419,202 +364,228 @@
             </form>
           </section>
 
-          <section class="card dashboard-panel" id="orderListPanel">
-            <h3>Órdenes registradas</h3>
-            <div class="order-panel-controls">
-              <p class="muted small">
-                Las órdenes pendientes se muestran primero, ordenadas por la fecha de entrega más
-                cercana. Las fechas vencidas se resaltan en rojo mientras la orden no haya sido
-                entregada.
-              </p>
-              <div class="order-search">
-                <label for="orderSearchInput">Buscar</label>
-                <input
-                  type="search"
-                  id="orderSearchInput"
-                  placeholder="Número de orden o cédula"
-                  autocomplete="off"
-                />
-              </div>
-              <div class="table-pagination">
-                <label for="orderPageSize">Filas por página</label>
-                <div class="pagination-controls">
-                  <select id="orderPageSize">
-                    <option value="10" selected>10</option>
-                    <option value="15">15</option>
-                    <option value="20">20</option>
-                    <option value="25">25</option>
-                    <option value="30">30</option>
-                    <option value="35">35</option>
-                    <option value="40">40</option>
-                    <option value="45">45</option>
-                    <option value="50">50</option>
-                  </select>
-                  <div class="pagination-buttons">
-                    <button
-                      type="button"
-                      class="pagination-button"
-                      id="orderPrevPage"
-                      aria-label="Página anterior de órdenes"
-                    >
-                      Anterior
-                    </button>
-                    <span
-                      id="orderPaginationInfo"
-                      class="pagination-info"
-                      aria-live="polite"
-                    >
-                      Mostrando 0-0 de 0
-                    </span>
-                    <button
-                      type="button"
-                      class="pagination-button"
-                      id="orderNextPage"
-                      aria-label="Página siguiente de órdenes"
-                    >
-                      Siguiente
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Orden</th>
-                    <th>Cliente</th>
-                    <th>Estado</th>
-                    <th>Fecha de ingreso</th>
-                    <th>Fecha de entrega</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="ordersTableBody"></tbody>
-              </table>
-            </div>
-            <div id="orderDetail" class="order-detail hidden">
-              <div class="order-detail-header">
-                <div>
-                  <h4>Detalle de la orden</h4>
-                  <p class="muted small">Orden <span id="orderDetailNumber"></span></p>
-                </div>
-                <button type="button" id="closeOrderDetailButton" class="link-button">Cerrar</button>
-              </div>
-              <div class="order-detail-meta">
-                <p><strong>Registrada:</strong> <span id="orderDetailCreatedAt"></span></p>
-                <p><strong>Última actualización:</strong> <span id="orderDetailUpdatedAt"></span></p>
-              </div>
-              <form id="updateOrderForm" class="form-grid">
-                <div class="form-row">
-                  <label for="orderDetailCustomer">Cliente</label>
-                  <input type="text" id="orderDetailCustomer" readonly />
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailDocument">Documento</label>
-                  <input type="text" id="orderDetailDocument" readonly />
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailContact">Contacto</label>
-                  <input type="text" id="orderDetailContact" />
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailInvoice">Número de factura</label>
-                  <input type="text" id="orderDetailInvoice" />
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailStatus">Estado</label>
-                  <select id="orderDetailStatus"></select>
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailTailor">Sastre asignado</label>
-                  <select id="orderDetailTailor"></select>
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailVendor">Vendedor asignado</label>
-                  <select id="orderDetailVendor"></select>
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailOrigin">Establecimiento remitente</label>
-                  <select id="orderDetailOrigin"></select>
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailDeliveryDate">Fecha y hora de entrega</label>
-                  <input type="datetime-local" id="orderDetailDeliveryDate" />
-                </div>
-                <div class="form-row">
-                  <label for="orderDetailNotes">Notas</label>
-                  <textarea id="orderDetailNotes" rows="3"></textarea>
-                </div>
-                <div class="form-row">
-                  <label>Medidas</label>
-                  <div id="orderDetailMeasurements" class="measurement-tags muted"></div>
-                </div>
-                <div class="form-row">
-                  <label>Checklist de producción</label>
-                  <div id="orderTasksContainer" class="order-tasks-container">
-                    <div id="orderTasksList" class="order-tasks-list muted">
-                      Selecciona una orden para ver el checklist.
-                    </div>
-                    <div id="orderTaskForm" class="order-task-form hidden" role="group" aria-label="Agregar trabajo al checklist">
-                      <div class="order-task-fields">
-                        <label class="sr-only" for="orderTaskDescription">Descripción del trabajo</label>
-                        <input
-                          type="text"
-                          id="orderTaskDescription"
-                          maxlength="255"
-                          placeholder="Describe el trabajo a registrar"
-                        />
-                        <button type="button" class="secondary" id="orderTaskAddButton">Agregar</button>
-                      </div>
-                      <p class="muted small">
-                        Añade los trabajos pendientes manualmente y marca cada casilla cuando el sastre los
-                        complete.
-                      </p>
-                    </div>
-                    <p id="orderTasksPermissionsNotice" class="muted small hidden">
-                      Solo los sastres o administradores pueden modificar el checklist.
-                    </p>
-                  </div>
-                </div>
-                <div class="button-row">
-                  <button type="submit" class="primary">Guardar cambios</button>
-                </div>
-              </form>
-            </div>
-          </section>
-
-          <section class="card dashboard-panel hidden" id="orderKanbanPanel">
-            <div class="kanban-header">
-              <div>
-                <h3>Kanban de órdenes</h3>
+          <section class="card dashboard-panel hidden" id="ordersPanel">
+            <div class="orders-controls">
+              <div class="orders-controls-info">
+                <h3>Gestión de órdenes</h3>
                 <p class="muted small">
-                  Visualiza las órdenes agrupadas por estado y refresca el tablero para obtener los
-                  datos más recientes.
+                  Administra las órdenes registradas, visualiza el tablero Kanban y abre el formulario
+                  de nuevas órdenes cuando lo necesites.
                 </p>
               </div>
-              <div class="kanban-actions">
-                <button type="button" class="secondary" id="orderKanbanRefreshButton">
-                  Actualizar tablero
+              <div class="orders-controls-actions">
+                <div class="orders-view-toggle" role="group" aria-label="Cambiar vista de órdenes">
+                  <button type="button" data-orders-view="list">Lista</button>
+                  <button type="button" data-orders-view="kanban">Kanban</button>
+                </div>
+                <button
+                  type="button"
+                  class="primary"
+                  id="ordersCreateButton"
+                  data-hide-roles="sastre"
+                >
+                  Crear orden
                 </button>
               </div>
             </div>
-            <div class="kanban-controls">
-              <div class="kanban-search">
-                <label for="orderKanbanSearchInput">Buscar</label>
-                <input
-                  type="search"
-                  id="orderKanbanSearchInput"
-                  placeholder="Número de orden, cliente o cédula"
-                  autocomplete="off"
-                />
+
+            <div id="ordersTableSection" class="orders-view-panel">
+              <div class="order-panel-controls">
+                <p class="muted small">
+                  Las órdenes pendientes se muestran primero, ordenadas por la fecha de entrega más
+                  cercana. Las fechas vencidas se resaltan en rojo mientras la orden no haya sido
+                  entregada.
+                </p>
+                <div class="order-search">
+                  <label for="orderSearchInput">Buscar</label>
+                  <input
+                    type="search"
+                    id="orderSearchInput"
+                    placeholder="Número de orden o cédula"
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="table-pagination">
+                  <label for="orderPageSize">Filas por página</label>
+                  <div class="pagination-controls">
+                    <select id="orderPageSize">
+                      <option value="10" selected>10</option>
+                      <option value="15">15</option>
+                      <option value="20">20</option>
+                      <option value="25">25</option>
+                      <option value="30">30</option>
+                      <option value="35">35</option>
+                      <option value="40">40</option>
+                      <option value="45">45</option>
+                      <option value="50">50</option>
+                    </select>
+                    <div class="pagination-buttons">
+                      <button
+                        type="button"
+                        class="pagination-button"
+                        id="orderPrevPage"
+                        aria-label="Página anterior de órdenes"
+                      >
+                        Anterior
+                      </button>
+                      <span
+                        id="orderPaginationInfo"
+                        class="pagination-info"
+                        aria-live="polite"
+                      >
+                        Mostrando 0-0 de 0
+                      </span>
+                      <button
+                        type="button"
+                        class="pagination-button"
+                        id="orderNextPage"
+                        aria-label="Página siguiente de órdenes"
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p class="muted small">
-                La búsqueda se aplica localmente sobre los resultados cargados en el tablero.
-              </p>
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Orden</th>
+                      <th>Cliente</th>
+                      <th>Estado</th>
+                      <th>Fecha de ingreso</th>
+                      <th>Fecha de entrega</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="ordersTableBody"></tbody>
+                </table>
+              </div>
+              <div id="orderDetail" class="order-detail hidden">
+                <div class="order-detail-header">
+                  <div>
+                    <h4>Detalle de la orden</h4>
+                    <p class="muted small">Orden <span id="orderDetailNumber"></span></p>
+                  </div>
+                  <button type="button" id="closeOrderDetailButton" class="link-button">Cerrar</button>
+                </div>
+                <div class="order-detail-meta">
+                  <p><strong>Registrada:</strong> <span id="orderDetailCreatedAt"></span></p>
+                  <p><strong>Última actualización:</strong> <span id="orderDetailUpdatedAt"></span></p>
+                </div>
+                <form id="updateOrderForm" class="form-grid">
+                  <div class="form-row">
+                    <label for="orderDetailCustomer">Cliente</label>
+                    <input type="text" id="orderDetailCustomer" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailDocument">Documento</label>
+                    <input type="text" id="orderDetailDocument" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailContact">Contacto</label>
+                    <input type="text" id="orderDetailContact" />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailInvoice">Número de factura</label>
+                    <input type="text" id="orderDetailInvoice" />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailStatus">Estado</label>
+                    <select id="orderDetailStatus"></select>
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailTailor">Sastre asignado</label>
+                    <select id="orderDetailTailor"></select>
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailVendor">Vendedor asignado</label>
+                    <select id="orderDetailVendor"></select>
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailOrigin">Establecimiento remitente</label>
+                    <select id="orderDetailOrigin"></select>
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailDeliveryDate">Fecha y hora de entrega</label>
+                    <input type="datetime-local" id="orderDetailDeliveryDate" />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailNotes">Notas</label>
+                    <textarea id="orderDetailNotes" rows="3"></textarea>
+                  </div>
+                  <div class="form-row">
+                    <label>Medidas</label>
+                    <div id="orderDetailMeasurements" class="measurement-tags muted"></div>
+                  </div>
+                  <div class="form-row">
+                    <label>Checklist de producción</label>
+                    <div id="orderTasksContainer" class="order-tasks-container">
+                      <div id="orderTasksList" class="order-tasks-list muted">
+                        Selecciona una orden para ver el checklist.
+                      </div>
+                      <div id="orderTaskForm" class="order-task-form hidden" role="group" aria-label="Agregar trabajo al checklist">
+                        <div class="order-task-fields">
+                          <label class="sr-only" for="orderTaskDescription">Descripción del trabajo</label>
+                          <input
+                            type="text"
+                            id="orderTaskDescription"
+                            maxlength="255"
+                            placeholder="Describe el trabajo a registrar"
+                          />
+                          <button type="button" class="secondary" id="orderTaskAddButton">Agregar</button>
+                        </div>
+                        <p class="muted small">
+                          Añade los trabajos pendientes manualmente y marca cada casilla cuando el sastre los
+                          complete.
+                        </p>
+                      </div>
+                      <p id="orderTasksPermissionsNotice" class="muted small hidden">
+                        Solo los sastres o administradores pueden modificar el checklist.
+                      </p>
+                    </div>
+                  </div>
+                  <div class="button-row">
+                    <button type="submit" class="primary">Guardar cambios</button>
+                  </div>
+                </form>
+              </div>
             </div>
-            <div id="orderKanbanStatus" class="kanban-status muted hidden" aria-live="polite"></div>
-            <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
+
+            <div id="ordersKanbanSection" class="orders-view-panel hidden" aria-hidden="true">
+              <div class="kanban-header">
+                <div>
+                  <h3>Kanban de órdenes</h3>
+                  <p class="muted small">
+                    Visualiza las órdenes agrupadas por estado y refresca el tablero para obtener los
+                    datos más recientes.
+                  </p>
+                </div>
+                <div class="kanban-actions">
+                  <button type="button" class="secondary" id="orderKanbanRefreshButton">
+                    Actualizar tablero
+                  </button>
+                </div>
+              </div>
+              <div class="kanban-controls">
+                <div class="kanban-search">
+                  <label for="orderKanbanSearchInput">Buscar</label>
+                  <input
+                    type="search"
+                    id="orderKanbanSearchInput"
+                    placeholder="Número de orden, cliente o cédula"
+                    autocomplete="off"
+                  />
+                </div>
+                <p class="muted small">
+                  La búsqueda se aplica localmente sobre los resultados cargados en el tablero.
+                </p>
+              </div>
+              <div id="orderKanbanStatus" class="kanban-status muted hidden" aria-live="polite"></div>
+              <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
+            </div>
+
           </section>
 
           <section class="card dashboard-panel hidden" id="usersPanel">
