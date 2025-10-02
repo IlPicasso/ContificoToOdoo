@@ -1212,7 +1212,7 @@ button[disabled] {
   box-shadow: 0 18px 32px rgba(var(--shadow-color), 0.12);
 }
 
-#ordersCreateToggleButton {
+#ordersCreateButton {
   box-shadow: 0 20px 44px rgba(var(--shadow-color), 0.16);
 }
 
@@ -1222,32 +1222,6 @@ button[disabled] {
 
 .orders-view-panel:last-of-type {
   margin-bottom: 0;
-}
-
-.orders-create-inline {
-  border: 1px solid rgba(7, 10, 12, 0.1);
-  border-radius: 18px;
-  background: rgba(7, 10, 12, 0.02);
-  padding: clamp(1.25rem, 3vw, 1.75rem);
-  box-shadow: 0 24px 55px rgba(var(--shadow-color), 0.08);
-  margin-top: 1.5rem;
-}
-
-.orders-create-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 1.25rem;
-}
-
-.orders-create-header h4 {
-  margin: 0;
-}
-
-.orders-create-header p {
-  margin: 0;
-  color: var(--muted);
-  max-width: 60ch;
 }
 
 .kanban-header {

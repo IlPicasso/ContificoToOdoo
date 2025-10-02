@@ -103,7 +103,13 @@ const navButtons = document.querySelectorAll('.nav-button');
 const panelNavButton = document.getElementById('panelNavButton');
 const loginNavButton = document.getElementById('loginNavButton');
 const categoryBar = document.getElementById('categoryBar');
-const DASHBOARD_TAB_IDS = ['ordersPanel', 'customersPanel', 'usersPanel', 'auditLogPanel'];
+const DASHBOARD_TAB_IDS = [
+  'ordersPanel',
+  'orderCreatePanel',
+  'customersPanel',
+  'usersPanel',
+  'auditLogPanel',
+];
 const ADMIN_ONLY_TABS = new Set(['usersPanel', 'auditLogPanel']);
 const dashboardTabButtons = Array.from(document.querySelectorAll('[data-tab]')).filter((btn) =>
   DASHBOARD_TAB_IDS.includes(btn.dataset.tab)
@@ -112,8 +118,8 @@ const dashboardSubnav = document.querySelector('.dashboard-subnav');
 const dashboardPanels = document.querySelectorAll('.dashboard-panel');
 const ordersTableSection = document.getElementById('ordersTableSection');
 const ordersKanbanSection = document.getElementById('ordersKanbanSection');
-const ordersCreateSection = document.getElementById('ordersCreateSection');
-const ordersCreateToggleButton = document.getElementById('ordersCreateToggleButton');
+const orderCreatePanel = document.getElementById('orderCreatePanel');
+const ordersCreateButton = document.getElementById('ordersCreateButton');
 const ordersViewToggleButtons = document.querySelectorAll('[data-orders-view]');
 const roleRestrictedElements = document.querySelectorAll('[data-hide-roles]');
 const orderKanbanColumns = document.getElementById('orderKanbanColumns');
@@ -368,32 +374,23 @@ if (loginNavButton) {
   });
 }
 
+function focusFirstCreateOrderField() {
+  if (!createOrderForm) return;
+  const focusable = createOrderForm.querySelector(
+    'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])'
+  );
+  if (focusable) {
+    focusable.focus();
+  }
+}
+
 function syncCreateOrderFormDisabled() {
   if (!createOrderForm) return;
-  const shouldDisable = !ordersCreateSection || ordersCreateSection.classList.contains('hidden');
+  const shouldDisable = !orderCreatePanel || orderCreatePanel.classList.contains('hidden');
   createOrderForm.dataset.disabled = shouldDisable ? 'true' : 'false';
   const submitButton = createOrderForm.querySelector('button[type="submit"]');
   if (submitButton) {
     submitButton.disabled = shouldDisable;
-  }
-}
-
-function setOrdersCreateSectionVisible(shouldShow) {
-  if (!ordersCreateSection) return;
-  const isVisible = Boolean(shouldShow);
-  ordersCreateSection.classList.toggle('hidden', !isVisible);
-  ordersCreateSection.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
-  if (ordersCreateToggleButton) {
-    ordersCreateToggleButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
-  }
-  syncCreateOrderFormDisabled();
-  if (isVisible) {
-    const focusable = ordersCreateSection.querySelector(
-      'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])'
-    );
-    if (focusable) {
-      focusable.focus();
-    }
   }
 }
 
@@ -409,11 +406,11 @@ function applyRoleVisibility() {
     if ('disabled' in element) {
       element.disabled = shouldHide;
     }
-    if (element === ordersCreateToggleButton && shouldHide) {
-      setOrdersCreateSectionVisible(false);
-    }
-    if (element === ordersCreateToggleButton) {
-      ordersCreateToggleButton.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+    if (element === ordersCreateButton) {
+      element.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
+      if (shouldHide && activeDashboardTab === 'orderCreatePanel') {
+        setActiveDashboardTab('ordersPanel');
+      }
     }
   });
 }
@@ -451,6 +448,8 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
   }
   activeDashboardTab = targetTab;
 
+  const highlightTabId = targetTab === 'orderCreatePanel' ? 'ordersPanel' : targetTab;
+
   dashboardTabButtons.forEach((btn) => {
     const tab = btn.dataset.tab;
     if (!tab) return;
@@ -458,7 +457,7 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
     const shouldHide = !state.token || (isAdminTab && userRole !== 'administrador');
     btn.classList.toggle('hidden', shouldHide);
     btn.disabled = shouldHide;
-    btn.classList.toggle('active', tab === targetTab);
+    btn.classList.toggle('active', tab === highlightTabId);
   });
 
   dashboardPanels.forEach((panel) => {
@@ -483,11 +482,14 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
     } else {
       renderOrderKanban();
     }
-    syncCreateOrderFormDisabled();
   } else {
     renderOrderKanban();
+    if (targetTab === 'orderCreatePanel') {
+      focusFirstCreateOrderField();
+    }
   }
 
+  syncCreateOrderFormDisabled();
   updateDashboardShortcutHighlight();
 }
 
@@ -509,13 +511,16 @@ ordersViewToggleButtons.forEach((btn) => {
   });
 });
 
-if (ordersCreateToggleButton) {
-  ordersCreateToggleButton.addEventListener('click', () => {
-    if (ordersCreateToggleButton.disabled) {
+if (ordersCreateButton) {
+  ordersCreateButton.addEventListener('click', () => {
+    if (ordersCreateButton.disabled) {
       return;
     }
-    const shouldShow = ordersCreateSection?.classList.contains('hidden');
-    setOrdersCreateSectionVisible(Boolean(shouldShow));
+    setActiveView('staff-view');
+    setActiveDashboardTab('orderCreatePanel');
+    if (orderCreatePanel && orderCreatePanel.scrollIntoView) {
+      orderCreatePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   });
 }
 
@@ -523,7 +528,6 @@ setActiveDashboardTab(activeDashboardTab);
 updateDashboardShortcutHighlight();
 updateDashboardShortcutVisibility();
 setActiveOrdersView(state.activeOrdersView || 'list');
-setOrdersCreateSectionVisible(false);
 applyRoleVisibility();
 
 if (dashboardShortcutButtons.length) {
@@ -3313,7 +3317,8 @@ if (deleteCustomerButton) {
 async function createOrder(event) {
   event.preventDefault();
   if (!createOrderForm) return;
-  if (createOrderForm.dataset.disabled === 'true' || isOrderCreatePanelHidden()) {
+  const isCreatePanelHidden = !orderCreatePanel || orderCreatePanel.classList.contains('hidden');
+  if (createOrderForm.dataset.disabled === 'true' || isCreatePanelHidden) {
     return;
   }
   const newOrderNumber = document.getElementById('newOrderNumber').value.trim();

@@ -67,34 +67,6 @@
           </nav>
         </div>
       </div>
-      <div class="category-bar hidden" id="categoryBar">
-        <div class="container category-bar-inner">
-          <nav class="category-nav" aria-label="Atajos del panel administrativo">
-            <button type="button" class="category-pill" data-target-tab="ordersPanel">
-              Órdenes
-            </button>
-            <button type="button" class="category-pill" data-target-tab="customersPanel">
-              Clientes
-            </button>
-            <button
-              type="button"
-              class="category-pill"
-              data-target-tab="usersPanel"
-              data-required-role="administrador"
-            >
-              Usuarios
-            </button>
-            <button
-              type="button"
-              class="category-pill"
-              data-target-tab="auditLogPanel"
-              data-required-role="administrador"
-            >
-              Bitácora
-            </button>
-          </nav>
-        </div>
-      </div>
     </header>
 
     <main class="container">
@@ -397,8 +369,8 @@
               <div class="orders-controls-info">
                 <h3>Gestión de órdenes</h3>
                 <p class="muted small">
-                  Administra las órdenes registradas, visualiza el tablero Kanban y registra nuevos
-                  pedidos desde un mismo espacio.
+                  Administra las órdenes registradas, visualiza el tablero Kanban y abre el formulario
+                  de nuevas órdenes cuando lo necesites.
                 </p>
               </div>
               <div class="orders-controls-actions">
@@ -409,10 +381,8 @@
                 <button
                   type="button"
                   class="primary"
-                  id="ordersCreateToggleButton"
+                  id="ordersCreateButton"
                   data-hide-roles="sastre"
-                  aria-expanded="false"
-                  aria-controls="ordersCreateSection"
                 >
                   Crear orden
                 </button>
@@ -616,94 +586,6 @@
               <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
             </div>
 
-            <div id="ordersCreateSection" class="orders-create-inline hidden" aria-hidden="true">
-              <div class="orders-create-header">
-                <h4>Registrar nueva orden</h4>
-                <p class="muted small">
-                  Completa el formulario y guarda la orden para que el equipo pueda comenzar a
-                  trabajarla.
-                </p>
-              </div>
-              <form id="createOrderForm" class="form-grid">
-                <div class="form-row">
-                  <label for="newOrderNumber">Número de orden</label>
-                  <input type="text" id="newOrderNumber" required />
-                </div>
-                <div class="form-row">
-                  <label for="newOrderInvoice">Número de factura</label>
-                  <input type="text" id="newOrderInvoice" placeholder="Ej. FAC-2024-00001" />
-                </div>
-                <div class="form-row">
-                  <label for="orderCustomerSelect">Cliente</label>
-                  <select id="orderCustomerSelect" required>
-                    <option value="">Selecciona un cliente</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label for="newCustomerDocument">Documento</label>
-                  <input type="text" id="newCustomerDocument" readonly />
-                </div>
-                <div class="form-row">
-                  <label for="newCustomerName">Nombre del cliente</label>
-                  <input type="text" id="newCustomerName" required />
-                </div>
-                <div class="form-row">
-                  <label for="newCustomerContact">Contacto del cliente</label>
-                  <input type="text" id="newCustomerContact" placeholder="Teléfono o correo" />
-                </div>
-                <div class="form-row">
-                  <label for="newOrderStatus">Estado inicial</label>
-                  <select id="newOrderStatus"></select>
-                </div>
-                <div class="form-row">
-                  <label for="newOrderOrigin">Establecimiento remitente</label>
-                  <select id="newOrderOrigin" required>
-                    <option value="">Selecciona un establecimiento</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label for="newOrderDeliveryDate">Fecha y hora de entrega</label>
-                  <input type="datetime-local" id="newOrderDeliveryDate" />
-                </div>
-                <div class="form-row">
-                  <label>Medidas guardadas del cliente</label>
-                  <div id="customerMeasurementOptions" class="measurement-option-list muted">
-                    Selecciona un cliente para ver sus medidas guardadas.
-                  </div>
-                </div>
-                <div class="form-row">
-                  <label>Medidas de la orden</label>
-                  <div id="measurementsList" class="measurement-list"></div>
-                  <button type="button" id="addMeasurementButton" class="secondary">Agregar medida</button>
-                </div>
-                <div class="form-row">
-                  <label for="newOrderNotes">Notas</label>
-                  <textarea id="newOrderNotes" rows="2" placeholder="Detalles adicionales"></textarea>
-                </div>
-                <div class="form-row">
-                  <label>Trabajos a realizar</label>
-                  <p class="muted small">
-                    Ingresa cada trabajo que debe realizarse para completar la orden. El sastre podrá marcar
-                    aquí los avances.
-                  </p>
-                  <div id="newOrderTasksList" class="measurement-list"></div>
-                  <button type="button" id="addOrderTaskButton" class="secondary">Agregar trabajo</button>
-                </div>
-                <div class="form-row">
-                  <label for="assignTailor">Asignar a sastre</label>
-                  <select id="assignTailor">
-                    <option value="">Sin asignar</option>
-                  </select>
-                </div>
-                <div class="form-row">
-                  <label for="assignVendor">Asignar a vendedor</label>
-                  <select id="assignVendor">
-                    <option value="">Sin asignar</option>
-                  </select>
-                </div>
-                <button type="submit" class="primary">Guardar orden</button>
-              </form>
-            </div>
           </section>
 
           <section class="card dashboard-panel hidden" id="usersPanel">
