@@ -33,6 +33,7 @@ const state = {
   kanbanSearchTerm: '',
   kanbanNeedsRefresh: true,
   kanbanLastUpdated: null,
+  activeOrdersView: 'list',
   isCreateCustomerVisible: false,
   isCreateUserVisible: false,
   auditLogs: [],
@@ -102,12 +103,19 @@ const navButtons = document.querySelectorAll('.nav-button');
 const panelNavButton = document.getElementById('panelNavButton');
 const loginNavButton = document.getElementById('loginNavButton');
 const categoryBar = document.getElementById('categoryBar');
-const dashboardTabButtons = document.querySelectorAll('.dashboard-tab');
+const DASHBOARD_TAB_IDS = ['ordersPanel', 'customersPanel', 'usersPanel', 'auditLogPanel'];
+const ADMIN_ONLY_TABS = new Set(['usersPanel', 'auditLogPanel']);
+const dashboardTabButtons = Array.from(document.querySelectorAll('[data-tab]')).filter((btn) =>
+  DASHBOARD_TAB_IDS.includes(btn.dataset.tab)
+);
 const dashboardSubnav = document.querySelector('.dashboard-subnav');
 const dashboardPanels = document.querySelectorAll('.dashboard-panel');
-const orderCreateTabButton = document.getElementById('orderCreateTabButton');
-const orderCreatePanel = document.getElementById('orderCreatePanel');
-const orderKanbanPanel = document.getElementById('orderKanbanPanel');
+const ordersTableSection = document.getElementById('ordersTableSection');
+const ordersKanbanSection = document.getElementById('ordersKanbanSection');
+const ordersCreateSection = document.getElementById('ordersCreateSection');
+const ordersCreateToggleButton = document.getElementById('ordersCreateToggleButton');
+const ordersViewToggleButtons = document.querySelectorAll('[data-orders-view]');
+const roleRestrictedElements = document.querySelectorAll('[data-hide-roles]');
 const orderKanbanColumns = document.getElementById('orderKanbanColumns');
 const orderKanbanStatus = document.getElementById('orderKanbanStatus');
 const orderKanbanSearchInput = document.getElementById('orderKanbanSearchInput');
@@ -231,7 +239,7 @@ const CUSTOMER_DETAIL_DEFAULT_SUMMARY = 'Selecciona un cliente para ver su infor
 const CUSTOMER_ORDER_HISTORY_PROMPT = 'Selecciona un cliente para ver sus órdenes anteriores.';
 const CUSTOMER_ORDER_HISTORY_EMPTY_MESSAGE = 'No tiene órdenes registradas.';
 
-let activeDashboardTab = 'orderListPanel';
+let activeDashboardTab = 'ordersPanel';
 const ORDER_TABLE_COLUMN_COUNT = 6;
 const CUSTOMER_TABLE_COLUMN_COUNT = 5;
 let activeOrderDetailRow = null;
@@ -280,17 +288,18 @@ function updateDashboardShortcutVisibility() {
     categoryBar.classList.toggle('hidden', !isAuthenticated);
   }
   if (dashboardSubnav) {
-    const shouldHideSubnav = isAuthenticated && categoryBar && !categoryBar.classList.contains('hidden');
-    dashboardSubnav.classList.toggle('hidden', shouldHideSubnav);
-    dashboardSubnav.setAttribute('aria-hidden', shouldHideSubnav ? 'true' : 'false');
+    dashboardSubnav.classList.toggle('hidden', !isAuthenticated);
+    dashboardSubnav.setAttribute('aria-hidden', isAuthenticated ? 'false' : 'true');
   }
   if (!dashboardShortcutButtons.length) {
+    applyRoleVisibility();
     return;
   }
 
   let hasVisibleActiveShortcut = false;
 
   dashboardShortcutButtons.forEach((btn) => {
+    const targetTab = btn.dataset.targetTab;
     const requiredRole = btn.dataset.requiredRole || null;
     const hideRoles = (btn.dataset.hideRoles || '')
       .split(',')
@@ -298,16 +307,24 @@ function updateDashboardShortcutVisibility() {
       .filter(Boolean);
     const lacksRequiredRole = Boolean(requiredRole) && userRole !== requiredRole;
     const hiddenForRole = hideRoles.length > 0 && (!userRole || hideRoles.includes(userRole));
-    const shouldHide = !isAuthenticated || lacksRequiredRole || hiddenForRole;
+    const isAdminTab = ADMIN_ONLY_TABS.has(targetTab);
+    const isRecognizedTab = DASHBOARD_TAB_IDS.includes(targetTab);
+    const shouldHide =
+      !isAuthenticated ||
+      !isRecognizedTab ||
+      lacksRequiredRole ||
+      hiddenForRole ||
+      (isAdminTab && userRole !== 'administrador');
     btn.classList.toggle('hidden', shouldHide);
-    if (!shouldHide && btn.dataset.targetTab === activeDashboardTab) {
+    if (!shouldHide && targetTab === activeDashboardTab) {
       hasVisibleActiveShortcut = true;
     }
   });
 
   if (isAuthenticated && !hasVisibleActiveShortcut) {
     const fallback = Array.from(dashboardShortcutButtons).find(
-      (btn) => !btn.classList.contains('hidden')
+      (btn) =>
+        !btn.classList.contains('hidden') && DASHBOARD_TAB_IDS.includes(btn.dataset.targetTab)
     );
     if (fallback) {
       setActiveDashboardTab(fallback.dataset.targetTab);
@@ -316,6 +333,7 @@ function updateDashboardShortcutVisibility() {
   }
 
   updateDashboardShortcutHighlight();
+  applyRoleVisibility();
 }
 
 dashboardShortcutButtons.forEach((btn) => {
@@ -350,13 +368,9 @@ if (loginNavButton) {
   });
 }
 
-function isOrderCreatePanelHidden() {
-  return !orderCreatePanel || orderCreatePanel.classList.contains('hidden');
-}
-
 function syncCreateOrderFormDisabled() {
   if (!createOrderForm) return;
-  const shouldDisable = isOrderCreatePanelHidden();
+  const shouldDisable = !ordersCreateSection || ordersCreateSection.classList.contains('hidden');
   createOrderForm.dataset.disabled = shouldDisable ? 'true' : 'false';
   const submitButton = createOrderForm.querySelector('button[type="submit"]');
   if (submitButton) {
@@ -364,60 +378,116 @@ function syncCreateOrderFormDisabled() {
   }
 }
 
-function setActiveDashboardTab(tabId = 'orderListPanel') {
-  if (!dashboardPanels.length) return;
+function setOrdersCreateSectionVisible(shouldShow) {
+  if (!ordersCreateSection) return;
+  const isVisible = Boolean(shouldShow);
+  ordersCreateSection.classList.toggle('hidden', !isVisible);
+  ordersCreateSection.setAttribute('aria-hidden', isVisible ? 'false' : 'true');
+  if (ordersCreateToggleButton) {
+    ordersCreateToggleButton.setAttribute('aria-expanded', isVisible ? 'true' : 'false');
+  }
+  syncCreateOrderFormDisabled();
+  if (isVisible) {
+    const focusable = ordersCreateSection.querySelector(
+      'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])'
+    );
+    if (focusable) {
+      focusable.focus();
+    }
+  }
+}
+
+function applyRoleVisibility() {
   const userRole = state.user?.role || null;
-  let targetTab = tabId || 'orderListPanel';
-  if (targetTab === 'auditLogPanel' && userRole !== 'administrador') {
-    targetTab = 'orderListPanel';
-  }
-  if (targetTab === 'orderCreatePanel' && userRole === 'sastre') {
-    targetTab = 'orderListPanel';
-  }
-  if (targetTab === 'usersPanel' && userRole !== 'administrador') {
-    targetTab = 'orderListPanel';
-  }
-  activeDashboardTab = targetTab;
-  dashboardTabButtons.forEach((btn) => {
-    const tab = btn.dataset.tab;
-    if (tab === 'orderCreatePanel') {
-      const shouldHideTab = userRole === 'sastre';
-      if (shouldHideTab) {
-        btn.classList.add('hidden');
-      } else {
-        btn.classList.remove('hidden');
-      }
-      btn.disabled = shouldHideTab;
+  roleRestrictedElements.forEach((element) => {
+    const roles = (element.dataset.hideRoles || '')
+      .split(',')
+      .map((role) => role.trim())
+      .filter(Boolean);
+    const shouldHide = roles.length > 0 && (!userRole || roles.includes(userRole));
+    element.classList.toggle('hidden', shouldHide);
+    if ('disabled' in element) {
+      element.disabled = shouldHide;
     }
-    if (tab === 'usersPanel') {
-      const shouldHideUsersTab = userRole !== 'administrador';
-      if (shouldHideUsersTab) {
-        btn.classList.add('hidden');
-      } else {
-        btn.classList.remove('hidden');
-      }
-      btn.disabled = shouldHideUsersTab;
+    if (element === ordersCreateToggleButton && shouldHide) {
+      setOrdersCreateSectionVisible(false);
     }
-    btn.classList.toggle('active', tab === targetTab);
-  });
-  dashboardPanels.forEach((panel) => {
-    if (panel.id === 'orderCreatePanel' && userRole === 'sastre') {
-      panel.classList.add('hidden');
-    } else if (panel.id === 'usersPanel' && userRole !== 'administrador') {
-      panel.classList.add('hidden');
-    } else {
-      panel.classList.toggle('hidden', panel.id !== targetTab);
+    if (element === ordersCreateToggleButton) {
+      ordersCreateToggleButton.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
     }
   });
-  if (targetTab === 'usersPanel' && userRole === 'administrador') {
-    loadUsers();
+}
+
+function setActiveOrdersView(view) {
+  const nextView = view === 'kanban' ? 'kanban' : 'list';
+  state.activeOrdersView = nextView;
+  ordersViewToggleButtons.forEach((btn) => {
+    const isActive = btn.dataset.ordersView === nextView;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+  if (ordersTableSection) {
+    ordersTableSection.classList.toggle('hidden', nextView !== 'list');
+    ordersTableSection.setAttribute('aria-hidden', nextView === 'list' ? 'false' : 'true');
   }
-  if (targetTab === 'orderKanbanPanel') {
+  if (ordersKanbanSection) {
+    const isKanban = nextView === 'kanban';
+    ordersKanbanSection.classList.toggle('hidden', !isKanban);
+    ordersKanbanSection.setAttribute('aria-hidden', isKanban ? 'false' : 'true');
+  }
+  if (nextView === 'kanban') {
     ensureKanbanDataLoaded();
   } else {
     renderOrderKanban();
   }
-  syncCreateOrderFormDisabled();
+}
+
+function setActiveDashboardTab(tabId = 'ordersPanel') {
+  if (!dashboardPanels.length) return;
+  const userRole = state.user?.role || null;
+  let targetTab = tabId && DASHBOARD_TAB_IDS.includes(tabId) ? tabId : 'ordersPanel';
+  if (ADMIN_ONLY_TABS.has(targetTab) && userRole !== 'administrador') {
+    targetTab = 'ordersPanel';
+  }
+  activeDashboardTab = targetTab;
+
+  dashboardTabButtons.forEach((btn) => {
+    const tab = btn.dataset.tab;
+    if (!tab) return;
+    const isAdminTab = ADMIN_ONLY_TABS.has(tab);
+    const shouldHide = !state.token || (isAdminTab && userRole !== 'administrador');
+    btn.classList.toggle('hidden', shouldHide);
+    btn.disabled = shouldHide;
+    btn.classList.toggle('active', tab === targetTab);
+  });
+
+  dashboardPanels.forEach((panel) => {
+    const { id } = panel;
+    if (!id) return;
+    const isAdminPanel = ADMIN_ONLY_TABS.has(id);
+    const shouldHide = !state.token || (isAdminPanel && userRole !== 'administrador');
+    if (shouldHide) {
+      panel.classList.add('hidden');
+    } else {
+      panel.classList.toggle('hidden', id !== targetTab);
+    }
+  });
+
+  if (targetTab === 'usersPanel' && userRole === 'administrador') {
+    loadUsers();
+  }
+
+  if (targetTab === 'ordersPanel') {
+    if (state.activeOrdersView === 'kanban') {
+      ensureKanbanDataLoaded();
+    } else {
+      renderOrderKanban();
+    }
+    syncCreateOrderFormDisabled();
+  } else {
+    renderOrderKanban();
+  }
+
   updateDashboardShortcutHighlight();
 }
 
@@ -430,9 +500,31 @@ dashboardTabButtons.forEach((btn) => {
   });
 });
 
+ordersViewToggleButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) {
+      return;
+    }
+    setActiveOrdersView(btn.dataset.ordersView);
+  });
+});
+
+if (ordersCreateToggleButton) {
+  ordersCreateToggleButton.addEventListener('click', () => {
+    if (ordersCreateToggleButton.disabled) {
+      return;
+    }
+    const shouldShow = ordersCreateSection?.classList.contains('hidden');
+    setOrdersCreateSectionVisible(Boolean(shouldShow));
+  });
+}
+
 setActiveDashboardTab(activeDashboardTab);
 updateDashboardShortcutHighlight();
 updateDashboardShortcutVisibility();
+setActiveOrdersView(state.activeOrdersView || 'list');
+setOrdersCreateSectionVisible(false);
+applyRoleVisibility();
 
 if (dashboardShortcutButtons.length) {
   dashboardShortcutButtons.forEach((shortcut) => {
@@ -1646,31 +1738,12 @@ function updateUserInfo() {
     }
   }
   const isAdmin = state.user.role === 'administrador';
-  if (auditLogTabButton) {
-    auditLogTabButton.classList.toggle('hidden', !isAdmin);
-  }
-  if (usersTabButton) {
-    usersTabButton.classList.toggle('hidden', !isAdmin);
-  }
-  const isTailor = state.user.role === 'sastre';
-  if (orderCreateTabButton) {
-    if (isTailor) {
-      orderCreateTabButton.classList.add('hidden');
-    } else {
-      orderCreateTabButton.classList.remove('hidden');
-    }
-    orderCreateTabButton.disabled = isTailor;
-  }
-  if (orderCreatePanel && isTailor) {
-    orderCreatePanel.classList.add('hidden');
-  }
-  if (!isAdmin && activeDashboardTab === 'auditLogPanel') {
-    setActiveDashboardTab('orderListPanel');
-  } else if (isTailor && activeDashboardTab === 'orderCreatePanel') {
-    setActiveDashboardTab('orderListPanel');
+  if (!isAdmin && ADMIN_ONLY_TABS.has(activeDashboardTab)) {
+    setActiveDashboardTab('ordersPanel');
   } else {
     setActiveDashboardTab(activeDashboardTab);
   }
+  applyRoleVisibility();
   updateUserCreationForm();
   renderOrderTasks();
   updateDashboardShortcutVisibility();
@@ -1683,7 +1756,7 @@ function showDashboard() {
   if (staffLoginCard) {
     staffLoginCard.classList.add('hidden');
   }
-  setActiveDashboardTab('orderListPanel');
+  setActiveDashboardTab('ordersPanel');
 }
 
 function hideDashboard() {
@@ -1967,7 +2040,7 @@ async function loadKanbanOrders({ force = false } = {}) {
 }
 
 function ensureKanbanDataLoaded() {
-  if (!state.token) {
+  if (!state.token || state.activeOrdersView !== 'kanban') {
     renderOrderKanban();
     return;
   }
@@ -1985,7 +2058,12 @@ function ensureKanbanDataLoaded() {
 function markKanbanDataStale() {
   state.kanbanNeedsRefresh = true;
   renderOrderKanban();
-  if (activeDashboardTab === 'orderKanbanPanel' && state.token && !state.kanbanLoading) {
+  const shouldReload =
+    activeDashboardTab === 'ordersPanel' &&
+    state.activeOrdersView === 'kanban' &&
+    state.token &&
+    !state.kanbanLoading;
+  if (shouldReload) {
     loadKanbanOrders({ force: true });
   }
 }
@@ -2226,7 +2304,7 @@ function handleLogout(auto = false) {
   if (usersTabButton) {
     usersTabButton.classList.add('hidden');
   }
-  setActiveDashboardTab('orderListPanel');
+  setActiveDashboardTab('ordersPanel');
   hideDashboard();
   if (customerSearchInput) {
     customerSearchInput.value = '';
