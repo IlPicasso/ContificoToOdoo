@@ -119,6 +119,7 @@ const dashboardPanels = document.querySelectorAll('.dashboard-panel');
 const ordersTableSection = document.getElementById('ordersTableSection');
 const ordersKanbanSection = document.getElementById('ordersKanbanSection');
 const orderCreatePanel = document.getElementById('orderCreatePanel');
+const orderCreateBackButton = document.getElementById('orderCreateBackButton');
 const ordersCreateButton = document.getElementById('ordersCreateButton');
 const ordersViewToggleButtons = document.querySelectorAll('[data-orders-view]');
 const roleRestrictedElements = document.querySelectorAll('[data-hide-roles]');
@@ -246,6 +247,7 @@ const CUSTOMER_ORDER_HISTORY_PROMPT = 'Selecciona un cliente para ver sus órden
 const CUSTOMER_ORDER_HISTORY_EMPTY_MESSAGE = 'No tiene órdenes registradas.';
 
 let activeDashboardTab = 'ordersPanel';
+let lastOrdersViewBeforeCreate = 'list';
 const ORDER_TABLE_COLUMN_COUNT = 6;
 const CUSTOMER_TABLE_COLUMN_COUNT = 5;
 let activeOrderDetailRow = null;
@@ -516,10 +518,25 @@ if (ordersCreateButton) {
     if (ordersCreateButton.disabled) {
       return;
     }
+    lastOrdersViewBeforeCreate = state.activeOrdersView || 'list';
     setActiveView('staff-view');
     setActiveDashboardTab('orderCreatePanel');
     if (orderCreatePanel && orderCreatePanel.scrollIntoView) {
       orderCreatePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
+
+if (orderCreateBackButton) {
+  orderCreateBackButton.addEventListener('click', () => {
+    setActiveDashboardTab('ordersPanel');
+    setActiveOrdersView(lastOrdersViewBeforeCreate || 'list');
+    if (
+      ordersCreateButton &&
+      !ordersCreateButton.classList.contains('hidden') &&
+      !ordersCreateButton.disabled
+    ) {
+      ordersCreateButton.focus();
     }
   });
 }
@@ -3672,51 +3689,81 @@ function createKanbanMetaItem(label, value) {
   return item;
 }
 
-function getOrderDetailUrl(order) {
+async function openOrderDetailFromKanban(order) {
   if (!order || order.id === undefined || order.id === null) {
-    return null;
+    showToast('No se pudo abrir el detalle de la orden seleccionada.', 'error');
+    return;
   }
-  if (typeof window === 'undefined' || typeof window.location === 'undefined') {
-    return `order.html?id=${encodeURIComponent(order.id)}`;
+
+  const orderIdKey = String(order.id);
+  setActiveDashboardTab('ordersPanel');
+  if (state.activeOrdersView !== 'list') {
+    setActiveOrdersView('list');
   }
-  try {
-    const detailUrl = new URL('order.html', window.location.href);
-    detailUrl.searchParams.set('id', order.id);
-    if (order?.order_number) {
-      detailUrl.searchParams.set('number', order.order_number);
+
+  let detail = state.orders.find((item) => String(item.id) === orderIdKey);
+  if (!detail) {
+    try {
+      detail = await apiFetch(`/orders/${encodeURIComponent(orderIdKey)}`);
+    } catch (error) {
+      /* ignore fetch failure and fall back to cached data */
     }
-    return detailUrl.toString();
-  } catch (error) {
-    let fallback = `order.html?id=${encodeURIComponent(order.id)}`;
-    if (order?.order_number) {
-      fallback += `&number=${encodeURIComponent(order.order_number)}`;
-    }
-    return fallback;
   }
+
+  if (!detail) {
+    detail = order;
+  }
+
+  if (!detail || detail.id === undefined || detail.id === null) {
+    showToast('No se pudo abrir el detalle de la orden seleccionada.', 'error');
+    return;
+  }
+
+  const remainingOrders = state.orders.filter((item) => String(item.id) !== orderIdKey);
+  state.orders = [...remainingOrders, detail];
+  if (typeof state.orderTotal !== 'number' || state.orderTotal < state.orders.length) {
+    state.orderTotal = state.orders.length;
+  }
+
+  populateOrderDetail(detail);
 }
 
 function createKanbanCard(order) {
-  const detailUrl = getOrderDetailUrl(order);
-  const card = detailUrl ? document.createElement('a') : document.createElement('article');
+  const card = document.createElement('article');
   card.className = 'kanban-card';
+  card.classList.add('is-clickable');
+  card.setAttribute('role', 'button');
+  card.tabIndex = 0;
   if (order?.id !== undefined && order?.id !== null) {
     card.dataset.orderId = String(order.id);
   }
-  if (detailUrl) {
-    card.href = detailUrl;
-    card.target = '_blank';
-    card.rel = 'noopener noreferrer';
-    card.classList.add('is-clickable');
-    const labelParts = [];
-    if (order?.order_number) {
-      labelParts.push(`Orden ${order.order_number}`);
-    }
-    if (order?.customer_name) {
-      labelParts.push(order.customer_name);
-    }
-    card.setAttribute('aria-label', `Abrir detalle de ${labelParts.join(' · ') || 'la orden'}`);
-    card.title = 'Abrir información de la orden en una nueva pestaña';
+
+  const labelParts = [];
+  if (order?.order_number) {
+    labelParts.push(`Orden ${order.order_number}`);
   }
+  if (order?.customer_name) {
+    labelParts.push(order.customer_name);
+  }
+  if (labelParts.length) {
+    card.setAttribute('aria-label', `Ver detalle de ${labelParts.join(' · ')}`);
+  } else {
+    card.setAttribute('aria-label', 'Ver detalle de la orden seleccionada');
+  }
+  card.title = 'Ver detalle de la orden';
+
+  const handleCardActivation = (event) => {
+    event.preventDefault();
+    openOrderDetailFromKanban(order);
+  };
+
+  card.addEventListener('click', handleCardActivation);
+  card.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openOrderDetailFromKanban(order);
+    }
+  });
 
 
   const header = document.createElement('div');

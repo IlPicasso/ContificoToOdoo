@@ -1157,6 +1157,16 @@ button[disabled] {
   margin-bottom: 2rem;
 }
 
+.order-create-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+
+.order-create-toolbar button {
+  align-self: flex-start;
+}
+
 .orders-controls-info h3 {
   margin-bottom: 0.35rem;
 }
@@ -1338,6 +1348,10 @@ button[disabled] {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  font: inherit;
 }
 
 .kanban-card.is-clickable {
