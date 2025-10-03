@@ -752,6 +752,18 @@ button[disabled] {
   font-size: 1rem;
 }
 
+.customer-order-history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.customer-order-history-item-actions .customer-order-history-open {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .customer-order-history-item-meta {
   margin: 0;
   color: var(--muted);
