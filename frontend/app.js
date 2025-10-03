@@ -458,6 +458,7 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
   if (ADMIN_ONLY_TABS.has(targetTab) && userRole !== 'administrador') {
     targetTab = 'ordersPanel';
   }
+  const previousTab = activeDashboardTab;
   activeDashboardTab = targetTab;
 
   const highlightTabId = targetTab === 'orderCreatePanel' ? 'ordersPanel' : targetTab;
@@ -483,6 +484,14 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
       panel.classList.toggle('hidden', id !== targetTab);
     }
   });
+
+  if (previousTab === 'ordersPanel' && targetTab !== 'ordersPanel') {
+    if (currentOrderDetailHost === 'overlay' && state.selectedOrderId !== null) {
+      clearOrderDetail({ skipRender: true });
+    } else if (document.body) {
+      document.body.classList.remove('kanban-detail-open');
+    }
+  }
 
   if (targetTab === 'usersPanel' && userRole === 'administrador') {
     loadUsers();
