@@ -132,6 +132,10 @@ const orderKanbanDetailOverlay = document.getElementById('orderKanbanDetailOverl
 const orderKanbanDetailDialog = document.getElementById('orderKanbanDetailDialog');
 const orderKanbanDetailMessage = document.getElementById('orderKanbanDetailMessage');
 const kanbanDetailCloseElements = document.querySelectorAll('[data-kanban-detail-close]');
+const dashboardOverlay = document.getElementById('dashboardOverlay');
+const dashboardOverlayDialog = document.getElementById('dashboardOverlayDialog');
+const dashboardOverlayContent = document.getElementById('dashboardOverlayContent');
+const dashboardOverlayCloseElements = document.querySelectorAll('[data-dashboard-overlay-close]');
 const orderLookupForm = document.getElementById('orderLookupForm');
 const orderNumberInput = document.getElementById('orderNumber');
 const orderDocumentInput = document.getElementById('customerDocument');
@@ -257,9 +261,11 @@ const ORDER_TABLE_COLUMN_COUNT = 6;
 const CUSTOMER_TABLE_COLUMN_COUNT = 5;
 let activeOrderDetailRow = null;
 let currentOrderDetailHost = null;
-let activeCustomerDetailRow = null;
 let lastKanbanFocusedElement = null;
 let lastKanbanFocusedOrderId = null;
+let activeDashboardOverlayElement = null;
+let activeDashboardOverlayOptions = null;
+const dashboardOverlayOrigins = new WeakMap();
 
 
 function setActiveView(viewId) {
@@ -276,6 +282,9 @@ function setActiveView(viewId) {
   if (loginNavButton) {
     const shouldHighlightLogin = viewId === 'staff-view' && !state.token;
     loginNavButton.classList.toggle('active', shouldHighlightLogin);
+  }
+  if (viewId !== 'staff-view' && isDashboardOverlayActive()) {
+    closeDashboardOverlaySection();
   }
 }
 
@@ -418,8 +427,13 @@ function applyRoleVisibility() {
     }
     if (element === ordersCreateButton) {
       element.setAttribute('aria-hidden', shouldHide ? 'true' : 'false');
-      if (shouldHide && activeDashboardTab === 'orderCreatePanel') {
-        setActiveDashboardTab('ordersPanel');
+      if (shouldHide) {
+        if (isDashboardOverlayActive(orderCreatePanel)) {
+          closeDashboardOverlaySection();
+        }
+        if (activeDashboardTab === 'orderCreatePanel') {
+          setActiveDashboardTab('ordersPanel');
+        }
       }
     }
   });
@@ -458,7 +472,12 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
   if (ADMIN_ONLY_TABS.has(targetTab) && userRole !== 'administrador') {
     targetTab = 'ordersPanel';
   }
-  const previousTab = activeDashboardTab;
+
+  const overlayContextTab = activeDashboardOverlayOptions?.contextTab || null;
+  if (isDashboardOverlayActive() && overlayContextTab && overlayContextTab !== targetTab) {
+    closeDashboardOverlaySection();
+  }
+
   activeDashboardTab = targetTab;
 
   const highlightTabId = targetTab === 'orderCreatePanel' ? 'ordersPanel' : targetTab;
@@ -539,23 +558,35 @@ if (ordersCreateButton) {
     }
     lastOrdersViewBeforeCreate = state.activeOrdersView || 'list';
     setActiveView('staff-view');
-    setActiveDashboardTab('orderCreatePanel');
-    if (orderCreatePanel && orderCreatePanel.scrollIntoView) {
-      orderCreatePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    setActiveDashboardTab('ordersPanel');
+    openDashboardOverlaySection(orderCreatePanel, {
+      labelledBy: 'orderCreateHeading',
+      contextTab: 'ordersPanel',
+      focusSelector: '#newOrderNumber',
+      restoreFocus: ordersCreateButton,
+      onClose: () => {
+        syncCreateOrderFormDisabled();
+        setActiveOrdersView(lastOrdersViewBeforeCreate || 'list');
+      },
+    });
+    syncCreateOrderFormDisabled();
   });
 }
 
 if (orderCreateBackButton) {
   orderCreateBackButton.addEventListener('click', () => {
-    setActiveDashboardTab('ordersPanel');
-    setActiveOrdersView(lastOrdersViewBeforeCreate || 'list');
-    if (
-      ordersCreateButton &&
-      !ordersCreateButton.classList.contains('hidden') &&
-      !ordersCreateButton.disabled
-    ) {
-      ordersCreateButton.focus();
+    if (isDashboardOverlayActive(orderCreatePanel)) {
+      closeDashboardOverlaySection();
+    } else {
+      setActiveDashboardTab('ordersPanel');
+      setActiveOrdersView(lastOrdersViewBeforeCreate || 'list');
+      if (
+        ordersCreateButton &&
+        !ordersCreateButton.classList.contains('hidden') &&
+        !ordersCreateButton.disabled
+      ) {
+        ordersCreateButton.focus();
+      }
     }
   });
 }
@@ -1680,22 +1711,187 @@ function resetCreateCustomerForm() {
   }
 }
 
-function setCreateCustomerVisible(visible) {
-  if (!createCustomerSection) return;
-  state.isCreateCustomerVisible = visible;
-  createCustomerSection.classList.toggle('hidden', !visible);
-  if (showCreateCustomerButton) {
-    showCreateCustomerButton.classList.toggle('hidden', visible);
+function rememberDashboardOverlayOrigin(element) {
+  if (!element || dashboardOverlayOrigins.has(element)) {
+    return;
   }
+  dashboardOverlayOrigins.set(element, {
+    parent: element.parentNode,
+    nextSibling: element.nextSibling,
+  });
+}
+
+function isDashboardOverlayActive(element = null) {
+  if (!element) {
+    return Boolean(activeDashboardOverlayElement);
+  }
+  return activeDashboardOverlayElement === element;
+}
+
+function updateDashboardOverlayOptions(updates = {}) {
+  if (!activeDashboardOverlayElement) {
+    return;
+  }
+  activeDashboardOverlayOptions = {
+    ...(activeDashboardOverlayOptions || {}),
+    ...updates,
+  };
+}
+
+function openDashboardOverlaySection(element, options = {}) {
+  if (!element || !dashboardOverlay || !dashboardOverlayContent) {
+    return;
+  }
+
+  rememberDashboardOverlayOrigin(element);
+
+  if (activeDashboardOverlayElement === element) {
+    updateDashboardOverlayOptions(options);
+    if (dashboardOverlayDialog) {
+      if (options.labelledBy) {
+        dashboardOverlayDialog.setAttribute('aria-labelledby', options.labelledBy);
+      } else if (options.labelledBy === null) {
+        dashboardOverlayDialog.removeAttribute('aria-labelledby');
+      }
+    }
+  } else {
+    if (activeDashboardOverlayElement) {
+      closeDashboardOverlaySection();
+    }
+    activeDashboardOverlayElement = element;
+    activeDashboardOverlayOptions = { ...options };
+    dashboardOverlayContent.innerHTML = '';
+    dashboardOverlayContent.appendChild(element);
+    if (dashboardOverlayDialog) {
+      if (options.labelledBy) {
+        dashboardOverlayDialog.setAttribute('aria-labelledby', options.labelledBy);
+      } else {
+        dashboardOverlayDialog.removeAttribute('aria-labelledby');
+      }
+    }
+  }
+
+  element.classList.remove('hidden');
+  element.setAttribute('aria-hidden', 'false');
+
+  dashboardOverlay.classList.remove('hidden');
+  dashboardOverlay.setAttribute('aria-hidden', 'false');
+
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.add('dashboard-overlay-open');
+  }
+
+  requestAnimationFrame(() => {
+    let focusTarget = null;
+    if (options.focusSelector) {
+      focusTarget = element.querySelector(options.focusSelector);
+    } else if (options.focusElement instanceof HTMLElement) {
+      focusTarget = options.focusElement;
+    }
+    if (!(focusTarget instanceof HTMLElement) && dashboardOverlayDialog instanceof HTMLElement) {
+      focusTarget = dashboardOverlayDialog;
+    }
+    if (focusTarget instanceof HTMLElement) {
+      focusTarget.focus();
+    }
+  });
+}
+
+function closeDashboardOverlaySection(options = {}) {
+  if (!dashboardOverlay || !dashboardOverlayContent) {
+    return;
+  }
+  if (!activeDashboardOverlayElement) {
+    return;
+  }
+
+  const overlayElement = activeDashboardOverlayElement;
+  const overlayOptions = activeDashboardOverlayOptions || {};
+  const { skipCallbacks = false, restoreFocus } = options;
+
+  const origin = dashboardOverlayOrigins.get(overlayElement);
+  if (origin?.parent) {
+    if (origin.nextSibling && origin.nextSibling.parentNode === origin.parent) {
+      origin.parent.insertBefore(overlayElement, origin.nextSibling);
+    } else {
+      origin.parent.appendChild(overlayElement);
+    }
+  } else if (dashboardOverlayContent.contains(overlayElement)) {
+    dashboardOverlayContent.removeChild(overlayElement);
+  }
+
+  overlayElement.classList.add('hidden');
+  overlayElement.setAttribute('aria-hidden', 'true');
+
+  dashboardOverlayContent.innerHTML = '';
+  dashboardOverlay.classList.add('hidden');
+  dashboardOverlay.setAttribute('aria-hidden', 'true');
+
+  if (dashboardOverlayDialog) {
+    dashboardOverlayDialog.removeAttribute('aria-labelledby');
+  }
+
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.classList.remove('dashboard-overlay-open');
+  }
+
+  const focusTarget =
+    restoreFocus instanceof HTMLElement
+      ? restoreFocus
+      : overlayOptions.restoreFocus instanceof HTMLElement
+        ? overlayOptions.restoreFocus
+        : null;
+
+  if (focusTarget instanceof HTMLElement) {
+    requestAnimationFrame(() => {
+      if (focusTarget.isConnected) {
+        focusTarget.focus();
+      }
+    });
+  }
+
+  activeDashboardOverlayElement = null;
+  activeDashboardOverlayOptions = null;
+
+  if (!skipCallbacks && typeof overlayOptions.onClose === 'function') {
+    overlayOptions.onClose();
+  }
+}
+
+function setCreateCustomerVisible(visible, options = {}) {
+  if (!createCustomerSection) return;
+  const triggerElement = options.trigger instanceof HTMLElement ? options.trigger : null;
+
   if (visible) {
+    if (state.isCreateCustomerVisible) {
+      if (triggerElement) {
+        updateDashboardOverlayOptions({ restoreFocus: triggerElement });
+      }
+      return;
+    }
+    state.isCreateCustomerVisible = true;
+    if (showCreateCustomerButton) {
+      showCreateCustomerButton.classList.add('hidden');
+    }
     if (customerMeasurementsContainer && !customerMeasurementsContainer.children.length) {
       createMeasurementSetBlock(customerMeasurementsContainer);
     }
-    createCustomerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const firstField = createCustomerForm?.querySelector('input, textarea, select');
-    firstField?.focus();
-  } else {
-    resetCreateCustomerForm();
+    openDashboardOverlaySection(createCustomerSection, {
+      labelledBy: 'createCustomerHeading',
+      contextTab: 'customersPanel',
+      focusSelector: '#customerFullName',
+      restoreFocus:
+        triggerElement || (showCreateCustomerButton instanceof HTMLElement ? showCreateCustomerButton : null),
+      onClose: () => {
+        state.isCreateCustomerVisible = false;
+        if (showCreateCustomerButton) {
+          showCreateCustomerButton.classList.remove('hidden');
+        }
+        resetCreateCustomerForm();
+      },
+    });
+  } else if (state.isCreateCustomerVisible) {
+    closeDashboardOverlaySection();
   }
 }
 
@@ -1816,6 +2012,9 @@ function hideDashboard() {
   }
   if (staffLoginCard) {
     staffLoginCard.classList.remove('hidden');
+  }
+  if (isDashboardOverlayActive()) {
+    closeDashboardOverlaySection();
   }
 }
 
@@ -2688,7 +2887,6 @@ function renderCustomers() {
   }
 
   customersTableBody.innerHTML = '';
-  activeCustomerDetailRow = null;
 
   if (customerSearchInput && customerSearchInput.value !== state.customerSearchTerm) {
     customerSearchInput.value = state.customerSearchTerm;
@@ -2731,14 +2929,8 @@ function renderCustomers() {
     cell.className = 'muted';
     row.appendChild(cell);
     customersTableBody.appendChild(row);
-    if (customerDetail) {
-      customerDetail.classList.add('hidden');
-      activeCustomerDetailRow = null;
-    }
     return;
   }
-
-  let detailRendered = false;
 
   state.customers.forEach((customer) => {
     const row = document.createElement('tr');
@@ -2746,9 +2938,7 @@ function renderCustomers() {
     row.dataset.customerId = String(customer.id);
 
     const isSelected = state.selectedCustomerId === customer.id;
-    if (isSelected) {
-      row.classList.add('is-selected');
-    }
+    row.classList.toggle('is-selected', isSelected);
 
     const cachedOrders = getOrdersForCustomer(customer.id);
     const orderCount =
@@ -2797,12 +2987,18 @@ function renderCustomers() {
     viewButton.setAttribute('aria-expanded', isSelected ? 'true' : 'false');
     viewButton.addEventListener('click', async () => {
       if (state.selectedCustomerId === customer.id) {
-        clearCustomerDetail({ reRender: true });
+        clearCustomerDetail({ reRender: true, restoreFocus: viewButton });
       } else {
-        await populateCustomerDetail(customer);
+        await populateCustomerDetail(customer, { trigger: viewButton });
       }
     });
     actionsCell.appendChild(viewButton);
+
+    if (isSelected && isDashboardOverlayActive(customerDetail)) {
+      updateDashboardOverlayOptions({ restoreFocus: viewButton });
+      viewButton.textContent = 'Ocultar detalle';
+      viewButton.setAttribute('aria-expanded', 'true');
+    }
 
     row.appendChild(nameCell);
     row.appendChild(documentCell);
@@ -2811,37 +3007,24 @@ function renderCustomers() {
     row.appendChild(actionsCell);
 
     customersTableBody.appendChild(row);
-
-    if (isSelected && customerDetail) {
-      const detailRow = document.createElement('tr');
-      detailRow.className = 'customer-detail-row';
-      detailRow.dataset.customerId = String(customer.id);
-
-      const detailCell = document.createElement('td');
-      detailCell.colSpan = CUSTOMER_TABLE_COLUMN_COUNT;
-      detailCell.className = 'customer-detail-cell';
-      detailCell.appendChild(customerDetail);
-
-      detailRow.appendChild(detailCell);
-      customersTableBody.appendChild(detailRow);
-      activeCustomerDetailRow = detailRow;
-      customerDetail.classList.remove('hidden');
-      viewButton.textContent = 'Ocultar detalle';
-      viewButton.setAttribute('aria-expanded', 'true');
-      detailRendered = true;
-    }
   });
-
-  if (!detailRendered && customerDetail) {
-    customerDetail.classList.add('hidden');
-    activeCustomerDetailRow = null;
-  }
 }
 
-async function populateCustomerDetail(customer) {
+async function populateCustomerDetail(customer, options = {}) {
   if (!customerDetail) return;
+
+  const triggerElement = options.trigger instanceof HTMLElement ? options.trigger : null;
   state.selectedCustomerId = customer.id;
-  customerDetail.classList.remove('hidden');
+
+  openDashboardOverlaySection(customerDetail, {
+    labelledBy: 'customerDetailTitle',
+    contextTab: 'customersPanel',
+    focusSelector: '#updateCustomerName',
+    restoreFocus: triggerElement || null,
+    onClose: () => {
+      clearCustomerDetail({ skipOverlayClose: true, reRender: true });
+    },
+  });
 
   const cacheKey = String(customer.id);
   const expectedOrderCount =
@@ -2923,18 +3106,21 @@ async function populateCustomerDetail(customer) {
   renderCustomerOrderHistory(customer);
   renderCustomers();
   requestAnimationFrame(() => {
-    const detailRow = customersTableBody?.querySelector(
-      `.customer-detail-row[data-customer-id="${customer.id}"]`,
+    const row = customersTableBody?.querySelector(
+      `.customer-row[data-customer-id="${customer.id}"]`,
     );
-    detailRow?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    row?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 }
 
 function clearCustomerDetail(options = {}) {
   if (!customerDetail) return;
-  const { reRender = false } = options;
-  customerDetail.classList.add('hidden');
+
+  const { reRender = false, skipOverlayClose = false, restoreFocus = null } = options;
+
   state.selectedCustomerId = null;
+  customerDetail.classList.add('hidden');
+  customerDetail.setAttribute('aria-hidden', 'true');
 
   if (customerDetailTitle) {
     customerDetailTitle.textContent = CUSTOMER_DETAIL_DEFAULT_TITLE;
@@ -2949,7 +3135,15 @@ function clearCustomerDetail(options = {}) {
     updateCustomerMeasurementsContainer.innerHTML = '';
   }
 
-  removeCustomerDetailRow();
+  if (!skipOverlayClose && isDashboardOverlayActive(customerDetail)) {
+    closeDashboardOverlaySection({ skipCallbacks: true, restoreFocus });
+  } else if (restoreFocus instanceof HTMLElement) {
+    requestAnimationFrame(() => {
+      if (restoreFocus.isConnected) {
+        restoreFocus.focus();
+      }
+    });
+  }
 
   if (reRender) {
     renderCustomers();
@@ -3292,7 +3486,7 @@ if (orderNextPageButton) {
 
 if (showCreateCustomerButton) {
   showCreateCustomerButton.addEventListener('click', () => {
-    setCreateCustomerVisible(true);
+    setCreateCustomerVisible(true, { trigger: showCreateCustomerButton });
   });
 }
 
@@ -3367,6 +3561,23 @@ kanbanDetailCloseElements.forEach((element) => {
   });
 });
 
+dashboardOverlayCloseElements.forEach((element) => {
+  element.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (isDashboardOverlayActive()) {
+      closeDashboardOverlaySection();
+    }
+  });
+});
+
+if (dashboardOverlay) {
+  dashboardOverlay.addEventListener('click', (event) => {
+    if (event.target === dashboardOverlay && isDashboardOverlayActive()) {
+      closeDashboardOverlaySection();
+    }
+  });
+}
+
 if (orderKanbanDetailOverlay) {
   orderKanbanDetailOverlay.addEventListener('click', (event) => {
     if (event.target === orderKanbanDetailOverlay && currentOrderDetailHost === 'overlay') {
@@ -3377,8 +3588,14 @@ if (orderKanbanDetailOverlay) {
 
 if (typeof document !== 'undefined') {
   document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+    if (isDashboardOverlayActive()) {
+      closeDashboardOverlaySection();
+      return;
+    }
     if (
-      event.key === 'Escape' &&
       currentOrderDetailHost === 'overlay' &&
       orderKanbanDetailOverlay &&
       !orderKanbanDetailOverlay.classList.contains('hidden')
@@ -3790,13 +4007,6 @@ function updateOrderDetailOverlayVisibility() {
       document.body.classList.remove('kanban-detail-open');
     }
   }
-}
-
-function removeCustomerDetailRow() {
-  if (activeCustomerDetailRow && activeCustomerDetailRow.parentNode) {
-    activeCustomerDetailRow.parentNode.removeChild(activeCustomerDetailRow);
-  }
-  activeCustomerDetailRow = null;
 }
 
 function getStatusBadgeVariant(status) {
