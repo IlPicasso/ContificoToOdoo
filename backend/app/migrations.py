@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import DBAPIError
@@ -67,7 +69,50 @@ def ensure_assigned_vendor_column(engine: Engine) -> None:
             raise
 
 
+def ensure_delivery_date_is_datetime(engine: Engine) -> None:
+    """Upgrade the delivery_date column to store date and time information."""
+
+    inspector = inspect(engine)
+    if "orders" not in set(inspector.get_table_names()):
+        return
+
+    columns = inspector.get_columns("orders")
+    delivery_column = next((column for column in columns if column["name"] == "delivery_date"), None)
+    if delivery_column is None:
+        return
+
+    column_type = delivery_column.get("type")
+    python_type = None
+    if column_type is not None:
+        try:
+            python_type = column_type.python_type  # type: ignore[attr-defined]
+        except (NotImplementedError, AttributeError):
+            python_type = None
+
+    if python_type is not None and issubclass(python_type, datetime):
+        return
+
+    dialect = engine.dialect.name
+    if dialect == "sqlite":
+        # SQLite stores dates as TEXT and accepts datetime values without schema changes.
+        return
+    if dialect == "postgresql":
+        ddl = "ALTER TABLE orders ALTER COLUMN delivery_date TYPE TIMESTAMP WITHOUT TIME ZONE"
+    elif dialect in {"mysql", "mariadb"}:
+        ddl = "ALTER TABLE orders MODIFY COLUMN delivery_date DATETIME NULL"
+    else:
+        ddl = "ALTER TABLE orders ALTER COLUMN delivery_date TYPE DATETIME"
+
+    with engine.begin() as connection:
+        try:
+            connection.execute(text(ddl))
+        except DBAPIError:
+            # Best-effort migration: ignore databases that cannot alter the column automatically.
+            return
+
+
 def apply_schema_upgrades(engine: Engine) -> None:
     """Apply idempotent schema upgrades required by the application."""
 
     ensure_assigned_vendor_column(engine)
+    ensure_delivery_date_is_datetime(engine)

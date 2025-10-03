@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
@@ -106,7 +106,7 @@ class OrderBase(BaseModel):
     notes: Optional[str] = None
     assigned_tailor_id: Optional[int] = None
     assigned_vendor_id: Optional[int] = None
-    delivery_date: Optional[date] = None
+    delivery_date: Optional[datetime] = None
     invoice_number: Optional[str] = None
     origin_branch: Optional[Establishment] = None
 
@@ -131,7 +131,7 @@ class OrderUpdate(BaseModel):
     notes: Optional[str] = None
     assigned_tailor_id: Optional[int] = None
     assigned_vendor_id: Optional[int] = None
-    delivery_date: Optional[date] = None
+    delivery_date: Optional[datetime] = None
     invoice_number: Optional[str] = None
     origin_branch: Optional[Establishment] = None
 
@@ -143,7 +143,7 @@ class OrderPublic(BaseModel):
     status: OrderStatus
     notes: Optional[str]
     updated_at: datetime
-    delivery_date: Optional[date] = None
+    delivery_date: Optional[datetime] = None
     measurements: List[MeasurementItem] = Field(default_factory=list)
     invoice_number: Optional[str] = None
     origin_branch: Optional[Establishment] = None

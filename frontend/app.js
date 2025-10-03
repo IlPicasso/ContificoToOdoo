@@ -711,26 +711,58 @@ function hasExplicitTimeComponent(value) {
   return false;
 }
 
+function normalizeDateTimeString(value) {
+  if (!value) {
+    return '';
+  }
+  if (value instanceof Date) {
+    return formatDateTimeForApi(value);
+  }
+  if (typeof value === 'number') {
+    return formatDateTimeForApi(new Date(value));
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '';
+    }
+    const isoMatch = trimmed.match(
+      /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?(?:\.\d+)?(?:Z)?$/,
+    );
+    if (isoMatch) {
+      const datePart = isoMatch[1];
+      const hourPart = isoMatch[2] ?? '00';
+      const minutePart = isoMatch[3] ?? '00';
+      const secondPart = isoMatch[4] ?? '00';
+      return `${datePart}T${hourPart}:${minutePart}:${secondPart}`;
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatDateTimeForApi(parsed);
+    }
+  }
+  return '';
+}
+
 function formatDeliveryDateDisplay(order) {
   if (!order?.delivery_date) {
     return '';
   }
   const deliveryValue = order.delivery_date;
-  if (hasExplicitTimeComponent(deliveryValue)) {
-    return formatDate(deliveryValue);
-  }
-  const dateLabel = formatDateOnly(deliveryValue);
-  if (isOrderDelivered(order.status) && order.updated_at) {
+  const hasTime = hasExplicitTimeComponent(deliveryValue);
+  const normalizedValue = normalizeDateTimeString(deliveryValue) || deliveryValue;
+  if (!hasTime && isOrderDelivered(order.status) && order.updated_at) {
     const updated = new Date(order.updated_at);
     if (!Number.isNaN(updated.getTime())) {
       const timeLabel = updated.toLocaleTimeString('es-EC', {
         hour: '2-digit',
         minute: '2-digit',
       });
+      const dateLabel = formatDateOnly(normalizedValue);
       return `${dateLabel} · ${timeLabel}`;
     }
   }
-  return dateLabel;
+  return formatDate(normalizedValue);
 }
 
 function canModifyOrderTasks() {
@@ -838,25 +870,11 @@ function renderOrderTasks() {
     const meta = document.createElement('div');
     meta.className = 'order-task-meta';
 
-    const responsible = document.createElement('span');
-    responsible.className = 'order-task-responsible';
-    responsible.textContent = task.responsible?.full_name
-      ? `Responsable: ${task.responsible.full_name}`
-      : 'Responsable: Sin asignar';
-    meta.appendChild(responsible);
-
     if (task.updated_at) {
       const updated = document.createElement('span');
       updated.className = 'order-task-updated';
       updated.textContent = `Actualizado: ${formatDate(task.updated_at)}`;
       meta.appendChild(updated);
-    }
-
-    if (task.responsible?.full_name) {
-      const responsible = document.createElement('span');
-      responsible.className = 'order-task-responsible';
-      responsible.textContent = `Responsable: ${task.responsible.full_name}`;
-      meta.appendChild(responsible);
     }
 
     if (meta.children.length > 0) {
@@ -1073,29 +1091,22 @@ function renderPublicOrderResults(orders) {
 
   const listHtml = orders
     .map((order) => {
-      const measurements = order.measurements?.length
-        ? `<div class="measurement-tags">${order.measurements
-            .map((item) => `<span class="tag">${item.nombre}: ${item.valor}</span>`)
-            .join('')}</div>`
-        : '<p class="muted">No hay medidas registradas.</p>';
-      const deliveryLabel = order.delivery_date
-        ? formatDeliveryDateDisplay(order) || formatDateOnly(order.delivery_date)
-        : '';
+      const deliveryLabel = order.delivery_date ? formatDeliveryDateDisplay(order) : '';
       const deliveryInfo = deliveryLabel
         ? `<p><strong>Fecha tentativa de entrega:</strong> ${deliveryLabel}</p>`
         : `<p><strong>Fecha tentativa de entrega:</strong> <span class="muted">Sin definir</span></p>`;
+      const invoiceInfo = order.invoice_number
+        ? `<p class="muted">Factura: ${order.invoice_number}</p>`
+        : '<p class="muted">Factura: Sin registrar</p>';
       return `
         <article class="public-order-card">
           <header>
             <h3>Orden ${order.order_number}</h3>
-            <p><strong>Cliente:</strong> ${order.customer_name}</p>
-            ${order.customer_document ? `<p><strong>Documento:</strong> ${order.customer_document}</p>` : ''}
+            ${invoiceInfo}
           </header>
-          <p><strong>Estado:</strong> ${order.status}</p>
+          <p><strong>Cliente:</strong> ${order.customer_name || '—'}</p>
+          <p><strong>Estado:</strong> ${order.status || 'Sin estado'}</p>
           ${deliveryInfo}
-          ${order.notes ? `<p><strong>Notas:</strong> ${order.notes}</p>` : ''}
-          <p><strong>Última actualización:</strong> ${formatDate(order.updated_at)}</p>
-          ${measurements}
         </article>
       `;
     })
@@ -3539,14 +3550,17 @@ function parseDateValue(value) {
   return parsed;
 }
 
-function formatDateForApi(date) {
+function formatDateTimeForApi(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return '';
   }
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
 }
 
 function normalizeDateForApi(value) {
@@ -3554,23 +3568,29 @@ function normalizeDateForApi(value) {
     return '';
   }
   if (value instanceof Date) {
-    return formatDateForApi(value);
+    return formatDateTimeForApi(value);
   }
   if (typeof value === 'number') {
-    return formatDateForApi(new Date(value));
+    return formatDateTimeForApi(new Date(value));
   }
   if (typeof value === 'string') {
     const trimmed = value.trim();
     if (!trimmed) {
       return '';
     }
-    const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})/);
+    const match = trimmed.match(
+      /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?(?:\.\d+)?(?:Z)?$/,
+    );
     if (match) {
-      return match[1];
+      const datePart = match[1];
+      const hourPart = match[2] ?? '00';
+      const minutePart = match[3] ?? '00';
+      const secondPart = match[4] ?? '00';
+      return `${datePart}T${hourPart}:${minutePart}:${secondPart}`;
     }
     const parsed = parseDateValue(trimmed);
     if (parsed) {
-      return formatDateForApi(parsed);
+      return formatDateTimeForApi(parsed);
     }
   }
   return '';
