@@ -79,6 +79,66 @@ python -m app.main
 
 La documentación interactiva estará disponible en `http://<host>:<puerto>/docs`.
 
+#### Integración con Contifico
+
+El proyecto incluye un cliente HTTP para la API de Contifico descrita en
+https://contifico.github.io/. Configura tus credenciales en el archivo `.env` del
+backend (o como variables de entorno) para poder consumir los endpoints oficiales:
+
+```bash
+cat <<'EOF' >> .env
+CONTIFICO_BASE_URL="https://api.contifico.com/sistema/api/v1"
+CONTIFICO_API_KEY="tu-api-key-entregada-por-contifico"
+CONTIFICO_API_TOKEN="tu-api-token-entregado-por-contifico"
+CONTIFICO_COMPANY_ID="opcional-si-tu-empresa-lo-requiere"
+CONTIFICO_TIMEOUT_SECONDS=30
+CONTIFICO_RATE_LIMIT_PER_MINUTE=50
+CONTIFICO_MAX_RETRIES=3
+CONTIFICO_RETRY_BACKOFF_SECONDS=2
+EOF
+```
+
+El cliente envía ambos encabezados (`Authorization: Bearer <token>` y `api-key: <clave>`) tal
+como exige la documentación de Contifico. Puedes utilizar el helper `ContificoClient`
+para crear y actualizar
+facturas o consultar clientes por identificación:
+
+```python
+from app.integrations import ContificoClient
+from app.config import get_settings
+
+settings = get_settings()
+
+with ContificoClient(
+    base_url=settings.contifico_base_url,
+    api_key=settings.contifico_api_key,
+    api_token=settings.contifico_api_token,
+) as contifico:
+    factura = contifico.create_invoice({
+        "tipo_documento": "FAC",
+        "fecha_emision": "01/01/2025",
+        "cliente": {"cedula": "0912345678", "razon_social": "Juan Pérez"},
+        "detalles": [
+            {
+                "producto_id": "COD-PROD",
+                "cantidad": 1,
+                "precio": 100,
+                "porcentaje_iva": 12,
+            }
+        ],
+        "total": 112,
+    })
+
+    # Actualiza la factura agregando el identificador devuelto por Contifico.
+    contifico.update_invoice(factura["id"], {"descripcion": "Pedido actualizado"})
+
+    posibles_clientes = contifico.get_customer_by_document("0912345678")
+```
+
+Cada helper emplea las rutas oficiales (`documento/` y `persona/`) y maneja errores
+transitorios (por ejemplo límites de tasa o respuestas 5xx) para que puedas decidir
+si debes reintentar la operación o informar al usuario.
+
 ### 2. Preparar el frontend
 
 El frontend es una SPA ligera sin dependencias externas. Desde la carpeta `frontend` ejecuta:

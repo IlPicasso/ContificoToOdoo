@@ -7,3 +7,4 @@ passlib[bcrypt]==1.7.4
 pydantic>=2
 pydantic-settings>=2.0.0
 pytest
+httpx
