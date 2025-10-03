@@ -127,6 +127,8 @@ const orderKanbanColumns = document.getElementById('orderKanbanColumns');
 const orderKanbanStatus = document.getElementById('orderKanbanStatus');
 const orderKanbanSearchInput = document.getElementById('orderKanbanSearchInput');
 const orderKanbanRefreshButton = document.getElementById('orderKanbanRefreshButton');
+const orderKanbanDetailContainer = document.getElementById('orderKanbanDetail');
+const orderKanbanDetailMessage = document.getElementById('orderKanbanDetailMessage');
 const orderLookupForm = document.getElementById('orderLookupForm');
 const orderNumberInput = document.getElementById('orderNumber');
 const orderDocumentInput = document.getElementById('customerDocument');
@@ -251,6 +253,7 @@ let lastOrdersViewBeforeCreate = 'list';
 const ORDER_TABLE_COLUMN_COUNT = 6;
 const CUSTOMER_TABLE_COLUMN_COUNT = 5;
 let activeOrderDetailRow = null;
+let currentOrderDetailHost = null;
 let activeCustomerDetailRow = null;
 
 
@@ -436,7 +439,13 @@ function setActiveOrdersView(view) {
   }
   if (nextView === 'kanban') {
     ensureKanbanDataLoaded();
+    updateKanbanDetailVisibility();
   } else {
+    if (currentOrderDetailHost === 'kanban') {
+      currentOrderDetailHost = null;
+    }
+    updateKanbanDetailVisibility();
+    renderOrders();
     renderOrderKanban();
   }
 }
@@ -2953,11 +2962,13 @@ function populateOrderDetail(order, options = {}) {
   }
 
   refreshOrderTasks(order.id);
+  updateKanbanDetailVisibility();
 }
 
 function clearOrderDetail(options = {}) {
   if (!orderDetail) return;
-  const { skipRender = false } = options;
+  const skipRenderOption =
+    typeof options.skipRender === 'boolean' ? options.skipRender : currentOrderDetailHost === 'kanban';
 
   state.selectedOrderId = null;
   updateOrderForm?.reset();
@@ -2984,9 +2995,15 @@ function clearOrderDetail(options = {}) {
   removeOrderDetailRow();
   orderDetail.classList.add('hidden');
 
-  if (!skipRender) {
+  if (currentOrderDetailHost === 'kanban') {
+    currentOrderDetailHost = null;
+  }
+  updateKanbanDetailVisibility();
+
+  if (!skipRenderOption) {
     renderOrders();
   }
+  renderOrderKanban();
 }
 
 async function handleOrderUpdate(event) {
@@ -3555,10 +3572,58 @@ function compareOrdersForDisplay(a, b) {
 }
 
 function removeOrderDetailRow() {
+  if (currentOrderDetailHost !== 'table') {
+    activeOrderDetailRow = null;
+    return;
+  }
   if (activeOrderDetailRow && activeOrderDetailRow.parentNode) {
     activeOrderDetailRow.parentNode.removeChild(activeOrderDetailRow);
   }
   activeOrderDetailRow = null;
+}
+
+function attachOrderDetailToKanban() {
+  if (!orderDetail || !orderKanbanDetailContainer) {
+    return;
+  }
+  if (activeOrderDetailRow && activeOrderDetailRow.parentNode) {
+    activeOrderDetailRow.parentNode.removeChild(activeOrderDetailRow);
+    activeOrderDetailRow = null;
+  }
+  orderKanbanDetailContainer.appendChild(orderDetail);
+  currentOrderDetailHost = 'kanban';
+  orderDetail.classList.remove('hidden');
+  updateKanbanDetailVisibility();
+  requestAnimationFrame(() => {
+    if (orderKanbanDetailContainer?.isConnected) {
+      orderKanbanDetailContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  });
+}
+
+function updateKanbanDetailVisibility() {
+  if (!orderKanbanDetailContainer) {
+    return;
+  }
+  const shouldShowDetail =
+    currentOrderDetailHost === 'kanban' &&
+    state.selectedOrderId !== null &&
+    orderKanbanDetailContainer.contains(orderDetail);
+  orderKanbanDetailContainer.classList.toggle('hidden', !shouldShowDetail);
+  if (orderKanbanDetailMessage) {
+    orderKanbanDetailMessage.classList.toggle('hidden', shouldShowDetail);
+  }
+  if (orderDetail) {
+    orderDetail.classList.toggle('kanban-mode', shouldShowDetail);
+    const hideDetailElement = currentOrderDetailHost === 'kanban' && !shouldShowDetail;
+    orderDetail.classList.toggle('hidden', hideDetailElement);
+    if (currentOrderDetailHost === 'kanban') {
+      orderDetail.setAttribute('aria-hidden', shouldShowDetail ? 'false' : 'true');
+    } else {
+      orderDetail.removeAttribute('aria-hidden');
+      orderDetail.classList.remove('kanban-mode');
+    }
+  }
 }
 
 function removeCustomerDetailRow() {
@@ -3697,8 +3762,8 @@ async function openOrderDetailFromKanban(order) {
 
   const orderIdKey = String(order.id);
   setActiveDashboardTab('ordersPanel');
-  if (state.activeOrdersView !== 'list') {
-    setActiveOrdersView('list');
+  if (state.activeOrdersView !== 'kanban') {
+    setActiveOrdersView('kanban');
   }
 
   let detail = state.orders.find((item) => String(item.id) === orderIdKey);
@@ -3725,7 +3790,9 @@ async function openOrderDetailFromKanban(order) {
     state.orderTotal = state.orders.length;
   }
 
-  populateOrderDetail(detail);
+  populateOrderDetail(detail, { skipRender: true, focusOnDetail: false });
+  attachOrderDetailToKanban();
+  renderOrderKanban();
 }
 
 function createKanbanCard(order) {
@@ -3737,6 +3804,14 @@ function createKanbanCard(order) {
   if (order?.id !== undefined && order?.id !== null) {
     card.dataset.orderId = String(order.id);
   }
+
+  const isActive =
+    state.selectedOrderId !== null &&
+    order?.id !== undefined &&
+    order?.id !== null &&
+    String(state.selectedOrderId) === String(order.id);
+  card.classList.toggle('is-active', Boolean(isActive));
+  card.setAttribute('aria-pressed', isActive ? 'true' : 'false');
 
   const labelParts = [];
   if (order?.order_number) {
@@ -3828,6 +3903,8 @@ function renderOrderKanban() {
     return;
   }
 
+  updateKanbanDetailVisibility();
+
   if (orderKanbanSearchInput && orderKanbanSearchInput.value !== state.kanbanSearchTerm) {
     orderKanbanSearchInput.value = state.kanbanSearchTerm;
   }
@@ -3843,6 +3920,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = 'Inicia sesión para ver el tablero de órdenes.';
       orderKanbanStatus.classList.remove('hidden');
     }
+    updateKanbanDetailVisibility();
     return;
   }
 
@@ -3851,6 +3929,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = 'Cargando tablero Kanban...';
       orderKanbanStatus.classList.remove('hidden');
     }
+    updateKanbanDetailVisibility();
     return;
   }
 
@@ -3859,6 +3938,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = state.kanbanError;
       orderKanbanStatus.classList.remove('hidden');
     }
+    updateKanbanDetailVisibility();
     return;
   }
 
@@ -3870,6 +3950,7 @@ function renderOrderKanban() {
         : 'No hay órdenes registradas.';
       orderKanbanStatus.classList.remove('hidden');
     }
+    updateKanbanDetailVisibility();
     return;
   }
 
@@ -3883,6 +3964,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = 'No se encontraron órdenes que coincidan con la búsqueda actual.';
       orderKanbanStatus.classList.remove('hidden');
     }
+    updateKanbanDetailVisibility();
     return;
   }
 
@@ -3975,6 +4057,8 @@ function renderOrderKanban() {
       orderKanbanStatus.classList.add('hidden');
     }
   }
+
+  updateKanbanDetailVisibility();
 }
 
 function renderOrders() {
@@ -4107,28 +4191,36 @@ function renderOrders() {
 
     ordersTableBody.appendChild(row);
 
-    if (isSelected && orderDetail) {
-      const detailRow = document.createElement('tr');
-      detailRow.className = 'order-detail-row';
-      detailRow.dataset.orderId = String(order.id);
-
-      const detailCell = document.createElement('td');
-      detailCell.colSpan = ORDER_TABLE_COLUMN_COUNT;
-      detailCell.className = 'order-detail-cell';
-      detailCell.appendChild(orderDetail);
-
-      detailRow.appendChild(detailCell);
-      ordersTableBody.appendChild(detailRow);
-      activeOrderDetailRow = detailRow;
-      orderDetail.classList.remove('hidden');
-      detailButton.textContent = 'Ocultar detalle';
-      detailButton.setAttribute('aria-expanded', 'true');
+    if (isSelected) {
       hasActiveDetail = true;
+      if (orderDetail && currentOrderDetailHost !== 'kanban') {
+        const detailRow = document.createElement('tr');
+        detailRow.className = 'order-detail-row';
+        detailRow.dataset.orderId = String(order.id);
+
+        const detailCell = document.createElement('td');
+        detailCell.colSpan = ORDER_TABLE_COLUMN_COUNT;
+        detailCell.className = 'order-detail-cell';
+        detailCell.appendChild(orderDetail);
+
+        detailRow.appendChild(detailCell);
+        ordersTableBody.appendChild(detailRow);
+        activeOrderDetailRow = detailRow;
+        orderDetail.classList.remove('hidden');
+        detailButton.textContent = 'Ocultar detalle';
+        detailButton.setAttribute('aria-expanded', 'true');
+        currentOrderDetailHost = 'table';
+        updateKanbanDetailVisibility();
+      }
     }
   });
 
   if (!hasActiveDetail && orderDetail) {
     orderDetail.classList.add('hidden');
+    if (currentOrderDetailHost !== 'kanban') {
+      currentOrderDetailHost = null;
+    }
+    updateKanbanDetailVisibility();
   }
 }
 

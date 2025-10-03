@@ -588,7 +588,18 @@
                 </p>
               </div>
               <div id="orderKanbanStatus" class="kanban-status muted hidden" aria-live="polite"></div>
-              <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
+              <div class="kanban-content">
+                <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
+                <aside
+                  id="orderKanbanDetail"
+                  class="kanban-detail hidden"
+                  aria-live="polite"
+                >
+                  <p id="orderKanbanDetailMessage" class="muted small">
+                    Selecciona una orden del tablero para ver el detalle.
+                  </p>
+                </aside>
+              </div>
             </div>
 
           </section>
