@@ -1379,19 +1379,6 @@ body.kanban-detail-open {
   overflow: hidden;
 }
 
-body.dashboard-overlay-open {
-  overflow: hidden;
-}
-
-#dashboardOverlayContent > * {
-  width: 100%;
-}
-
-#dashboardOverlayContent .customer-create,
-#dashboardOverlayContent .customer-detail {
-  margin-top: 0;
-}
-
 .kanban-column {
   background: var(--surface-muted);
   border: 1px solid rgba(7, 10, 12, 0.08);
