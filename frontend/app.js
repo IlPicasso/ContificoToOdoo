@@ -35,6 +35,7 @@ const state = {
   kanbanLastUpdated: null,
   activeOrdersView: 'list',
   isCreateCustomerVisible: false,
+  isCustomerDetailVisible: false,
   isCreateUserVisible: false,
   auditLogs: [],
   users: [],
@@ -146,6 +147,8 @@ const updateCustomerForm = document.getElementById('updateCustomerForm');
 const customerSearchInput = document.getElementById('customerSearchInput');
 const showCreateCustomerButton = document.getElementById('showCreateCustomerButton');
 const createCustomerSection = document.getElementById('createCustomerSection');
+const customerCreateOverlay = document.getElementById('customerCreateOverlay');
+const customerCreateDialog = document.getElementById('customerCreateDialog');
 const closeCreateCustomerButton = document.getElementById('closeCreateCustomerButton');
 const customersTableBody = document.getElementById('customersTableBody');
 const customerPageSizeSelect = document.getElementById('customerPageSize');
@@ -153,6 +156,8 @@ const customerPrevPageButton = document.getElementById('customerPrevPage');
 const customerNextPageButton = document.getElementById('customerNextPage');
 const customerPaginationInfo = document.getElementById('customerPaginationInfo');
 const customerDetail = document.getElementById('customerDetail');
+const customerDetailOverlay = document.getElementById('customerDetailOverlay');
+const customerDetailDialog = document.getElementById('customerDetailDialog');
 const customerDetailTitle = document.getElementById('customerDetailTitle');
 const customerDetailSummaryElement = document.getElementById('customerDetailSummary');
 const customerOrderHistoryContainer = document.getElementById('customerOrderHistory');
@@ -197,6 +202,7 @@ const orderDetailInvoiceInput = document.getElementById('orderDetailInvoice');
 const orderDetailOriginSelect = document.getElementById('orderDetailOrigin');
 const orderDetailDeliveryDateInput = document.getElementById('orderDetailDeliveryDate');
 const orderDetailNotesTextarea = document.getElementById('orderDetailNotes');
+const deleteOrderButton = document.getElementById('deleteOrderButton');
 const orderDetailMeasurementsContainer = document.getElementById('orderDetailMeasurements');
 const orderTasksList = document.getElementById('orderTasksList');
 const orderTaskForm = document.getElementById('orderTaskForm');
@@ -257,9 +263,9 @@ const ORDER_TABLE_COLUMN_COUNT = 6;
 const CUSTOMER_TABLE_COLUMN_COUNT = 5;
 let activeOrderDetailRow = null;
 let currentOrderDetailHost = null;
-let activeCustomerDetailRow = null;
 let lastKanbanFocusedElement = null;
 let lastKanbanFocusedOrderId = null;
+let lastCustomerDetailTrigger = null;
 
 
 function setActiveView(viewId) {
@@ -1680,10 +1686,19 @@ function resetCreateCustomerForm() {
   }
 }
 
+function updateModalBodyState() {
+  if (typeof document === 'undefined' || !document.body) return;
+  const hasOpenModal = Boolean(document.querySelector('.modal-overlay:not(.hidden)'));
+  document.body.classList.toggle('modal-open', hasOpenModal);
+}
+
 function setCreateCustomerVisible(visible) {
-  if (!createCustomerSection) return;
+  if (!createCustomerSection || !customerCreateOverlay) return;
   state.isCreateCustomerVisible = visible;
   createCustomerSection.classList.toggle('hidden', !visible);
+  createCustomerSection.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  customerCreateOverlay.classList.toggle('hidden', !visible);
+  customerCreateOverlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
   if (showCreateCustomerButton) {
     showCreateCustomerButton.classList.toggle('hidden', visible);
   }
@@ -1691,12 +1706,37 @@ function setCreateCustomerVisible(visible) {
     if (customerMeasurementsContainer && !customerMeasurementsContainer.children.length) {
       createMeasurementSetBlock(customerMeasurementsContainer);
     }
-    createCustomerSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    const firstField = createCustomerForm?.querySelector('input, textarea, select');
-    firstField?.focus();
+    requestAnimationFrame(() => {
+      if (customerCreateDialog?.isConnected) {
+        customerCreateDialog.focus();
+      }
+      const firstField = createCustomerForm?.querySelector('input, textarea, select');
+      firstField?.focus();
+    });
   } else {
     resetCreateCustomerForm();
+    if (showCreateCustomerButton?.isConnected) {
+      showCreateCustomerButton.focus();
+    }
   }
+  updateModalBodyState();
+}
+
+function setCustomerDetailVisible(visible) {
+  if (!customerDetail || !customerDetailOverlay) return;
+  state.isCustomerDetailVisible = visible;
+  customerDetail.classList.toggle('hidden', !visible);
+  customerDetail.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  customerDetailOverlay.classList.toggle('hidden', !visible);
+  customerDetailOverlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  if (visible) {
+    requestAnimationFrame(() => {
+      if (customerDetailDialog?.isConnected) {
+        customerDetailDialog.focus();
+      }
+    });
+  }
+  updateModalBodyState();
 }
 
 function renderCustomerMeasurementOptions(customer) {
@@ -1788,6 +1828,15 @@ function updateUserInfo() {
       deleteCustomerButton.classList.add('hidden');
     }
   }
+  if (deleteOrderButton) {
+    if (state.user.role === 'administrador') {
+      deleteOrderButton.classList.remove('hidden');
+      deleteOrderButton.disabled = state.selectedOrderId === null;
+    } else {
+      deleteOrderButton.classList.add('hidden');
+      deleteOrderButton.disabled = true;
+    }
+  }
   const isAdmin = state.user.role === 'administrador';
   if (!isAdmin && ADMIN_ONLY_TABS.has(activeDashboardTab)) {
     setActiveDashboardTab('ordersPanel');
@@ -1798,6 +1847,7 @@ function updateUserInfo() {
   updateUserCreationForm();
   renderOrderTasks();
   updateDashboardShortcutVisibility();
+  updateOrderActionButtons();
 }
 
 function showDashboard() {
@@ -2315,6 +2365,7 @@ function handleLogout(auto = false) {
   state.kanbanNeedsRefresh = true;
   state.kanbanLastUpdated = null;
   state.isCreateCustomerVisible = false;
+  state.isCustomerDetailVisible = false;
   state.isCreateUserVisible = false;
   state.auditLogs = [];
   state.selectedCustomerId = null;
@@ -2688,7 +2739,6 @@ function renderCustomers() {
   }
 
   customersTableBody.innerHTML = '';
-  activeCustomerDetailRow = null;
 
   if (customerSearchInput && customerSearchInput.value !== state.customerSearchTerm) {
     customerSearchInput.value = state.customerSearchTerm;
@@ -2724,28 +2774,24 @@ function renderCustomers() {
       cell.textContent = hasSearch
         ? 'No se encontraron clientes que coincidan con la búsqueda.'
         : 'No hay clientes registrados aún.';
-      clearCustomerDetail();
+      if (state.isCustomerDetailVisible) {
+        clearCustomerDetail({ skipFocus: true });
+      }
     } else {
       cell.textContent = 'No hay clientes para la página seleccionada.';
     }
     cell.className = 'muted';
     row.appendChild(cell);
     customersTableBody.appendChild(row);
-    if (customerDetail) {
-      customerDetail.classList.add('hidden');
-      activeCustomerDetailRow = null;
-    }
     return;
   }
-
-  let detailRendered = false;
 
   state.customers.forEach((customer) => {
     const row = document.createElement('tr');
     row.classList.add('customer-row');
     row.dataset.customerId = String(customer.id);
 
-    const isSelected = state.selectedCustomerId === customer.id;
+    const isSelected = state.selectedCustomerId === customer.id && state.isCustomerDetailVisible;
     if (isSelected) {
       row.classList.add('is-selected');
     }
@@ -2793,10 +2839,11 @@ function renderCustomers() {
     viewButton.dataset.action = 'toggle-customer-detail';
     viewButton.dataset.customerId = String(customer.id);
     viewButton.setAttribute('aria-controls', 'customerDetail');
-    viewButton.textContent = isSelected ? 'Ocultar detalle' : 'Ver detalle';
+    viewButton.textContent = isSelected ? 'Cerrar detalle' : 'Ver detalle';
     viewButton.setAttribute('aria-expanded', isSelected ? 'true' : 'false');
     viewButton.addEventListener('click', async () => {
-      if (state.selectedCustomerId === customer.id) {
+      lastCustomerDetailTrigger = viewButton;
+      if (state.selectedCustomerId === customer.id && state.isCustomerDetailVisible) {
         clearCustomerDetail({ reRender: true });
       } else {
         await populateCustomerDetail(customer);
@@ -2811,37 +2858,12 @@ function renderCustomers() {
     row.appendChild(actionsCell);
 
     customersTableBody.appendChild(row);
-
-    if (isSelected && customerDetail) {
-      const detailRow = document.createElement('tr');
-      detailRow.className = 'customer-detail-row';
-      detailRow.dataset.customerId = String(customer.id);
-
-      const detailCell = document.createElement('td');
-      detailCell.colSpan = CUSTOMER_TABLE_COLUMN_COUNT;
-      detailCell.className = 'customer-detail-cell';
-      detailCell.appendChild(customerDetail);
-
-      detailRow.appendChild(detailCell);
-      customersTableBody.appendChild(detailRow);
-      activeCustomerDetailRow = detailRow;
-      customerDetail.classList.remove('hidden');
-      viewButton.textContent = 'Ocultar detalle';
-      viewButton.setAttribute('aria-expanded', 'true');
-      detailRendered = true;
-    }
   });
-
-  if (!detailRendered && customerDetail) {
-    customerDetail.classList.add('hidden');
-    activeCustomerDetailRow = null;
-  }
 }
 
 async function populateCustomerDetail(customer) {
   if (!customerDetail) return;
   state.selectedCustomerId = customer.id;
-  customerDetail.classList.remove('hidden');
 
   const cacheKey = String(customer.id);
   const expectedOrderCount =
@@ -2921,20 +2943,15 @@ async function populateCustomerDetail(customer) {
   }
 
   renderCustomerOrderHistory(customer);
+  setCustomerDetailVisible(true);
   renderCustomers();
-  requestAnimationFrame(() => {
-    const detailRow = customersTableBody?.querySelector(
-      `.customer-detail-row[data-customer-id="${customer.id}"]`,
-    );
-    detailRow?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  });
 }
 
 function clearCustomerDetail(options = {}) {
   if (!customerDetail) return;
-  const { reRender = false } = options;
-  customerDetail.classList.add('hidden');
+  const { reRender = false, skipFocus = false } = options;
   state.selectedCustomerId = null;
+  setCustomerDetailVisible(false);
 
   if (customerDetailTitle) {
     customerDetailTitle.textContent = CUSTOMER_DETAIL_DEFAULT_TITLE;
@@ -2949,11 +2966,14 @@ function clearCustomerDetail(options = {}) {
     updateCustomerMeasurementsContainer.innerHTML = '';
   }
 
-  removeCustomerDetailRow();
-
   if (reRender) {
     renderCustomers();
   }
+
+  if (!skipFocus && lastCustomerDetailTrigger?.isConnected) {
+    lastCustomerDetailTrigger.focus();
+  }
+  lastCustomerDetailTrigger = null;
 }
 
 if (closeCustomerDetailButton) {
@@ -2961,6 +2981,23 @@ if (closeCustomerDetailButton) {
     clearCustomerDetail({ reRender: true });
   });
 }
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || event.defaultPrevented) {
+    return;
+  }
+  const detailOpen = customerDetailOverlay && !customerDetailOverlay.classList.contains('hidden');
+  if (detailOpen) {
+    event.preventDefault();
+    clearCustomerDetail({ reRender: true });
+    return;
+  }
+  const createOpen = customerCreateOverlay && !customerCreateOverlay.classList.contains('hidden');
+  if (createOpen) {
+    event.preventDefault();
+    setCreateCustomerVisible(false);
+  }
+});
 
 function populateOrderDetail(order, options = {}) {
   if (!orderDetail || !order) return;
@@ -3302,6 +3339,17 @@ if (closeCreateCustomerButton) {
   });
 }
 
+document.querySelectorAll('[data-modal-close]').forEach((element) => {
+  element.addEventListener('click', () => {
+    const target = element.dataset.modalClose;
+    if (target === 'customer-create') {
+      setCreateCustomerVisible(false);
+    } else if (target === 'customer-detail') {
+      clearCustomerDetail({ reRender: true });
+    }
+  });
+});
+
 if (toggleCreateUserButton) {
   toggleCreateUserButton.addEventListener('click', () => {
     const shouldShow = !state.isCreateUserVisible;
@@ -3484,6 +3532,40 @@ if (deleteCustomerButton) {
       state.selectedCustomerId = null;
       await loadCustomers();
       await refreshCustomerOptions();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+}
+
+if (deleteOrderButton) {
+  deleteOrderButton.addEventListener('click', async () => {
+    if (state.selectedOrderId === null) {
+      return;
+    }
+    if (!confirm('¿Estás seguro de eliminar esta orden? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    const orderId = state.selectedOrderId;
+    const orderToDelete = state.orders.find((order) => order.id === orderId);
+    const affectedCustomerId = orderToDelete?.customer_id ?? null;
+    try {
+      await apiFetch(`/orders/${orderId}`, { method: 'DELETE' });
+      showToast('Orden eliminada correctamente.', 'success');
+      if (affectedCustomerId !== null && affectedCustomerId !== undefined) {
+        delete state.customerOrdersCache[String(affectedCustomerId)];
+        delete state.customerDisplayCache[String(affectedCustomerId)];
+        const customerEntry = state.customers.find((customer) => customer.id === affectedCustomerId);
+        if (customerEntry && typeof customerEntry.order_count === 'number' && customerEntry.order_count > 0) {
+          customerEntry.order_count = Math.max(0, customerEntry.order_count - 1);
+        }
+      }
+      clearOrderDetail({ skipRender: true });
+      await loadOrders();
+      if (affectedCustomerId) {
+        await loadCustomers();
+      }
+      markKanbanDataStale();
     } catch (error) {
       showToast(error.message, 'error');
     }
@@ -3790,13 +3872,16 @@ function updateOrderDetailOverlayVisibility() {
       document.body.classList.remove('kanban-detail-open');
     }
   }
+  updateOrderActionButtons();
 }
 
-function removeCustomerDetailRow() {
-  if (activeCustomerDetailRow && activeCustomerDetailRow.parentNode) {
-    activeCustomerDetailRow.parentNode.removeChild(activeCustomerDetailRow);
+function updateOrderActionButtons() {
+  if (!deleteOrderButton) {
+    return;
   }
-  activeCustomerDetailRow = null;
+  const isAdmin = state.user?.role === 'administrador';
+  const hasSelection = typeof state.selectedOrderId === 'number';
+  deleteOrderButton.disabled = !isAdmin || !hasSelection;
 }
 
 function getStatusBadgeVariant(status) {

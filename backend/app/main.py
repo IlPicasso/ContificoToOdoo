@@ -335,6 +335,11 @@ def delete_customer_endpoint(
     customer = crud.get_customer(db, customer_id)
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+    if crud.customer_has_orders(db, customer.id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede eliminar el cliente porque tiene órdenes registradas.",
+        )
     before = crud.serialize_customer(customer)
     crud.delete_customer(db, customer)
     crud.create_audit_log(
