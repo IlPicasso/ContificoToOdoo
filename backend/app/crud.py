@@ -287,6 +287,18 @@ def delete_customer(db: Session, db_customer: models.Customer) -> None:
     db.commit()
 
 
+def customer_has_orders(db: Session, customer_id: int) -> bool:
+    """Return True if the customer has at least one linked order."""
+
+    return (
+        db.query(models.Order)
+        .filter(models.Order.customer_id == customer_id)
+        .limit(1)
+        .first()
+        is not None
+    )
+
+
 # Order operations ----------------------------------------------------------
 
 def _measurements_to_dicts(measurements: Iterable[schemas.MeasurementItem]):

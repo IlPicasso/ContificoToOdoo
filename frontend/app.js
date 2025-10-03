@@ -202,6 +202,7 @@ const orderDetailInvoiceInput = document.getElementById('orderDetailInvoice');
 const orderDetailOriginSelect = document.getElementById('orderDetailOrigin');
 const orderDetailDeliveryDateInput = document.getElementById('orderDetailDeliveryDate');
 const orderDetailNotesTextarea = document.getElementById('orderDetailNotes');
+const deleteOrderButton = document.getElementById('deleteOrderButton');
 const orderDetailMeasurementsContainer = document.getElementById('orderDetailMeasurements');
 const orderTasksList = document.getElementById('orderTasksList');
 const orderTaskForm = document.getElementById('orderTaskForm');
@@ -1827,6 +1828,15 @@ function updateUserInfo() {
       deleteCustomerButton.classList.add('hidden');
     }
   }
+  if (deleteOrderButton) {
+    if (state.user.role === 'administrador') {
+      deleteOrderButton.classList.remove('hidden');
+      deleteOrderButton.disabled = state.selectedOrderId === null;
+    } else {
+      deleteOrderButton.classList.add('hidden');
+      deleteOrderButton.disabled = true;
+    }
+  }
   const isAdmin = state.user.role === 'administrador';
   if (!isAdmin && ADMIN_ONLY_TABS.has(activeDashboardTab)) {
     setActiveDashboardTab('ordersPanel');
@@ -1837,6 +1847,7 @@ function updateUserInfo() {
   updateUserCreationForm();
   renderOrderTasks();
   updateDashboardShortcutVisibility();
+  updateOrderActionButtons();
 }
 
 function showDashboard() {
@@ -3526,6 +3537,40 @@ if (deleteCustomerButton) {
     }
   });
 }
+
+if (deleteOrderButton) {
+  deleteOrderButton.addEventListener('click', async () => {
+    if (state.selectedOrderId === null) {
+      return;
+    }
+    if (!confirm('¿Estás seguro de eliminar esta orden? Esta acción no se puede deshacer.')) {
+      return;
+    }
+    const orderId = state.selectedOrderId;
+    const orderToDelete = state.orders.find((order) => order.id === orderId);
+    const affectedCustomerId = orderToDelete?.customer_id ?? null;
+    try {
+      await apiFetch(`/orders/${orderId}`, { method: 'DELETE' });
+      showToast('Orden eliminada correctamente.', 'success');
+      if (affectedCustomerId !== null && affectedCustomerId !== undefined) {
+        delete state.customerOrdersCache[String(affectedCustomerId)];
+        delete state.customerDisplayCache[String(affectedCustomerId)];
+        const customerEntry = state.customers.find((customer) => customer.id === affectedCustomerId);
+        if (customerEntry && typeof customerEntry.order_count === 'number' && customerEntry.order_count > 0) {
+          customerEntry.order_count = Math.max(0, customerEntry.order_count - 1);
+        }
+      }
+      clearOrderDetail({ skipRender: true });
+      await loadOrders();
+      if (affectedCustomerId) {
+        await loadCustomers();
+      }
+      markKanbanDataStale();
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  });
+}
 async function createOrder(event) {
   event.preventDefault();
   if (!createOrderForm) return;
@@ -3827,6 +3872,16 @@ function updateOrderDetailOverlayVisibility() {
       document.body.classList.remove('kanban-detail-open');
     }
   }
+  updateOrderActionButtons();
+}
+
+function updateOrderActionButtons() {
+  if (!deleteOrderButton) {
+    return;
+  }
+  const isAdmin = state.user?.role === 'administrador';
+  const hasSelection = typeof state.selectedOrderId === 'number';
+  deleteOrderButton.disabled = !isAdmin || !hasSelection;
 }
 
 function getStatusBadgeVariant(status) {
