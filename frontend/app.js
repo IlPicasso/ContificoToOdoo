@@ -128,7 +128,10 @@ const orderKanbanStatus = document.getElementById('orderKanbanStatus');
 const orderKanbanSearchInput = document.getElementById('orderKanbanSearchInput');
 const orderKanbanRefreshButton = document.getElementById('orderKanbanRefreshButton');
 const orderKanbanDetailContainer = document.getElementById('orderKanbanDetail');
+const orderKanbanDetailOverlay = document.getElementById('orderKanbanDetailOverlay');
+const orderKanbanDetailDialog = document.getElementById('orderKanbanDetailDialog');
 const orderKanbanDetailMessage = document.getElementById('orderKanbanDetailMessage');
+const kanbanDetailCloseElements = document.querySelectorAll('[data-kanban-detail-close]');
 const orderLookupForm = document.getElementById('orderLookupForm');
 const orderNumberInput = document.getElementById('orderNumber');
 const orderDocumentInput = document.getElementById('customerDocument');
@@ -255,6 +258,8 @@ const CUSTOMER_TABLE_COLUMN_COUNT = 5;
 let activeOrderDetailRow = null;
 let currentOrderDetailHost = null;
 let activeCustomerDetailRow = null;
+let lastKanbanFocusedElement = null;
+let lastKanbanFocusedOrderId = null;
 
 
 function setActiveView(viewId) {
@@ -2967,8 +2972,11 @@ function populateOrderDetail(order, options = {}) {
 
 function clearOrderDetail(options = {}) {
   if (!orderDetail) return;
+  const wasKanbanHost = currentOrderDetailHost === 'kanban';
   const skipRenderOption =
-    typeof options.skipRender === 'boolean' ? options.skipRender : currentOrderDetailHost === 'kanban';
+    typeof options.skipRender === 'boolean' ? options.skipRender : wasKanbanHost;
+  const focusOrderId = lastKanbanFocusedOrderId;
+  const focusElement = lastKanbanFocusedElement;
 
   state.selectedOrderId = null;
   updateOrderForm?.reset();
@@ -2995,7 +3003,7 @@ function clearOrderDetail(options = {}) {
   removeOrderDetailRow();
   orderDetail.classList.add('hidden');
 
-  if (currentOrderDetailHost === 'kanban') {
+  if (wasKanbanHost) {
     currentOrderDetailHost = null;
   }
   updateKanbanDetailVisibility();
@@ -3004,6 +3012,29 @@ function clearOrderDetail(options = {}) {
     renderOrders();
   }
   renderOrderKanban();
+
+  if (wasKanbanHost) {
+    requestAnimationFrame(() => {
+      let focusTarget = null;
+      if (focusOrderId && orderKanbanColumns) {
+        focusTarget = orderKanbanColumns.querySelector(`[data-order-id="${focusOrderId}"]`);
+      }
+      if (!(focusTarget instanceof HTMLElement) && focusElement instanceof HTMLElement) {
+        focusTarget = focusElement.isConnected ? focusElement : null;
+      }
+      if (!(focusTarget instanceof HTMLElement)) {
+        focusTarget = Array.from(ordersViewToggleButtons).find(
+          (btn) => btn instanceof HTMLElement && btn.dataset.ordersView === 'kanban',
+        );
+      }
+      if (focusTarget instanceof HTMLElement) {
+        focusTarget.focus();
+      }
+    });
+  }
+
+  lastKanbanFocusedElement = null;
+  lastKanbanFocusedOrderId = null;
 }
 
 async function handleOrderUpdate(event) {
@@ -3244,6 +3275,40 @@ if (cancelEditUserButton) {
 if (closeOrderDetailButton) {
   closeOrderDetailButton.addEventListener('click', () => {
     clearOrderDetail();
+  });
+}
+
+kanbanDetailCloseElements.forEach((element) => {
+  element.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (
+      orderKanbanDetailOverlay &&
+      !orderKanbanDetailOverlay.classList.contains('hidden') &&
+      currentOrderDetailHost === 'kanban'
+    ) {
+      clearOrderDetail();
+    }
+  });
+});
+
+if (orderKanbanDetailOverlay) {
+  orderKanbanDetailOverlay.addEventListener('click', (event) => {
+    if (event.target === orderKanbanDetailOverlay && currentOrderDetailHost === 'kanban') {
+      clearOrderDetail();
+    }
+  });
+}
+
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', (event) => {
+    if (
+      event.key === 'Escape' &&
+      currentOrderDetailHost === 'kanban' &&
+      orderKanbanDetailOverlay &&
+      !orderKanbanDetailOverlay.classList.contains('hidden')
+    ) {
+      clearOrderDetail();
+    }
   });
 }
 
@@ -3595,8 +3660,8 @@ function attachOrderDetailToKanban() {
   orderDetail.classList.remove('hidden');
   updateKanbanDetailVisibility();
   requestAnimationFrame(() => {
-    if (orderKanbanDetailContainer?.isConnected) {
-      orderKanbanDetailContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    if (orderKanbanDetailDialog?.isConnected) {
+      orderKanbanDetailDialog.focus();
     }
   });
 }
@@ -3605,16 +3670,19 @@ function updateKanbanDetailVisibility() {
   if (!orderKanbanDetailContainer) {
     return;
   }
-  const shouldShowDetail =
-    currentOrderDetailHost === 'kanban' &&
-    state.selectedOrderId !== null &&
-    orderKanbanDetailContainer.contains(orderDetail);
+  const isKanbanHost =
+    currentOrderDetailHost === 'kanban' && orderKanbanDetailContainer.contains(orderDetail);
+  const shouldShowDetail = isKanbanHost && state.selectedOrderId !== null;
   orderKanbanDetailContainer.classList.toggle('hidden', !shouldShowDetail);
+  if (orderKanbanDetailOverlay) {
+    orderKanbanDetailOverlay.classList.toggle('hidden', !shouldShowDetail);
+    orderKanbanDetailOverlay.setAttribute('aria-hidden', shouldShowDetail ? 'false' : 'true');
+  }
   if (orderKanbanDetailMessage) {
     orderKanbanDetailMessage.classList.toggle('hidden', shouldShowDetail);
   }
   if (orderDetail) {
-    orderDetail.classList.toggle('kanban-mode', shouldShowDetail);
+    orderDetail.classList.toggle('kanban-mode', isKanbanHost);
     const hideDetailElement = currentOrderDetailHost === 'kanban' && !shouldShowDetail;
     orderDetail.classList.toggle('hidden', hideDetailElement);
     if (currentOrderDetailHost === 'kanban') {
@@ -3623,6 +3691,9 @@ function updateKanbanDetailVisibility() {
       orderDetail.removeAttribute('aria-hidden');
       orderDetail.classList.remove('kanban-mode');
     }
+  }
+  if (document.body) {
+    document.body.classList.toggle('kanban-detail-open', shouldShowDetail);
   }
 }
 
@@ -3760,6 +3831,14 @@ async function openOrderDetailFromKanban(order) {
     return;
   }
 
+  if (!lastKanbanFocusedOrderId) {
+    lastKanbanFocusedOrderId = String(order.id);
+  }
+  if (!(lastKanbanFocusedElement instanceof HTMLElement)) {
+    lastKanbanFocusedElement =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+
   const orderIdKey = String(order.id);
   setActiveDashboardTab('ordersPanel');
   if (state.activeOrdersView !== 'kanban') {
@@ -3829,6 +3908,10 @@ function createKanbanCard(order) {
 
   const handleCardActivation = (event) => {
     event.preventDefault();
+    if (order?.id !== undefined && order?.id !== null) {
+      lastKanbanFocusedOrderId = String(order.id);
+    }
+    lastKanbanFocusedElement = card;
     openOrderDetailFromKanban(order);
   };
 
@@ -3836,7 +3919,7 @@ function createKanbanCard(order) {
   card.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      openOrderDetailFromKanban(order);
+      handleCardActivation(event);
     }
   });
 

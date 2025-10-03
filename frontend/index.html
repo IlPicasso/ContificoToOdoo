@@ -470,7 +470,7 @@
               <div id="orderDetail" class="order-detail hidden">
                 <div class="order-detail-header">
                   <div>
-                    <h4>Detalle de la orden</h4>
+                    <h4 id="orderDetailDialogHeading">Detalle de la orden</h4>
                     <p class="muted small">Orden <span id="orderDetailNumber"></span></p>
                   </div>
                   <button type="button" id="closeOrderDetailButton" class="link-button">Cerrar</button>
@@ -588,17 +588,28 @@
                 </p>
               </div>
               <div id="orderKanbanStatus" class="kanban-status muted hidden" aria-live="polite"></div>
-              <div class="kanban-content">
-                <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
-                <aside
-                  id="orderKanbanDetail"
-                  class="kanban-detail hidden"
-                  aria-live="polite"
-                >
+              <div id="orderKanbanColumns" class="kanban-board" aria-live="polite"></div>
+            </div>
+
+            <div
+              id="orderKanbanDetailOverlay"
+              class="kanban-detail-overlay hidden"
+              aria-hidden="true"
+            >
+              <div class="kanban-detail-backdrop" data-kanban-detail-close></div>
+              <div
+                id="orderKanbanDetailDialog"
+                class="kanban-detail-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="orderDetailDialogHeading"
+                tabindex="-1"
+              >
+                <div id="orderKanbanDetail" class="kanban-detail-content">
                   <p id="orderKanbanDetailMessage" class="muted small">
                     Selecciona una orden del tablero para ver el detalle.
                   </p>
-                </aside>
+                </div>
               </div>
             </div>
 
