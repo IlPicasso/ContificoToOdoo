@@ -141,6 +141,52 @@ function hasExplicitTimeComponent(value) {
   return false;
 }
 
+function formatDateTimeLocalString(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+}
+
+function normalizeDateTimeString(value) {
+  if (!value) {
+    return '';
+  }
+  if (value instanceof Date) {
+    return formatDateTimeLocalString(value);
+  }
+  if (typeof value === 'number') {
+    return formatDateTimeLocalString(new Date(value));
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '';
+    }
+    const isoMatch = trimmed.match(
+      /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2}))?)?(?:\.\d+)?(?:Z)?$/,
+    );
+    if (isoMatch) {
+      const datePart = isoMatch[1];
+      const hourPart = isoMatch[2] ?? '00';
+      const minutePart = isoMatch[3] ?? '00';
+      const secondPart = isoMatch[4] ?? '00';
+      return `${datePart}T${hourPart}:${minutePart}:${secondPart}`;
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatDateTimeLocalString(parsed);
+    }
+  }
+  return '';
+}
+
 function isOrderDelivered(status) {
   return typeof status === 'string' && status.trim().toLowerCase() === 'entregado';
 }
@@ -150,21 +196,20 @@ function formatDeliveryDateLabel(order) {
     return '';
   }
   const deliveryValue = order.delivery_date;
-  if (hasExplicitTimeComponent(deliveryValue)) {
-    return formatDate(deliveryValue);
-  }
-  const dateLabel = formatDateOnly(deliveryValue);
-  if (isOrderDelivered(order.status) && order.updated_at) {
+  const hasTime = hasExplicitTimeComponent(deliveryValue);
+  const normalizedValue = normalizeDateTimeString(deliveryValue) || deliveryValue;
+  if (!hasTime && isOrderDelivered(order.status) && order.updated_at) {
     const updated = new Date(order.updated_at);
     if (!Number.isNaN(updated.getTime())) {
       const timeLabel = updated.toLocaleTimeString('es-EC', {
         hour: '2-digit',
         minute: '2-digit',
       });
+      const dateLabel = formatDateOnly(normalizedValue);
       return `${dateLabel} · ${timeLabel}`;
     }
   }
-  return dateLabel;
+  return formatDate(normalizedValue);
 }
 
 function getStatusBadgeVariant(status) {
@@ -357,9 +402,6 @@ function renderTasks(tasks, { loading = false, error = null } = {}) {
     item.appendChild(description);
 
     const metaParts = [];
-    if (task?.responsible?.full_name) {
-      metaParts.push(`Responsable: ${task.responsible.full_name}`);
-    }
     if (task?.created_at) {
       metaParts.push(`Creada: ${formatDate(task.created_at)}`);
     }

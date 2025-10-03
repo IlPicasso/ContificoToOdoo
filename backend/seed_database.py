@@ -8,7 +8,7 @@ import re
 import secrets
 import string
 from collections import Counter
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Iterable, List, Optional, Sequence, Tuple
 
 from sqlalchemy import MetaData, Table, delete, inspect, select
@@ -238,19 +238,28 @@ def random_password(length: int = 10) -> str:
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-def random_delivery_date(status: models.OrderStatus) -> date | None:
+def random_delivery_date(status: models.OrderStatus) -> datetime | None:
     today = now().date()
+    delivery_day: Optional[date]
     if status == models.OrderStatus.ENTREGADO:
-        return today - timedelta(days=random.randint(1, 30))
-    if status in {
+        delivery_day = today - timedelta(days=random.randint(1, 30))
+    elif status in {
         models.OrderStatus.LISTO_ENTREGA_BATAN,
         models.OrderStatus.LISTO_ENTREGA_URDESA,
         models.OrderStatus.LISTO_ENVIAR_BATAN,
     }:
-        return today + timedelta(days=random.randint(1, 15))
-    if random.random() < 0.3:
-        return today + timedelta(days=random.randint(1, 20))
-    return None
+        delivery_day = today + timedelta(days=random.randint(1, 15))
+    elif random.random() < 0.3:
+        delivery_day = today + timedelta(days=random.randint(1, 20))
+    else:
+        delivery_day = None
+
+    if delivery_day is None:
+        return None
+
+    hour = random.randint(9, 19)
+    minute = random.choice((0, 15, 30, 45))
+    return datetime.combine(delivery_day, time(hour=hour, minute=minute))
 
 
 def seed_users(db: Session, count: int) -> List[Tuple[models.User, str]]:
@@ -345,20 +354,26 @@ def measurement_payload(items: Iterable[schemas.MeasurementItem]) -> List[dict]:
     return payload
 
 
-def random_entry_date(delivery_date: Optional[date]) -> date:
+def random_entry_date(delivery_date: Optional[datetime]) -> datetime:
     """Produce a plausible entry date respecting the delivery date when present."""
 
-    today = date.today()
-    if delivery_date and delivery_date <= today:
-        latest = max(delivery_date - timedelta(days=1), today - timedelta(days=90))
+    today = datetime.now()
+    delivery_reference = delivery_date
+    if delivery_reference and delivery_reference <= today:
+        latest_day = max(
+            delivery_reference - timedelta(days=1), today - timedelta(days=90)
+        )
     else:
-        latest = today
-    earliest = max(latest - timedelta(days=45), today - timedelta(days=120))
-    if earliest > latest:
-        earliest = latest
-    span = max((latest - earliest).days, 0)
+        latest_day = today
+    earliest_day = max(latest_day - timedelta(days=45), today - timedelta(days=120))
+    if earliest_day > latest_day:
+        earliest_day = latest_day
+    span = max(int((latest_day - earliest_day).days), 0)
     offset = random.randint(0, span) if span else 0
-    return latest - timedelta(days=offset)
+    candidate_day = latest_day - timedelta(days=offset)
+    hour = random.randint(8, 18)
+    minute = random.choice((0, 15, 30, 45))
+    return candidate_day.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
 
 def generate_order_tasks(

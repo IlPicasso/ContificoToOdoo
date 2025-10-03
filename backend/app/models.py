@@ -1,6 +1,6 @@
 import enum
 
-from sqlalchemy import Column, Date, DateTime, Enum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import relationship
 
 from .database import Base
@@ -81,7 +81,7 @@ class Order(Base):
     notes = Column(Text, nullable=True)
     assigned_tailor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     assigned_vendor_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    delivery_date = Column(Date, nullable=True)
+    delivery_date = Column(DateTime(timezone=False), nullable=True)
     origin_branch = Column(Enum(Establishment), nullable=True)
     invoice_number = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), default=now, nullable=False)
