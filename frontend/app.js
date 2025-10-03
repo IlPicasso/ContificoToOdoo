@@ -3693,27 +3693,41 @@ function updateKanbanDetailVisibility() {
   const isKanbanHost =
     currentOrderDetailHost === 'kanban' && orderKanbanDetailContainer.contains(orderDetail);
   const shouldShowDetail = isKanbanHost && state.selectedOrderId !== null;
-  orderKanbanDetailContainer.classList.toggle('hidden', !shouldShowDetail);
-  if (orderKanbanDetailOverlay) {
-    orderKanbanDetailOverlay.classList.toggle('hidden', !shouldShowDetail);
-    orderKanbanDetailOverlay.setAttribute('aria-hidden', shouldShowDetail ? 'false' : 'true');
-  }
-  if (orderKanbanDetailMessage) {
-    orderKanbanDetailMessage.classList.toggle('hidden', shouldShowDetail);
+  if (currentOrderDetailHost === 'kanban') {
+    orderKanbanDetailContainer.classList.toggle('hidden', !shouldShowDetail);
+    if (orderKanbanDetailOverlay) {
+      orderKanbanDetailOverlay.classList.toggle('hidden', !shouldShowDetail);
+      orderKanbanDetailOverlay.setAttribute('aria-hidden', shouldShowDetail ? 'false' : 'true');
+    }
+    if (orderKanbanDetailMessage) {
+      orderKanbanDetailMessage.classList.toggle('hidden', shouldShowDetail);
+    }
+  } else {
+    orderKanbanDetailContainer.classList.add('hidden');
+    if (orderKanbanDetailOverlay) {
+      orderKanbanDetailOverlay.classList.add('hidden');
+      orderKanbanDetailOverlay.setAttribute('aria-hidden', 'true');
+    }
+    if (orderKanbanDetailMessage) {
+      orderKanbanDetailMessage.classList.remove('hidden');
+    }
   }
   if (orderDetail) {
     orderDetail.classList.toggle('kanban-mode', isKanbanHost);
     const hideDetailElement = currentOrderDetailHost === 'kanban' && !shouldShowDetail;
-    orderDetail.classList.toggle('hidden', hideDetailElement);
     if (currentOrderDetailHost === 'kanban') {
+      orderDetail.classList.toggle('hidden', hideDetailElement);
       orderDetail.setAttribute('aria-hidden', shouldShowDetail ? 'false' : 'true');
     } else {
       orderDetail.removeAttribute('aria-hidden');
-      orderDetail.classList.remove('kanban-mode');
     }
   }
   if (document.body) {
-    document.body.classList.toggle('kanban-detail-open', shouldShowDetail);
+    if (currentOrderDetailHost === 'kanban') {
+      document.body.classList.toggle('kanban-detail-open', shouldShowDetail);
+    } else {
+      document.body.classList.remove('kanban-detail-open');
+    }
   }
 }
 
