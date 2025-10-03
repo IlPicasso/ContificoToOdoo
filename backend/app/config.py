@@ -39,6 +39,53 @@ class Settings(BaseSettings):
         description="Enable auto reload when running the development server via python -m app.main.",
     )
 
+    contifico_base_url: str = Field(
+        "https://api.contifico.com/sistema/api/v1",
+        description=(
+            "Base URL for Contifico API requests documented at https://contifico.github.io/. "
+            "Loaded from the CONTIFICO_BASE_URL environment variable or the .env file."
+        ),
+    )
+    contifico_token: str | None = Field(
+        None,
+        description=(
+            "Personal access token used to sign Contifico requests. Loaded from the "
+            "CONTIFICO_TOKEN environment variable or the .env file."
+        ),
+    )
+    contifico_timeout_seconds: float = Field(
+        30.0,
+        ge=0,
+        description=(
+            "HTTP timeout (in seconds) for Contifico requests. Loaded from "
+            "CONTIFICO_TIMEOUT_SECONDS or the .env file."
+        ),
+    )
+    contifico_rate_limit_per_minute: int = Field(
+        50,
+        ge=1,
+        description=(
+            "Maximum number of Contifico requests permitted per minute before "
+            "triggering retries. Loaded from CONTIFICO_RATE_LIMIT_PER_MINUTE or the .env file."
+        ),
+    )
+    contifico_max_retries: int = Field(
+        3,
+        ge=0,
+        description=(
+            "Maximum number of retries for transient Contifico errors. Loaded from "
+            "CONTIFICO_MAX_RETRIES or the .env file."
+        ),
+    )
+    contifico_retry_backoff_seconds: float = Field(
+        2.0,
+        ge=0,
+        description=(
+            "Base backoff interval (in seconds) between Contifico retry attempts. "
+            "Loaded from CONTIFICO_RETRY_BACKOFF_SECONDS or the .env file."
+        ),
+    )
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
