@@ -129,7 +129,7 @@ class ContificoClient:
                         response.status_code,
                         response.text,
                     )
-                    error = ContificoPermanentError("Contifico request failed")
+                    raise ContificoPermanentError("Contifico request failed")
                 else:
                     logger.debug("Contifico response %s %s", response.status_code, response.text)
                     try:
