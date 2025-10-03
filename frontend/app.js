@@ -444,15 +444,11 @@ function setActiveOrdersView(view) {
   }
   if (nextView === 'kanban') {
     ensureKanbanDataLoaded();
-    updateKanbanDetailVisibility();
   } else {
-    if (currentOrderDetailHost === 'kanban') {
-      currentOrderDetailHost = null;
-    }
-    updateKanbanDetailVisibility();
     renderOrders();
-    renderOrderKanban();
   }
+  updateOrderDetailOverlayVisibility();
+  renderOrderKanban();
 }
 
 function setActiveDashboardTab(tabId = 'ordersPanel') {
@@ -2581,8 +2577,23 @@ function renderCustomerOrderHistory(customer) {
     const statusWrapper = document.createElement('div');
     statusWrapper.appendChild(createStatusBadge(order.status));
 
+    const actions = document.createElement('div');
+    actions.className = 'customer-order-history-item-actions';
+    actions.appendChild(statusWrapper);
+
+    if (state.token) {
+      const openButton = document.createElement('button');
+      openButton.type = 'button';
+      openButton.className = 'link-button customer-order-history-open';
+      openButton.textContent = 'Ver orden';
+      openButton.addEventListener('click', () => {
+        openOrderDetailFromCustomerHistory(order);
+      });
+      actions.appendChild(openButton);
+    }
+
     header.appendChild(orderNumber);
-    header.appendChild(statusWrapper);
+    header.appendChild(actions);
 
     const invoice = document.createElement('p');
     invoice.className = 'customer-order-history-item-invoice';
@@ -2614,6 +2625,50 @@ function renderCustomerOrderHistory(customer) {
   });
 
   customerOrderHistoryContainer.appendChild(list);
+}
+
+async function openOrderDetailFromCustomerHistory(order) {
+  if (!state.token) {
+    showToast('Inicia sesión para gestionar las órdenes.', 'error');
+    return;
+  }
+  if (!order || order.id === undefined || order.id === null) {
+    showToast('No se pudo abrir el detalle de la orden seleccionada.', 'error');
+    return;
+  }
+
+  const orderIdKey = String(order.id);
+  setActiveDashboardTab('ordersPanel');
+  if (state.activeOrdersView !== 'list') {
+    setActiveOrdersView('list');
+  }
+
+  let detail = state.orders.find((item) => String(item.id) === orderIdKey);
+  if (!detail) {
+    try {
+      detail = await apiFetch(`/orders/${encodeURIComponent(orderIdKey)}`);
+    } catch (error) {
+      /* ignore fetch failure and fall back to cached data */
+    }
+  }
+
+  if (!detail) {
+    detail = order;
+  }
+
+  if (!detail || detail.id === undefined || detail.id === null) {
+    showToast('No se pudo abrir el detalle de la orden seleccionada.', 'error');
+    return;
+  }
+
+  const remainingOrders = state.orders.filter((item) => String(item.id) !== orderIdKey);
+  state.orders = [...remainingOrders, detail];
+  if (typeof state.orderTotal !== 'number' || state.orderTotal < state.orders.length) {
+    state.orderTotal = state.orders.length;
+  }
+
+  populateOrderDetail(detail, { focusOnDetail: false });
+  attachOrderDetailToOverlay();
 }
 function renderCustomers() {
   if (!customersTableBody) return;
@@ -2978,14 +3033,15 @@ function populateOrderDetail(order, options = {}) {
   }
 
   refreshOrderTasks(order.id);
-  updateKanbanDetailVisibility();
+  updateOrderDetailOverlayVisibility();
 }
 
 function clearOrderDetail(options = {}) {
   if (!orderDetail) return;
-  const wasKanbanHost = currentOrderDetailHost === 'kanban';
+  const wasOverlayHost = currentOrderDetailHost === 'overlay';
+  const defaultSkipRender = wasOverlayHost && state.activeOrdersView === 'kanban';
   const skipRenderOption =
-    typeof options.skipRender === 'boolean' ? options.skipRender : wasKanbanHost;
+    typeof options.skipRender === 'boolean' ? options.skipRender : defaultSkipRender;
   const focusOrderId = lastKanbanFocusedOrderId;
   const focusElement = lastKanbanFocusedElement;
 
@@ -3014,17 +3070,17 @@ function clearOrderDetail(options = {}) {
   removeOrderDetailRow();
   orderDetail.classList.add('hidden');
 
-  if (wasKanbanHost) {
+  if (wasOverlayHost) {
     currentOrderDetailHost = null;
   }
-  updateKanbanDetailVisibility();
+  updateOrderDetailOverlayVisibility();
 
   if (!skipRenderOption) {
     renderOrders();
   }
   renderOrderKanban();
 
-  if (wasKanbanHost) {
+  if (wasOverlayHost) {
     requestAnimationFrame(() => {
       let focusTarget = null;
       if (focusOrderId && orderKanbanColumns) {
@@ -3295,7 +3351,7 @@ kanbanDetailCloseElements.forEach((element) => {
     if (
       orderKanbanDetailOverlay &&
       !orderKanbanDetailOverlay.classList.contains('hidden') &&
-      currentOrderDetailHost === 'kanban'
+      currentOrderDetailHost === 'overlay'
     ) {
       clearOrderDetail();
     }
@@ -3304,7 +3360,7 @@ kanbanDetailCloseElements.forEach((element) => {
 
 if (orderKanbanDetailOverlay) {
   orderKanbanDetailOverlay.addEventListener('click', (event) => {
-    if (event.target === orderKanbanDetailOverlay && currentOrderDetailHost === 'kanban') {
+    if (event.target === orderKanbanDetailOverlay && currentOrderDetailHost === 'overlay') {
       clearOrderDetail();
     }
   });
@@ -3314,7 +3370,7 @@ if (typeof document !== 'undefined') {
   document.addEventListener('keydown', (event) => {
     if (
       event.key === 'Escape' &&
-      currentOrderDetailHost === 'kanban' &&
+      currentOrderDetailHost === 'overlay' &&
       orderKanbanDetailOverlay &&
       !orderKanbanDetailOverlay.classList.contains('hidden')
     ) {
@@ -3657,17 +3713,13 @@ function compareOrdersForDisplay(a, b) {
 }
 
 function removeOrderDetailRow() {
-  if (currentOrderDetailHost !== 'table') {
-    activeOrderDetailRow = null;
-    return;
-  }
   if (activeOrderDetailRow && activeOrderDetailRow.parentNode) {
     activeOrderDetailRow.parentNode.removeChild(activeOrderDetailRow);
   }
   activeOrderDetailRow = null;
 }
 
-function attachOrderDetailToKanban() {
+function attachOrderDetailToOverlay() {
   if (!orderDetail || !orderKanbanDetailContainer) {
     return;
   }
@@ -3676,9 +3728,9 @@ function attachOrderDetailToKanban() {
     activeOrderDetailRow = null;
   }
   orderKanbanDetailContainer.appendChild(orderDetail);
-  currentOrderDetailHost = 'kanban';
+  currentOrderDetailHost = 'overlay';
   orderDetail.classList.remove('hidden');
-  updateKanbanDetailVisibility();
+  updateOrderDetailOverlayVisibility();
   requestAnimationFrame(() => {
     if (orderKanbanDetailDialog?.isConnected) {
       orderKanbanDetailDialog.focus();
@@ -3686,14 +3738,14 @@ function attachOrderDetailToKanban() {
   });
 }
 
-function updateKanbanDetailVisibility() {
+function updateOrderDetailOverlayVisibility() {
   if (!orderKanbanDetailContainer) {
     return;
   }
-  const isKanbanHost =
-    currentOrderDetailHost === 'kanban' && orderKanbanDetailContainer.contains(orderDetail);
-  const shouldShowDetail = isKanbanHost && state.selectedOrderId !== null;
-  if (currentOrderDetailHost === 'kanban') {
+  const isOverlayHost =
+    currentOrderDetailHost === 'overlay' && orderKanbanDetailContainer.contains(orderDetail);
+  const shouldShowDetail = isOverlayHost && state.selectedOrderId !== null;
+  if (currentOrderDetailHost === 'overlay') {
     orderKanbanDetailContainer.classList.toggle('hidden', !shouldShowDetail);
     if (orderKanbanDetailOverlay) {
       orderKanbanDetailOverlay.classList.toggle('hidden', !shouldShowDetail);
@@ -3713,9 +3765,9 @@ function updateKanbanDetailVisibility() {
     }
   }
   if (orderDetail) {
-    orderDetail.classList.toggle('kanban-mode', isKanbanHost);
-    const hideDetailElement = currentOrderDetailHost === 'kanban' && !shouldShowDetail;
-    if (currentOrderDetailHost === 'kanban') {
+    orderDetail.classList.toggle('kanban-mode', isOverlayHost);
+    const hideDetailElement = currentOrderDetailHost === 'overlay' && !shouldShowDetail;
+    if (currentOrderDetailHost === 'overlay') {
       orderDetail.classList.toggle('hidden', hideDetailElement);
       orderDetail.setAttribute('aria-hidden', shouldShowDetail ? 'false' : 'true');
     } else {
@@ -3723,7 +3775,7 @@ function updateKanbanDetailVisibility() {
     }
   }
   if (document.body) {
-    if (currentOrderDetailHost === 'kanban') {
+    if (currentOrderDetailHost === 'overlay') {
       document.body.classList.toggle('kanban-detail-open', shouldShowDetail);
     } else {
       document.body.classList.remove('kanban-detail-open');
@@ -3904,7 +3956,7 @@ async function openOrderDetailFromKanban(order) {
   }
 
   populateOrderDetail(detail, { skipRender: true, focusOnDetail: false });
-  attachOrderDetailToKanban();
+  attachOrderDetailToOverlay();
   renderOrderKanban();
 }
 
@@ -4020,7 +4072,7 @@ function renderOrderKanban() {
     return;
   }
 
-  updateKanbanDetailVisibility();
+  updateOrderDetailOverlayVisibility();
 
   if (orderKanbanSearchInput && orderKanbanSearchInput.value !== state.kanbanSearchTerm) {
     orderKanbanSearchInput.value = state.kanbanSearchTerm;
@@ -4037,7 +4089,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = 'Inicia sesión para ver el tablero de órdenes.';
       orderKanbanStatus.classList.remove('hidden');
     }
-    updateKanbanDetailVisibility();
+    updateOrderDetailOverlayVisibility();
     return;
   }
 
@@ -4046,7 +4098,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = 'Cargando tablero Kanban...';
       orderKanbanStatus.classList.remove('hidden');
     }
-    updateKanbanDetailVisibility();
+    updateOrderDetailOverlayVisibility();
     return;
   }
 
@@ -4055,7 +4107,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = state.kanbanError;
       orderKanbanStatus.classList.remove('hidden');
     }
-    updateKanbanDetailVisibility();
+    updateOrderDetailOverlayVisibility();
     return;
   }
 
@@ -4067,7 +4119,7 @@ function renderOrderKanban() {
         : 'No hay órdenes registradas.';
       orderKanbanStatus.classList.remove('hidden');
     }
-    updateKanbanDetailVisibility();
+    updateOrderDetailOverlayVisibility();
     return;
   }
 
@@ -4081,7 +4133,7 @@ function renderOrderKanban() {
       orderKanbanStatus.textContent = 'No se encontraron órdenes que coincidan con la búsqueda actual.';
       orderKanbanStatus.classList.remove('hidden');
     }
-    updateKanbanDetailVisibility();
+    updateOrderDetailOverlayVisibility();
     return;
   }
 
@@ -4175,7 +4227,7 @@ function renderOrderKanban() {
     }
   }
 
-  updateKanbanDetailVisibility();
+  updateOrderDetailOverlayVisibility();
 }
 
 function renderOrders() {
@@ -4294,7 +4346,8 @@ function renderOrders() {
       if (state.selectedOrderId === order.id) {
         clearOrderDetail();
       } else {
-        populateOrderDetail(order);
+        populateOrderDetail(order, { focusOnDetail: false });
+        attachOrderDetailToOverlay();
       }
     });
     actionsCell.appendChild(detailButton);
@@ -4310,34 +4363,20 @@ function renderOrders() {
 
     if (isSelected) {
       hasActiveDetail = true;
-      if (orderDetail && currentOrderDetailHost !== 'kanban') {
-        const detailRow = document.createElement('tr');
-        detailRow.className = 'order-detail-row';
-        detailRow.dataset.orderId = String(order.id);
-
-        const detailCell = document.createElement('td');
-        detailCell.colSpan = ORDER_TABLE_COLUMN_COUNT;
-        detailCell.className = 'order-detail-cell';
-        detailCell.appendChild(orderDetail);
-
-        detailRow.appendChild(detailCell);
-        ordersTableBody.appendChild(detailRow);
-        activeOrderDetailRow = detailRow;
-        orderDetail.classList.remove('hidden');
-        detailButton.textContent = 'Ocultar detalle';
-        detailButton.setAttribute('aria-expanded', 'true');
-        currentOrderDetailHost = 'table';
-        updateKanbanDetailVisibility();
+      detailButton.textContent = 'Ocultar detalle';
+      detailButton.setAttribute('aria-expanded', 'true');
+      if (currentOrderDetailHost !== 'overlay') {
+        attachOrderDetailToOverlay();
       }
     }
   });
 
   if (!hasActiveDetail && orderDetail) {
     orderDetail.classList.add('hidden');
-    if (currentOrderDetailHost !== 'kanban') {
+    if (currentOrderDetailHost !== 'overlay') {
       currentOrderDetailHost = null;
     }
-    updateKanbanDetailVisibility();
+    updateOrderDetailOverlayVisibility();
   }
 }
 
