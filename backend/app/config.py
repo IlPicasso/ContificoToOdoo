@@ -46,11 +46,25 @@ class Settings(BaseSettings):
             "Loaded from the CONTIFICO_BASE_URL environment variable or the .env file."
         ),
     )
-    contifico_token: str | None = Field(
+    contifico_api_key: str | None = Field(
         None,
         description=(
-            "Personal access token used to sign Contifico requests. Loaded from the "
-            "CONTIFICO_TOKEN environment variable or the .env file."
+            "API key issued by Contifico. Loaded from the CONTIFICO_API_KEY environment "
+            "variable or the .env file."
+        ),
+    )
+    contifico_api_token: str | None = Field(
+        None,
+        description=(
+            "API token used alongside the API key to authenticate Contifico requests. "
+            "Loaded from the CONTIFICO_API_TOKEN environment variable or the .env file."
+        ),
+    )
+    contifico_company_id: str | None = Field(
+        None,
+        description=(
+            "Optional company identifier for Contifico operations when required by "
+            "specific endpoints. Loaded from CONTIFICO_COMPANY_ID or the .env file."
         ),
     )
     contifico_timeout_seconds: float = Field(

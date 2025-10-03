@@ -31,7 +31,8 @@ class ContificoClient:
         self,
         *,
         base_url: str,
-        token: str,
+        api_key: str,
+        api_token: str,
         timeout: float = 30.0,
         rate_limit_per_minute: int = 50,
         max_retries: int = 3,
@@ -41,7 +42,11 @@ class ContificoClient:
         monotonic_func: Callable[[], float] = time.monotonic,
     ) -> None:
         self.base_url = base_url.rstrip("/")
-        self.token = token
+        if not api_key or not api_token:
+            raise ValueError("Contifico API key and token must be provided")
+
+        self.api_key = api_key
+        self.api_token = api_token
         self.timeout = timeout
         self.rate_limit_per_minute = max(1, rate_limit_per_minute)
         self.max_retries = max_retries
@@ -93,7 +98,10 @@ class ContificoClient:
         json: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         url = self._build_url(path)
-        headers = {"Authorization": self.token}
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "api-key": self.api_key,
+        }
 
         attempt = 0
         while True:
