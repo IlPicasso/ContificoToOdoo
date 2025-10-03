@@ -752,6 +752,18 @@ button[disabled] {
   font-size: 1rem;
 }
 
+.customer-order-history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.customer-order-history-item-actions .customer-order-history-open {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 .customer-order-history-item-meta {
   margin: 0;
   color: var(--muted);
@@ -1367,6 +1379,19 @@ body.kanban-detail-open {
   overflow: hidden;
 }
 
+body.dashboard-overlay-open {
+  overflow: hidden;
+}
+
+#dashboardOverlayContent > * {
+  width: 100%;
+}
+
+#dashboardOverlayContent .customer-create,
+#dashboardOverlayContent .customer-detail {
+  margin-top: 0;
+}
+
 .kanban-column {
   background: var(--surface-muted);
   border: 1px solid rgba(7, 10, 12, 0.08);
@@ -1547,6 +1572,26 @@ body.kanban-detail-open {
     width: 100%;
     max-height: calc(100vh - clamp(1.5rem, 6vh, 3rem));
     border-radius: 16px;
+  }
+}
+
+@media (max-width: 540px) {
+  .kanban-detail-overlay {
+    padding: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+
+  .kanban-detail-dialog {
+    height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+    max-height: none;
+    border-radius: 0;
+  }
+
+  .kanban-detail-content {
+    padding: clamp(1rem, 6vw, 1.5rem);
   }
 }
 

@@ -190,9 +190,9 @@
               <button type="button" class="primary" id="showCreateCustomerButton">Añadir cliente</button>
             </div>
             </div>
-            <div id="createCustomerSection" class="customer-create hidden">
+            <div id="createCustomerSection" class="customer-create hidden" aria-labelledby="createCustomerHeading">
               <div class="customer-create-header">
-                <h4>Registrar cliente</h4>
+                <h4 id="createCustomerHeading">Registrar cliente</h4>
                 <button type="button" class="link-button" id="closeCreateCustomerButton">Cerrar</button>
               </div>
               <form id="createCustomerForm" class="form-grid">
@@ -281,13 +281,17 @@
             </div>
           </section>
 
-          <section class="card dashboard-panel hidden" id="orderCreatePanel">
+          <section
+            class="card dashboard-panel hidden"
+            id="orderCreatePanel"
+            aria-labelledby="orderCreateHeading"
+          >
             <div class="order-create-toolbar">
               <button type="button" class="secondary" id="orderCreateBackButton">
                 ← Volver a órdenes
               </button>
             </div>
-            <h3>Crear nueva orden</h3>
+            <h3 id="orderCreateHeading">Crear nueva orden</h3>
             <form id="createOrderForm" class="form-grid">
               <div class="form-row">
                 <label for="newOrderNumber">Número de orden</label>
@@ -756,6 +760,18 @@
               </table>
             </div>
           </section>
+          <div id="dashboardOverlay" class="kanban-detail-overlay hidden" aria-hidden="true">
+            <div class="kanban-detail-backdrop" data-dashboard-overlay-close></div>
+            <div
+              id="dashboardOverlayDialog"
+              class="kanban-detail-dialog"
+              role="dialog"
+              aria-modal="true"
+              tabindex="-1"
+            >
+              <div id="dashboardOverlayContent" class="kanban-detail-content"></div>
+            </div>
+          </div>
         </div>
       </section>
     </main>
