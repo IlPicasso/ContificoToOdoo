@@ -504,6 +504,14 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
     }
   });
 
+  if (previousTab === 'ordersPanel' && targetTab !== 'ordersPanel') {
+    if (currentOrderDetailHost === 'overlay' && state.selectedOrderId !== null) {
+      clearOrderDetail({ skipRender: true });
+    } else if (document.body) {
+      document.body.classList.remove('kanban-detail-open');
+    }
+  }
+
   if (targetTab === 'usersPanel' && userRole === 'administrador') {
     loadUsers();
   }
