@@ -576,6 +576,10 @@ button[disabled] {
   box-shadow: 0 16px 32px rgba(var(--shadow-color), 0.08);
 }
 
+.modal-content.customer-create {
+  margin-bottom: 0;
+}
+
 .users-panel-header {
   display: flex;
   flex-wrap: wrap;
@@ -681,6 +685,10 @@ button[disabled] {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.modal-content.customer-detail {
+  margin-top: 0;
 }
 
 .customer-detail-row td {
@@ -1317,6 +1325,69 @@ button[disabled] {
   box-shadow: 0 18px 40px rgba(var(--shadow-color), 0.08);
   max-height: 72vh;
   overflow-y: auto;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  z-index: 1400;
+}
+
+.modal-overlay.hidden {
+  display: none !important;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 10, 12, 0.45);
+}
+
+.modal-dialog {
+  position: relative;
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: 0 28px 68px rgba(var(--shadow-color), 0.2);
+  width: min(720px, 100%);
+  max-height: calc(100vh - clamp(2rem, 10vh, 5rem));
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  outline: none;
+}
+
+.modal-content {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  overflow-y: auto;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .modal-overlay {
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .modal-dialog {
+    border-radius: 0;
+    max-height: 100vh;
+  }
+
+  .modal-content {
+    padding: clamp(1rem, 4vw, 1.5rem);
+  }
 }
 
 .kanban-detail .muted {
