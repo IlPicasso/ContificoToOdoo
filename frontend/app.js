@@ -2581,8 +2581,23 @@ function renderCustomerOrderHistory(customer) {
     const statusWrapper = document.createElement('div');
     statusWrapper.appendChild(createStatusBadge(order.status));
 
+    const actions = document.createElement('div');
+    actions.className = 'customer-order-history-item-actions';
+    actions.appendChild(statusWrapper);
+
+    if (state.token) {
+      const openButton = document.createElement('button');
+      openButton.type = 'button';
+      openButton.className = 'link-button customer-order-history-open';
+      openButton.textContent = 'Ver orden';
+      openButton.addEventListener('click', () => {
+        openOrderDetailFromCustomerHistory(order);
+      });
+      actions.appendChild(openButton);
+    }
+
     header.appendChild(orderNumber);
-    header.appendChild(statusWrapper);
+    header.appendChild(actions);
 
     const invoice = document.createElement('p');
     invoice.className = 'customer-order-history-item-invoice';
@@ -2614,6 +2629,49 @@ function renderCustomerOrderHistory(customer) {
   });
 
   customerOrderHistoryContainer.appendChild(list);
+}
+
+async function openOrderDetailFromCustomerHistory(order) {
+  if (!state.token) {
+    showToast('Inicia sesión para gestionar las órdenes.', 'error');
+    return;
+  }
+  if (!order || order.id === undefined || order.id === null) {
+    showToast('No se pudo abrir el detalle de la orden seleccionada.', 'error');
+    return;
+  }
+
+  const orderIdKey = String(order.id);
+  setActiveDashboardTab('ordersPanel');
+  if (state.activeOrdersView !== 'list') {
+    setActiveOrdersView('list');
+  }
+
+  let detail = state.orders.find((item) => String(item.id) === orderIdKey);
+  if (!detail) {
+    try {
+      detail = await apiFetch(`/orders/${encodeURIComponent(orderIdKey)}`);
+    } catch (error) {
+      /* ignore fetch failure and fall back to cached data */
+    }
+  }
+
+  if (!detail) {
+    detail = order;
+  }
+
+  if (!detail || detail.id === undefined || detail.id === null) {
+    showToast('No se pudo abrir el detalle de la orden seleccionada.', 'error');
+    return;
+  }
+
+  const remainingOrders = state.orders.filter((item) => String(item.id) !== orderIdKey);
+  state.orders = [...remainingOrders, detail];
+  if (typeof state.orderTotal !== 'number' || state.orderTotal < state.orders.length) {
+    state.orderTotal = state.orders.length;
+  }
+
+  populateOrderDetail(detail);
 }
 function renderCustomers() {
   if (!customersTableBody) return;
