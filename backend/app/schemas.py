@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
@@ -274,7 +274,7 @@ class ContificoProductPage(BaseModel):
 
 
 class ContificoWarehouse(BaseModel):
-    id: Optional[int] = None
+    id: Optional[Union[int, str]] = None
     codigo: Optional[str] = None
     nombre: Optional[str] = None
     direccion: Optional[str] = None
