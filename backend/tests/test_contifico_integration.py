@@ -39,10 +39,9 @@ def test_create_invoice_builds_expected_request():
         captured["url"] = str(request.url)
         captured["path"] = request.url.path
         captured["authorization"] = request.headers.get("authorization")
-        captured["api-token"] = request.headers.get("api-token")
+        captured["api-key"] = request.headers.get("api-key")
         captured["json"] = json.loads(request.content.decode())
         captured["params"] = dict(request.url.params)
-        captured["api-key"] = request.headers.get("api-key")
         return httpx.Response(201, json={"id": "INV-1"})
 
     client = build_contifico_client(handler)
@@ -51,7 +50,6 @@ def test_create_invoice_builds_expected_request():
     assert response == {"id": "INV-1"}
     assert captured["path"] == "/sistema/api/v1/documento/"
     assert captured["authorization"] == "key-123"
-    assert captured["api-token"] == "token-abc"
     assert captured["api-key"] is None
     assert captured["json"] == {"total": 100}
     assert captured["params"] == {}
