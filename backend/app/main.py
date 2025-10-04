@@ -9,11 +9,18 @@ from sqlalchemy.orm import Session
 from . import auth, crud, models, schemas
 from .config import get_settings
 from .database import Base, engine, get_db
+from .contifico import ContificoClient
 from .dependencies import (
     admin_required,
+    get_contifico_client,
     staff_required,
     tailor_or_admin_required,
     vendor_or_admin_required,
+)
+from .temp_contifico import (
+    build_product_page,
+    build_warehouse_list,
+    router as contifico_preview_router,
 )
 from .migrations import apply_schema_upgrades
 
@@ -56,6 +63,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(contifico_preview_router)
 
 def _validate_assigned_tailor(
     db: Session, assigned_tailor_id: Optional[int]
@@ -123,6 +132,36 @@ def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
 @app.get("/statuses", response_model=List[str])
 def list_statuses() -> List[str]:
     return [status.value for status in models.OrderStatus]
+
+
+@app.get(
+    "/integrations/contifico/products",
+    response_model=schemas.ContificoProductPage,
+)
+def list_contifico_products(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(admin_required()),
+):
+    """Devuelve un listado de productos desde Contífico."""
+
+    _ = current_user
+    return build_product_page(contifico_client, page=page, page_size=page_size)
+
+
+@app.get(
+    "/integrations/contifico/warehouses",
+    response_model=List[schemas.ContificoWarehouse],
+)
+def list_contifico_warehouses(
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(admin_required()),
+):
+    """Lista las bodegas disponibles en Contífico."""
+
+    _ = current_user
+    return build_warehouse_list(contifico_client)
 
 
 @app.post(

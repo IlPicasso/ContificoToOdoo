@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
@@ -239,3 +239,55 @@ class AuditLogRead(BaseModel):
     actor: Optional[UserOut]
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ContificoProduct(BaseModel):
+    id: Optional[int] = None
+    codigo: Optional[str] = None
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    pvp1: Optional[float] = None
+    pvp2: Optional[float] = None
+    pvp3: Optional[float] = None
+    raw: Dict[str, Any] = Field(default_factory=dict, description="Respuesta original de Contífico.")
+
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "ContificoProduct":
+        if not isinstance(payload, dict):
+            raise TypeError("El producto devuelto por Contífico debe ser un diccionario")
+        return cls(
+            id=payload.get("id"),
+            codigo=payload.get("codigo"),
+            nombre=payload.get("nombre") or payload.get("descripcion"),
+            descripcion=payload.get("descripcion"),
+            pvp1=payload.get("pvp1"),
+            pvp2=payload.get("pvp2"),
+            pvp3=payload.get("pvp3"),
+            raw=payload,
+        )
+
+
+class ContificoProductPage(BaseModel):
+    items: List[ContificoProduct] = Field(default_factory=list)
+    page: int
+    page_size: int
+
+
+class ContificoWarehouse(BaseModel):
+    id: Optional[Union[int, str]] = None
+    codigo: Optional[str] = None
+    nombre: Optional[str] = None
+    direccion: Optional[str] = None
+    raw: Dict[str, Any] = Field(default_factory=dict, description="Respuesta original de Contífico.")
+
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "ContificoWarehouse":
+        if not isinstance(payload, dict):
+            raise TypeError("La bodega devuelta por Contífico debe ser un diccionario")
+        return cls(
+            id=payload.get("id"),
+            codigo=payload.get("codigo"),
+            nombre=payload.get("nombre") or payload.get("descripcion"),
+            direccion=payload.get("direccion"),
+            raw=payload,
+        )
