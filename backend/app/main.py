@@ -9,8 +9,10 @@ from sqlalchemy.orm import Session
 from . import auth, crud, models, schemas
 from .config import get_settings
 from .database import Base, engine, get_db
+from .contifico import ContificoAPIError, ContificoClient, ContificoTransportError
 from .dependencies import (
     admin_required,
+    get_contifico_client,
     staff_required,
     tailor_or_admin_required,
     vendor_or_admin_required,
@@ -123,6 +125,57 @@ def login(request: schemas.LoginRequest, db: Session = Depends(get_db)):
 @app.get("/statuses", response_model=List[str])
 def list_statuses() -> List[str]:
     return [status.value for status in models.OrderStatus]
+
+
+@app.get(
+    "/integrations/contifico/products",
+    response_model=schemas.ContificoProductPage,
+)
+def list_contifico_products(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(admin_required()),
+):
+    """Devuelve un listado de productos desde Contífico."""
+
+    _ = current_user
+    try:
+        products = contifico_client.list_products(page=page, page_size=page_size)
+    except ContificoTransportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.detail,
+        ) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    items = [schemas.ContificoProduct.from_api(product) for product in products]
+    return schemas.ContificoProductPage(page=page, page_size=page_size, items=items)
+
+
+@app.get(
+    "/integrations/contifico/warehouses",
+    response_model=List[schemas.ContificoWarehouse],
+)
+def list_contifico_warehouses(
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(admin_required()),
+):
+    """Lista las bodegas disponibles en Contífico."""
+
+    _ = current_user
+    try:
+        warehouses = contifico_client.list_warehouses()
+    except ContificoTransportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.detail,
+        ) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    return [schemas.ContificoWarehouse.from_api(bodega) for bodega in warehouses]
 
 
 @app.post(
