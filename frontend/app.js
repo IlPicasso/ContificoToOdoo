@@ -63,6 +63,18 @@ const state = {
   contificoPreviewWarehousesLoading: false,
   contificoPreviewWarehousesError: null,
   contificoPreviewWarehousesFetched: false,
+  contificoPreviewCustomerInvoices: [],
+  contificoPreviewCustomerInvoicesPage: 1,
+  contificoPreviewCustomerInvoicesPageSize: CONTIFICO_DEFAULT_PAGE_SIZE,
+  contificoPreviewCustomerInvoicesLoading: false,
+  contificoPreviewCustomerInvoicesError: null,
+  contificoPreviewCustomerInvoicesFetched: false,
+  contificoPreviewCustomerInvoicesDocument: '',
+  contificoPreviewInvoiceLookup: null,
+  contificoPreviewInvoiceLookupLoading: false,
+  contificoPreviewInvoiceLookupError: null,
+  contificoPreviewInvoiceLookupFetched: false,
+  contificoPreviewInvoiceLookupNumber: '',
 };
 
 const TOKEN_STORAGE_KEY = 'sastreria.authToken';
@@ -240,6 +252,16 @@ const contificoPreviewProductsTableBody = document.getElementById('contificoPrev
 const contificoPreviewWarehousesButton = document.getElementById('contificoPreviewWarehousesButton');
 const contificoPreviewWarehousesStatus = document.getElementById('contificoPreviewWarehousesStatus');
 const contificoPreviewWarehousesTableBody = document.getElementById('contificoPreviewWarehousesTableBody');
+const contificoCustomerInvoicesForm = document.getElementById('contificoCustomerInvoicesForm');
+const contificoCustomerInvoicesDocumentInput = document.getElementById('contificoCustomerInvoicesDocument');
+const contificoCustomerInvoicesPageInput = document.getElementById('contificoCustomerInvoicesPage');
+const contificoCustomerInvoicesPageSizeInput = document.getElementById('contificoCustomerInvoicesPageSize');
+const contificoCustomerInvoicesStatus = document.getElementById('contificoCustomerInvoicesStatus');
+const contificoCustomerInvoicesTableBody = document.getElementById('contificoCustomerInvoicesTableBody');
+const contificoInvoiceLookupForm = document.getElementById('contificoInvoiceLookupForm');
+const contificoInvoiceLookupNumberInput = document.getElementById('contificoInvoiceLookupNumber');
+const contificoInvoiceLookupStatus = document.getElementById('contificoInvoiceLookupStatus');
+const contificoInvoiceLookupDetails = document.getElementById('contificoInvoiceLookupDetails');
 const usersTableBody = document.getElementById('usersTableBody');
 const userCreateContainer = document.getElementById('userCreateContainer');
 const toggleCreateUserButton = document.getElementById('toggleCreateUserButton');
@@ -2553,6 +2575,14 @@ if (contificoPreviewProductsForm) {
 
 if (contificoPreviewWarehousesButton) {
   contificoPreviewWarehousesButton.addEventListener('click', handleContificoPreviewWarehousesFetch);
+}
+
+if (contificoCustomerInvoicesForm) {
+  contificoCustomerInvoicesForm.addEventListener('submit', handleContificoCustomerInvoicesFetch);
+}
+
+if (contificoInvoiceLookupForm) {
+  contificoInvoiceLookupForm.addEventListener('submit', handleContificoInvoiceLookup);
 }
 
 function getOrdersForCustomer(customerId) {
@@ -4995,6 +5025,18 @@ function resetContificoPreviewState() {
   state.contificoPreviewWarehousesLoading = false;
   state.contificoPreviewWarehousesError = null;
   state.contificoPreviewWarehousesFetched = false;
+  state.contificoPreviewCustomerInvoices = [];
+  state.contificoPreviewCustomerInvoicesPage = 1;
+  state.contificoPreviewCustomerInvoicesPageSize = CONTIFICO_DEFAULT_PAGE_SIZE;
+  state.contificoPreviewCustomerInvoicesLoading = false;
+  state.contificoPreviewCustomerInvoicesError = null;
+  state.contificoPreviewCustomerInvoicesFetched = false;
+  state.contificoPreviewCustomerInvoicesDocument = '';
+  state.contificoPreviewInvoiceLookup = null;
+  state.contificoPreviewInvoiceLookupLoading = false;
+  state.contificoPreviewInvoiceLookupError = null;
+  state.contificoPreviewInvoiceLookupFetched = false;
+  state.contificoPreviewInvoiceLookupNumber = '';
   renderContificoPreview();
 }
 
@@ -5226,9 +5268,258 @@ function renderContificoPreviewWarehouses() {
   updateContificoStatus(contificoPreviewWarehousesStatus, { text: statusMessage, tone });
 }
 
+function renderContificoPreviewCustomerInvoices() {
+  const isAdmin = state.token && state.user?.role === 'administrador';
+  if (!isAdmin) {
+    if (contificoCustomerInvoicesForm) {
+      const elements = contificoCustomerInvoicesForm.querySelectorAll('input, button');
+      elements.forEach((element) => {
+        element.disabled = true;
+      });
+    }
+    if (contificoCustomerInvoicesDocumentInput) {
+      contificoCustomerInvoicesDocumentInput.value = '';
+    }
+    if (contificoCustomerInvoicesPageInput) {
+      contificoCustomerInvoicesPageInput.value = '1';
+    }
+    if (contificoCustomerInvoicesPageSizeInput) {
+      contificoCustomerInvoicesPageSizeInput.value = String(CONTIFICO_DEFAULT_PAGE_SIZE);
+    }
+    if (contificoCustomerInvoicesTableBody) {
+      contificoCustomerInvoicesTableBody.innerHTML = '';
+    }
+    updateContificoStatus(contificoCustomerInvoicesStatus, {
+      text: 'Inicia sesión como administrador para consultar facturas en Contífico.',
+      tone: 'info',
+    });
+    return;
+  }
+
+  if (contificoCustomerInvoicesForm) {
+    const elements = contificoCustomerInvoicesForm.querySelectorAll('input, button');
+    elements.forEach((element) => {
+      element.disabled = state.contificoPreviewCustomerInvoicesLoading;
+    });
+  }
+
+  if (contificoCustomerInvoicesDocumentInput) {
+    contificoCustomerInvoicesDocumentInput.value = state.contificoPreviewCustomerInvoicesDocument || '';
+  }
+  if (contificoCustomerInvoicesPageInput) {
+    contificoCustomerInvoicesPageInput.value = String(
+      state.contificoPreviewCustomerInvoicesPage || 1
+    );
+  }
+  if (contificoCustomerInvoicesPageSizeInput) {
+    contificoCustomerInvoicesPageSizeInput.value = String(
+      state.contificoPreviewCustomerInvoicesPageSize || CONTIFICO_DEFAULT_PAGE_SIZE
+    );
+  }
+
+  if (contificoCustomerInvoicesTableBody) {
+    contificoCustomerInvoicesTableBody.innerHTML = '';
+    const invoices = Array.isArray(state.contificoPreviewCustomerInvoices)
+      ? state.contificoPreviewCustomerInvoices
+      : [];
+
+    if (invoices.length) {
+      invoices.forEach((invoice) => {
+        const row = document.createElement('tr');
+
+        const numberCell = document.createElement('td');
+        const invoiceNumber = invoice?.numero;
+        numberCell.textContent = invoiceNumber ? String(invoiceNumber) : '—';
+        numberCell.dataset.label = 'Documento';
+
+        const clientCell = document.createElement('td');
+        const clientName = invoice?.cliente;
+        clientCell.textContent = clientName ? String(clientName) : '—';
+        clientCell.dataset.label = 'Cliente';
+
+        const idCell = document.createElement('td');
+        const identification = invoice?.identificacion;
+        idCell.textContent = identification ? String(identification) : '—';
+        idCell.dataset.label = 'Identificación';
+
+        const dateCell = document.createElement('td');
+        const emissionDate = invoice?.fecha_emision;
+        dateCell.textContent = emissionDate ? String(emissionDate) : '—';
+        dateCell.dataset.label = 'Fecha';
+
+        const statusCell = document.createElement('td');
+        const invoiceStatus = invoice?.estado;
+        statusCell.textContent = invoiceStatus ? String(invoiceStatus) : '—';
+        statusCell.dataset.label = 'Estado';
+
+        const totalCell = document.createElement('td');
+        const invoiceTotal = invoice?.total;
+        totalCell.textContent =
+          typeof invoiceTotal === 'number' && Number.isFinite(invoiceTotal)
+            ? invoiceTotal.toFixed(2)
+            : '—';
+        totalCell.dataset.label = 'Total';
+
+        const rawCell = document.createElement('td');
+        rawCell.dataset.label = 'Detalle';
+        const detailsElement = document.createElement('details');
+        const summaryElement = document.createElement('summary');
+        summaryElement.textContent = 'Ver JSON';
+        const preElement = document.createElement('pre');
+        preElement.textContent = JSON.stringify(invoice?.raw ?? invoice, null, 2);
+        detailsElement.appendChild(summaryElement);
+        detailsElement.appendChild(preElement);
+        rawCell.appendChild(detailsElement);
+
+        row.appendChild(numberCell);
+        row.appendChild(clientCell);
+        row.appendChild(idCell);
+        row.appendChild(dateCell);
+        row.appendChild(statusCell);
+        row.appendChild(totalCell);
+        row.appendChild(rawCell);
+
+        contificoCustomerInvoicesTableBody.appendChild(row);
+      });
+    } else if (
+      state.contificoPreviewCustomerInvoicesFetched &&
+      !state.contificoPreviewCustomerInvoicesLoading &&
+      !state.contificoPreviewCustomerInvoicesError
+    ) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.textContent = 'No se encontraron facturas para el documento consultado.';
+      cell.className = 'muted';
+      row.appendChild(cell);
+      contificoCustomerInvoicesTableBody.appendChild(row);
+    }
+  }
+
+  let statusMessage = '';
+  let tone = 'info';
+  if (state.contificoPreviewCustomerInvoicesLoading) {
+    statusMessage = 'Consultando facturas en Contífico...';
+    tone = 'loading';
+  } else if (state.contificoPreviewCustomerInvoicesError) {
+    statusMessage = state.contificoPreviewCustomerInvoicesError;
+    tone = 'error';
+  } else if (state.contificoPreviewCustomerInvoicesFetched) {
+    if (state.contificoPreviewCustomerInvoices.length) {
+      statusMessage = `Se muestran ${state.contificoPreviewCustomerInvoices.length} facturas.`;
+      tone = 'success';
+    } else if (state.contificoPreviewCustomerInvoicesDocument) {
+      statusMessage = `No se encontraron facturas para ${state.contificoPreviewCustomerInvoicesDocument}.`;
+    } else {
+      statusMessage = 'No se encontraron facturas con los filtros seleccionados.';
+    }
+  } else {
+    statusMessage = 'Ingresa un número de documento para consultar facturas del cliente en Contífico.';
+  }
+  updateContificoStatus(contificoCustomerInvoicesStatus, { text: statusMessage, tone });
+}
+
+function renderContificoPreviewInvoiceLookup() {
+  const isAdmin = state.token && state.user?.role === 'administrador';
+  if (!isAdmin) {
+    if (contificoInvoiceLookupForm) {
+      const elements = contificoInvoiceLookupForm.querySelectorAll('input, button');
+      elements.forEach((element) => {
+        element.disabled = true;
+      });
+    }
+    if (contificoInvoiceLookupNumberInput) {
+      contificoInvoiceLookupNumberInput.value = '';
+    }
+    if (contificoInvoiceLookupDetails) {
+      contificoInvoiceLookupDetails.innerHTML = '';
+    }
+    updateContificoStatus(contificoInvoiceLookupStatus, {
+      text: 'Inicia sesión como administrador para buscar facturas puntuales.',
+      tone: 'info',
+    });
+    return;
+  }
+
+  if (contificoInvoiceLookupForm) {
+    const elements = contificoInvoiceLookupForm.querySelectorAll('input, button');
+    elements.forEach((element) => {
+      element.disabled = state.contificoPreviewInvoiceLookupLoading;
+    });
+  }
+
+  if (contificoInvoiceLookupNumberInput) {
+    contificoInvoiceLookupNumberInput.value = state.contificoPreviewInvoiceLookupNumber || '';
+  }
+
+  if (contificoInvoiceLookupDetails) {
+    contificoInvoiceLookupDetails.innerHTML = '';
+    const invoice = state.contificoPreviewInvoiceLookup;
+    if (invoice && !state.contificoPreviewInvoiceLookupLoading && !state.contificoPreviewInvoiceLookupError) {
+      const list = document.createElement('dl');
+      list.className = 'contifico-invoice-detail-list';
+
+      const appendItem = (label, value) => {
+        const term = document.createElement('dt');
+        term.textContent = label;
+        const description = document.createElement('dd');
+        description.textContent = value ?? '—';
+        list.appendChild(term);
+        list.appendChild(description);
+      };
+
+      appendItem('Documento', invoice.numero ? String(invoice.numero) : '—');
+      appendItem('Cliente', invoice.cliente ? String(invoice.cliente) : '—');
+      appendItem('Identificación', invoice.identificacion ? String(invoice.identificacion) : '—');
+      appendItem('Fecha de emisión', invoice.fecha_emision ? String(invoice.fecha_emision) : '—');
+      appendItem('Estado', invoice.estado ? String(invoice.estado) : '—');
+      appendItem(
+        'Total',
+        typeof invoice.total === 'number' && Number.isFinite(invoice.total)
+          ? invoice.total.toFixed(2)
+          : '—'
+      );
+
+      const rawDetails = document.createElement('details');
+      rawDetails.className = 'contifico-invoice-raw';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Ver respuesta completa';
+      const pre = document.createElement('pre');
+      pre.textContent = JSON.stringify(invoice.raw ?? invoice, null, 2);
+      rawDetails.appendChild(summary);
+      rawDetails.appendChild(pre);
+
+      contificoInvoiceLookupDetails.appendChild(list);
+      contificoInvoiceLookupDetails.appendChild(rawDetails);
+    }
+  }
+
+  let statusMessage = '';
+  let tone = 'info';
+  if (state.contificoPreviewInvoiceLookupLoading) {
+    statusMessage = 'Buscando factura en Contífico...';
+    tone = 'loading';
+  } else if (state.contificoPreviewInvoiceLookupError) {
+    statusMessage = state.contificoPreviewInvoiceLookupError;
+    tone = 'error';
+  } else if (state.contificoPreviewInvoiceLookupFetched) {
+    if (state.contificoPreviewInvoiceLookup) {
+      statusMessage = 'Factura encontrada correctamente.';
+      tone = 'success';
+    } else {
+      statusMessage = 'No se encontraron facturas con el número consultado.';
+    }
+  } else {
+    statusMessage = 'Ingresa el número exacto de documento para buscar una factura específica.';
+  }
+  updateContificoStatus(contificoInvoiceLookupStatus, { text: statusMessage, tone });
+}
+
 function renderContificoPreview() {
   renderContificoPreviewProducts();
   renderContificoPreviewWarehouses();
+  renderContificoPreviewCustomerInvoices();
+  renderContificoPreviewInvoiceLookup();
 }
 
 async function handleContificoPreviewProductsFetch(event) {
@@ -5313,6 +5604,132 @@ async function handleContificoPreviewWarehousesFetch() {
   } finally {
     state.contificoPreviewWarehousesLoading = false;
     renderContificoPreviewWarehouses();
+  }
+}
+
+async function handleContificoCustomerInvoicesFetch(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden consultar Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewCustomerInvoicesLoading) {
+    return;
+  }
+
+  const rawDocument =
+    contificoCustomerInvoicesDocumentInput?.value ?? state.contificoPreviewCustomerInvoicesDocument ?? '';
+  const normalizedDocument = String(rawDocument).trim();
+
+  if (!normalizedDocument) {
+    state.contificoPreviewCustomerInvoicesError = 'Ingresa un número de documento válido.';
+    state.contificoPreviewCustomerInvoices = [];
+    state.contificoPreviewCustomerInvoicesFetched = true;
+    renderContificoPreviewCustomerInvoices();
+    showToast(state.contificoPreviewCustomerInvoicesError, 'error');
+    return;
+  }
+
+  const rawPage = Number(
+    contificoCustomerInvoicesPageInput?.value ?? state.contificoPreviewCustomerInvoicesPage ?? 1
+  );
+  const rawPageSize = Number(
+    contificoCustomerInvoicesPageSizeInput?.value ??
+      state.contificoPreviewCustomerInvoicesPageSize ??
+      CONTIFICO_DEFAULT_PAGE_SIZE
+  );
+  const normalizedPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  const normalizedPageSize = Number.isFinite(rawPageSize) && rawPageSize > 0
+    ? Math.min(Math.floor(rawPageSize), CONTIFICO_MAX_PAGE_SIZE)
+    : CONTIFICO_DEFAULT_PAGE_SIZE;
+
+  state.contificoPreviewCustomerInvoicesDocument = normalizedDocument;
+  state.contificoPreviewCustomerInvoicesPage = normalizedPage;
+  state.contificoPreviewCustomerInvoicesPageSize = normalizedPageSize;
+  state.contificoPreviewCustomerInvoicesLoading = true;
+  state.contificoPreviewCustomerInvoicesError = null;
+  state.contificoPreviewCustomerInvoicesFetched = false;
+  renderContificoPreviewCustomerInvoices();
+
+  try {
+    const response = await apiFetch(
+      `/temp/contifico/invoices/by-customer?document_id=${encodeURIComponent(
+        normalizedDocument
+      )}&page=${normalizedPage}&page_size=${normalizedPageSize}`
+    );
+    const items = Array.isArray(response?.items) ? response.items : [];
+    state.contificoPreviewCustomerInvoices = items;
+    state.contificoPreviewCustomerInvoicesPage = Number.isFinite(response?.page)
+      ? response.page
+      : normalizedPage;
+    state.contificoPreviewCustomerInvoicesPageSize = Number.isFinite(response?.page_size)
+      ? response.page_size
+      : normalizedPageSize;
+    state.contificoPreviewCustomerInvoicesFetched = true;
+    renderContificoPreviewCustomerInvoices();
+  } catch (error) {
+    state.contificoPreviewCustomerInvoicesError =
+      error.message || 'No se pudieron consultar las facturas.';
+    state.contificoPreviewCustomerInvoices = [];
+    state.contificoPreviewCustomerInvoicesFetched = true;
+    renderContificoPreviewCustomerInvoices();
+    showToast(state.contificoPreviewCustomerInvoicesError, 'error');
+  } finally {
+    state.contificoPreviewCustomerInvoicesLoading = false;
+    renderContificoPreviewCustomerInvoices();
+  }
+}
+
+async function handleContificoInvoiceLookup(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden consultar Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewInvoiceLookupLoading) {
+    return;
+  }
+
+  const rawNumber =
+    contificoInvoiceLookupNumberInput?.value ?? state.contificoPreviewInvoiceLookupNumber ?? '';
+  const normalizedNumber = String(rawNumber).trim();
+
+  if (!normalizedNumber) {
+    state.contificoPreviewInvoiceLookupError = 'Ingresa un número de documento válido.';
+    state.contificoPreviewInvoiceLookup = null;
+    state.contificoPreviewInvoiceLookupFetched = true;
+    renderContificoPreviewInvoiceLookup();
+    showToast(state.contificoPreviewInvoiceLookupError, 'error');
+    return;
+  }
+
+  state.contificoPreviewInvoiceLookupNumber = normalizedNumber;
+  state.contificoPreviewInvoiceLookupLoading = true;
+  state.contificoPreviewInvoiceLookupError = null;
+  state.contificoPreviewInvoiceLookupFetched = false;
+  renderContificoPreviewInvoiceLookup();
+
+  try {
+    const response = await apiFetch(
+      `/temp/contifico/invoices/by-number?document_number=${encodeURIComponent(normalizedNumber)}`
+    );
+    state.contificoPreviewInvoiceLookup = response ?? null;
+    state.contificoPreviewInvoiceLookupFetched = true;
+    renderContificoPreviewInvoiceLookup();
+  } catch (error) {
+    state.contificoPreviewInvoiceLookupError =
+      error.message || 'No se pudo consultar la factura solicitada.';
+    state.contificoPreviewInvoiceLookup = null;
+    state.contificoPreviewInvoiceLookupFetched = true;
+    renderContificoPreviewInvoiceLookup();
+    showToast(state.contificoPreviewInvoiceLookupError, 'error');
+  } finally {
+    state.contificoPreviewInvoiceLookupLoading = false;
+    renderContificoPreviewInvoiceLookup();
   }
 }
 

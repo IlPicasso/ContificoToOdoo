@@ -896,6 +896,105 @@
                   </table>
                 </div>
               </article>
+
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
+                    <h4>Facturas por cliente</h4>
+                    <p class="muted small">
+                      Consulta todas las facturas asociadas a un número de cédula o RUC.
+                    </p>
+                  </div>
+                </header>
+                <form id="contificoCustomerInvoicesForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoCustomerInvoicesDocument">Documento del cliente</label>
+                    <input
+                      type="text"
+                      id="contificoCustomerInvoicesDocument"
+                      name="document_id"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej. 0912345678"
+                      required
+                    />
+                  </div>
+                  <div class="form-row">
+                    <label for="contificoCustomerInvoicesPage">Página</label>
+                    <input type="number" id="contificoCustomerInvoicesPage" min="1" step="1" value="1" />
+                  </div>
+                  <div class="form-row">
+                    <label for="contificoCustomerInvoicesPageSize">Filas por página</label>
+                    <input
+                      type="number"
+                      id="contificoCustomerInvoicesPageSize"
+                      min="1"
+                      max="200"
+                      step="1"
+                      value="25"
+                    />
+                  </div>
+                  <div class="form-row contifico-preview-submit">
+                    <button type="submit" class="primary">Consultar facturas</button>
+                  </div>
+                </form>
+                <p
+                  id="contificoCustomerInvoicesStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Número</th>
+                        <th>Cliente</th>
+                        <th>Documento</th>
+                        <th>Fecha</th>
+                        <th>Estado</th>
+                        <th>Total</th>
+                        <th>Detalle</th>
+                      </tr>
+                    </thead>
+                    <tbody id="contificoCustomerInvoicesTableBody"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
+                    <h4>Buscar factura puntual</h4>
+                    <p class="muted small">
+                      Introduce el número completo del documento para validar una factura específica.
+                    </p>
+                  </div>
+                </header>
+                <form id="contificoInvoiceLookupForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoInvoiceLookupNumber">Número de documento</label>
+                    <input
+                      type="text"
+                      id="contificoInvoiceLookupNumber"
+                      name="document_number"
+                      autocomplete="off"
+                      placeholder="Ej. 001-001-0000001"
+                      required
+                    />
+                  </div>
+                  <div class="form-row contifico-preview-submit">
+                    <button type="submit" class="primary">Buscar factura</button>
+                  </div>
+                </form>
+                <p
+                  id="contificoInvoiceLookupStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div id="contificoInvoiceLookupDetails" class="contifico-invoice-details"></div>
+              </article>
             </div>
           </section>
         </div>

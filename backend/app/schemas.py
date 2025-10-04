@@ -291,3 +291,61 @@ class ContificoWarehouse(BaseModel):
             direccion=payload.get("direccion"),
             raw=payload,
         )
+
+
+class ContificoInvoice(BaseModel):
+    id: Optional[Union[int, str]] = None
+    numero: Optional[str] = None
+    cliente: Optional[str] = None
+    identificacion: Optional[str] = None
+    fecha_emision: Optional[str] = None
+    estado: Optional[str] = None
+    total: Optional[float] = None
+    raw: Dict[str, Any] = Field(default_factory=dict, description="Respuesta original de Contífico.")
+
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "ContificoInvoice":
+        if not isinstance(payload, dict):
+            raise TypeError("La factura devuelta por Contífico debe ser un diccionario")
+
+        numero = (
+            payload.get("numero")
+            or payload.get("numero_documento")
+            or payload.get("numero_comprobante")
+        )
+        cliente = payload.get("cliente") or payload.get("cliente_nombre")
+        identificacion = (
+            payload.get("cliente_identificacion")
+            or payload.get("identificacion_cliente")
+            or payload.get("cliente_documento")
+            or payload.get("identificacion")
+        )
+        fecha = payload.get("fecha_emision") or payload.get("fecha") or payload.get("fecha_autorizacion")
+        estado = payload.get("estado") or payload.get("estado_sri")
+        total = (
+            payload.get("total")
+            or payload.get("total_con_impuestos")
+            or payload.get("total_sin_impuestos")
+        )
+
+        try:
+            normalized_total = float(total) if total is not None else None
+        except (TypeError, ValueError):
+            normalized_total = None
+
+        return cls(
+            id=payload.get("id"),
+            numero=numero,
+            cliente=cliente,
+            identificacion=identificacion,
+            fecha_emision=fecha,
+            estado=estado,
+            total=normalized_total,
+            raw=payload,
+        )
+
+
+class ContificoInvoicePage(BaseModel):
+    items: List[ContificoInvoice] = Field(default_factory=list)
+    page: int
+    page_size: int
