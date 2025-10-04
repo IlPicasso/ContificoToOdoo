@@ -102,7 +102,6 @@ class ContificoClient:
         url = self._build_url(path)
         headers = {
             "Authorization": self.api_key,
-            "api-token": self.api_token,
         }
 
         request_params = dict(params) if params else {}
