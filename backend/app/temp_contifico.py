@@ -70,7 +70,10 @@ def build_invoice_page(
             detail=exc.detail,
         ) from exc
     except ContificoAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            invoices = []
+        else:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     items = [schemas.ContificoInvoice.from_api(invoice) for invoice in invoices]
     return schemas.ContificoInvoicePage(page=page, page_size=page_size, items=items)
