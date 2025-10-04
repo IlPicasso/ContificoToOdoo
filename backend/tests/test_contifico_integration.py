@@ -17,7 +17,7 @@ from app.integrations import (  # noqa: E402
 )
 
 
-def build_contifico_client(handler, **kwargs):
+def build_contifico_client(handler, *, company_id: str | None = "EMP-001", **kwargs):
     client = ContificoClient(
         base_url="https://api.example.com/sistema/api/v1",
         api_key="key-123",
@@ -26,6 +26,7 @@ def build_contifico_client(handler, **kwargs):
         rate_limit_per_minute=100,
         sleep_func=lambda _seconds: None,
         client=httpx.Client(transport=httpx.MockTransport(handler)),
+        company_id=company_id,
         **kwargs,
     )
     return client
@@ -107,7 +108,7 @@ def test_get_customer_by_document_sets_query_param():
 
     assert (
         captured["url"]
-        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909"
+        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001&empresa_id=EMP-001"
     )
     assert captured["params"]["identificacion"] == "0909090909"
     assert "empresa_id" not in captured["params"]
