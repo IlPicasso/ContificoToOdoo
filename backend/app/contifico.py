@@ -38,6 +38,7 @@ class ContificoClient:
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
     INVOICE_LOOKUP_PAGE_SIZE = 100
+    INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = (50, 25, 10, 5)
     INVOICE_LOOKUP_MAX_PAGES = 50
 
     def __init__(
@@ -175,6 +176,21 @@ class ContificoClient:
                 return invoice
         return None
 
+    def _invoice_lookup_page_sizes(self) -> Iterable[int]:
+        """Yield the preferred page sizes to use while looking up invoices."""
+
+        seen: set[int] = set()
+        for size in (self.INVOICE_LOOKUP_PAGE_SIZE, *self.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES):
+            if not isinstance(size, int):
+                try:
+                    size = int(size)
+                except (TypeError, ValueError):  # pragma: no cover - defensive guard
+                    continue
+            if size <= 0 or size in seen:
+                continue
+            seen.add(size)
+            yield size
+
     def list_products(
         self, *, page: int = 1, page_size: int = 100
     ) -> Iterable[Dict[str, Any]]:
@@ -279,45 +295,62 @@ class ContificoClient:
         if normalized_target and normalized_target != canonical_input:
             search_candidates.append(normalized_target)
 
+        last_server_error: ContificoAPIError | None = None
+
         for candidate in search_candidates:
-            seen_numbers: set[str] = set()
-            for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
-                try:
-                    invoices = list(
-                        self.list_invoices(
-                            page=page,
-                            page_size=self.INVOICE_LOOKUP_PAGE_SIZE,
-                            document_number=candidate,
+            for page_size in self._invoice_lookup_page_sizes():
+                seen_numbers: set[str] = set()
+                encountered_server_error = False
+
+                for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
+                    try:
+                        invoices = list(
+                            self.list_invoices(
+                                page=page,
+                                page_size=page_size,
+                                document_number=candidate,
+                            )
                         )
-                    )
-                except ContificoAPIError as exc:
-                    if exc.status_code == HTTPStatus.NOT_FOUND:
+                    except ContificoAPIError as exc:
+                        if exc.status_code == HTTPStatus.NOT_FOUND:
+                            break
+                        if HTTPStatus.BAD_GATEWAY <= exc.status_code < 600:
+                            last_server_error = exc
+                            encountered_server_error = True
+                            break
+                        raise
+
+                    if not invoices:
                         break
-                    raise
 
-                if not invoices:
-                    break
+                    match = self._match_invoice_by_number(invoices, normalized_target)
+                    if match is not None:
+                        return match
 
-                match = self._match_invoice_by_number(invoices, normalized_target)
-                if match is not None:
-                    return match
+                    if len(invoices) < page_size:
+                        break
 
-                if len(invoices) < self.INVOICE_LOOKUP_PAGE_SIZE:
-                    break
+                    page_numbers = set()
+                    for invoice in invoices:
+                        candidate_number = self._extract_invoice_number(invoice)
+                        if not candidate_number:
+                            continue
+                        normalized_candidate = self._normalize_invoice_number(candidate_number)
+                        if normalized_candidate:
+                            page_numbers.add(normalized_candidate)
 
-                page_numbers = set()
-                for invoice in invoices:
-                    candidate_number = self._extract_invoice_number(invoice)
-                    if not candidate_number:
-                        continue
-                    normalized_candidate = self._normalize_invoice_number(candidate_number)
-                    if normalized_candidate:
-                        page_numbers.add(normalized_candidate)
+                    if page_numbers and page_numbers.issubset(seen_numbers):
+                        break
 
-                if page_numbers and page_numbers.issubset(seen_numbers):
-                    break
+                    seen_numbers.update(page_numbers)
 
-                seen_numbers.update(page_numbers)
+                if encountered_server_error:
+                    continue
+
+                break
+
+        if last_server_error is not None:
+            raise last_server_error
 
         return None
 
