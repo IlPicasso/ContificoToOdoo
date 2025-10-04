@@ -103,6 +103,7 @@ class ContificoClient:
         url = self._build_url(path)
         headers = {
             "Authorization": self.api_key,
+            "api-token": self.api_token,
             "Accept": "application/json",
             "Content-Type": "application/json; charset=UTF-8",
         }
@@ -125,7 +126,7 @@ class ContificoClient:
                 )
             except httpx.RequestError as exc:  # pragma: no cover - httpx RequestError holds detail
                 logger.warning("Transient network error contacting Contifico: %s", exc)
-                if attempt >= self.max_retries:
+                if attempt >= allowed_retries:
                     raise ContificoTransientError("Network error contacting Contifico") from exc
             else:
                 if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
@@ -177,19 +178,23 @@ class ContificoClient:
         """Fetch a Contifico document by its identifier."""
 
         if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
-            params = {"numero": invoice_id}
-            return self._request("GET", "documento/", params=params, max_retries=0)
+            params: Dict[str, Any] = {"numero": invoice_id}
+            if self.company_id:
+                params["empresa"] = self.company_id
+            return self._request("GET", "documento/", params=params)
 
         params = None
         if self.company_id:
             params = {"empresa": self.company_id, "empresa_id": self.company_id}
 
-        return self._request("GET", f"documento/{invoice_id}/", params=params, max_retries=0)
+        return self._request("GET", f"documento/{invoice_id}/", params=params)
 
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
         """Fetch Contifico personas (clientes) filtered by identification number."""
 
         params = {"identificacion": document}
+        if self.company_id:
+            params.setdefault("empresa", self.company_id)
         return self._request("GET", "persona/", params=params)
 
     def __enter__(self) -> "ContificoClient":  # pragma: no cover - convenience

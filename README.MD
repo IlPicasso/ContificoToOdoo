@@ -97,12 +97,12 @@ CONTIFICO_RETRY_BACKOFF_SECONDS=2
 EOF
 ```
 
-El cliente envía la llave (`API KEY`) directamente en el encabezado `Authorization` y adjunta los
-encabezados estándar de JSON (`Accept` y `Content-Type`) igual que la integración oficial de
-WooCommerce. No es necesario configurar ningún identificador de empresa adicional: con la llave
-(`API KEY`) y el token (`API TOKEN`) es suficiente para consumir los endpoints. Para instalaciones
-heredadas todavía se acepta la variable opcional `CONTIFICO_COMPANY_ID`, pero no es requerida por
-el flujo actual.
+El cliente envía la llave (`API KEY`) directamente en el encabezado `Authorization`, el token en el
+encabezado `api-token` y adjunta los encabezados estándar de JSON (`Accept` y `Content-Type`) igual
+que la integración oficial de WooCommerce. No es necesario configurar ningún identificador de
+empresa adicional: con la llave (`API KEY`) y el token (`API TOKEN`) es suficiente para consumir los
+endpoints. Para instalaciones heredadas todavía se acepta la variable opcional
+`CONTIFICO_COMPANY_ID`, pero no es requerida por el flujo actual.
 
 Puedes utilizar el
 helper `ContificoClient` para crear y actualizar facturas o consultar clientes por identificación:
