@@ -101,11 +101,14 @@ class ContificoClient:
     ) -> Dict[str, Any]:
         url = self._build_url(path)
         headers = {
-            "Authorization": f"Bearer {self.api_token}",
-            "api-key": self.api_key,
+            "Authorization": self.api_key,
+            "api-token": self.api_token,
         }
 
         request_params = dict(params) if params else {}
+        if self.company_id and params is not None:
+            request_params.setdefault("empresa", self.company_id)
+            request_params.setdefault("empresa_id", self.company_id)
 
         attempt = 0
         while True:
@@ -172,6 +175,10 @@ class ContificoClient:
 
     def get_invoice(self, invoice_id: str) -> Dict[str, Any]:
         """Fetch a Contifico document by its identifier."""
+
+        if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
+            params = {"numero": invoice_id}
+            return self._request("GET", "documento/", params=params)
 
         return self._request("GET", f"documento/{invoice_id}/")
 
