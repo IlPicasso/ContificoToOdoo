@@ -174,20 +174,95 @@ class ContificoClient:
         body["id"] = invoice_id
         return self._request("PUT", "documento/", json=body)
 
-    def get_invoice(self, invoice_id: str) -> Dict[str, Any]:
+    def get_invoice(
+        self,
+        invoice_id: str,
+        *,
+        customer_document: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Fetch a Contifico document by its identifier."""
 
         if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
+            parts = invoice_id.split("-")
             params: Dict[str, Any] = {"numero": invoice_id}
+            if len(parts) == 3:
+                establecimiento, pto_emision, secuencial = parts
+                params.update(
+                    {
+                        "establecimiento": establecimiento,
+                        "pto_emision": pto_emision,
+                        "secuencial": secuencial,
+                    }
+                )
             if self.company_id:
                 params["empresa"] = self.company_id
-            return self._request("GET", "documento/", params=params)
+            try:
+                return self._request("GET", "documento/", params=params)
+            except ContificoTransientError:
+                if not customer_document:
+                    raise
+                logger.info(
+                    "Falling back to Contifico persona lookup for invoice %s", invoice_id
+                )
+                fallback_invoice = self._lookup_invoice_by_customer_document(
+                    invoice_number=invoice_id,
+                    customer_document=customer_document,
+                )
+                if fallback_invoice is not None:
+                    return fallback_invoice
+                raise
 
-        params = None
-        if self.company_id:
-            params = {"empresa": self.company_id, "empresa_id": self.company_id}
+        params = self._build_company_detail_params()
 
         return self._request("GET", f"documento/{invoice_id}/", params=params)
+
+    def _build_company_detail_params(self) -> Optional[Dict[str, Any]]:
+        if not self.company_id:
+            return None
+        return {"empresa": self.company_id, "empresa_id": self.company_id}
+
+    def _lookup_invoice_by_customer_document(
+        self,
+        *,
+        invoice_number: str,
+        customer_document: str,
+    ) -> Optional[Dict[str, Any]]:
+        params: Dict[str, Any] = {"persona_identificacion": customer_document}
+        if self.company_id:
+            params["empresa"] = self.company_id
+
+        listing = self._request("GET", "registro/documento/", params=params)
+        documents = self._extract_document_listing(listing)
+        for document in documents:
+            if not isinstance(document, dict):
+                continue
+            numero = document.get("numero") or document.get("documento_numero")
+            if numero != invoice_number:
+                continue
+            document_id = (
+                document.get("documento")
+                or document.get("documento_id")
+                or document.get("id")
+            )
+            if not document_id:
+                return document
+            return self._request(
+                "GET",
+                f"documento/{document_id}/",
+                params=self._build_company_detail_params(),
+            )
+        return None
+
+    @staticmethod
+    def _extract_document_listing(payload: Any) -> list[Dict[str, Any]]:
+        if isinstance(payload, list):
+            return [item for item in payload if isinstance(item, dict)]
+        if isinstance(payload, dict):
+            for key in ("results", "items", "data", "documentos"):
+                value = payload.get(key)
+                if isinstance(value, list):
+                    return [item for item in value if isinstance(item, dict)]
+        return []
 
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
         """Fetch Contifico personas (clientes) filtered by identification number."""
