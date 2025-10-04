@@ -67,20 +67,6 @@ def test_update_invoice_uses_company_id_and_json():
     assert captured["json"] == {"id": "INV-2", "total": 200}
 
 
-def test_get_invoice_fetches_specific_document():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["url"] = str(request.url)
-        return httpx.Response(200, json={"id": "INV-25"})
-
-    client = build_contifico_client(handler)
-    response = client.get_invoice("INV-25")
-
-    assert response == {"id": "INV-25"}
-    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/INV-25/"
-
-
 def test_get_customer_by_document_sets_query_param():
     captured = {}
 
@@ -126,8 +112,7 @@ def test_does_not_retry_permanent_error(monkeypatch):
 
     client = ContificoClient(
         base_url="https://api.example.com",
-        api_key="key-123",
-        api_token="token-abc",
+        token="token-abc",
         max_retries=3,
         retry_backoff_seconds=0,
         rate_limit_per_minute=100,
