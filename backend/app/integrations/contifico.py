@@ -103,11 +103,13 @@ class ContificoClient:
         url = self._build_url(path)
         headers = {
             "Authorization": self.api_key,
-            "Accept": "application/json",
-            "Content-Type": "application/json; charset=UTF-8",
+            "api-token": self.api_token,
         }
 
         request_params = dict(params) if params else {}
+        if self.company_id and params is not None:
+            request_params.setdefault("empresa", self.company_id)
+            request_params.setdefault("empresa_id", self.company_id)
 
         attempt = 0
         allowed_retries = self.max_retries if max_retries is None else max(0, max_retries)

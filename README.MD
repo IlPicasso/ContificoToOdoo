@@ -90,6 +90,8 @@ cat <<'EOF' >> .env
 CONTIFICO_BASE_URL="https://api.contifico.com/sistema/api/v1"
 CONTIFICO_API_KEY="tu-api-key-entregada-por-contifico"
 CONTIFICO_API_TOKEN="tu-api-token-entregado-por-contifico"
+# Opcional: mantenido por compatibilidad con despliegues previos.
+# CONTIFICO_COMPANY_ID="identificador-de-empresa-en-contifico"
 CONTIFICO_TIMEOUT_SECONDS=30
 CONTIFICO_RATE_LIMIT_PER_MINUTE=50
 CONTIFICO_MAX_RETRIES=3
@@ -97,15 +99,25 @@ CONTIFICO_RETRY_BACKOFF_SECONDS=2
 EOF
 ```
 
-El cliente envía la llave (`API KEY`) directamente en el encabezado `Authorization` y adjunta los
-encabezados estándar de JSON (`Accept` y `Content-Type`) igual que la integración oficial de
-WooCommerce. No es necesario configurar ningún identificador de empresa adicional: con la llave
-(`API KEY`) y el token (`API TOKEN`) es suficiente para consumir los endpoints. Para instalaciones
-heredadas todavía se acepta la variable opcional `CONTIFICO_COMPANY_ID`, pero no es requerida por
-el flujo actual.
+Para un entorno de pruebas puedes utilizar las credenciales proporcionadas por el
+equipo de Contifico:
 
-Puedes utilizar el
-helper `ContificoClient` para crear y actualizar facturas o consultar clientes por identificación:
+```
+CONTIFICO_API_KEY="FrguR1kDpFHaXHLQwplZ2CwTX3p8p9XHVTnukL98V5U"
+CONTIFICO_API_TOKEN="80a8e763-b45e-4f9e-9b41-39a03dcea1a5"
+```
+
+El cliente envía el encabezado `Authorization` con la API key (sin el prefijo `Bearer`)
+y el encabezado `api-token` con el token provisto por Contifico, replicando el esquema
+de autenticación del plugin oficial de WooCommerce y evitando duplicar el valor en un
+encabezado `api-key` separado. Cuando consultas una factura puedes entregar tanto el
+identificador numérico interno como el número legible (por ejemplo `001-005-000012717`);
+en este último caso el cliente convierte la solicitud en `GET documento/?numero=<valor>`
+para alinearse con la API oficial. Si configuraste `CONTIFICO_COMPANY_ID`, el cliente
+anexará automáticamente los parámetros `empresa` y `empresa_id` en ambas variantes
+de consulta para que Contifico resuelva la factura aun cuando requiera el contexto de
+empresa. Puedes utilizar el helper `ContificoClient` para crear y actualizar facturas o
+consultar clientes por identificación:
 
 ```python
 from app.integrations import ContificoClient
