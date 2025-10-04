@@ -41,7 +41,7 @@ def test_create_invoice_builds_expected_request():
         captured["authorization"] = request.headers.get("authorization")
         captured["accept"] = request.headers.get("accept")
         captured["content-type"] = request.headers.get("content-type")
-        captured["api-key"] = request.headers.get("api-key")
+        captured["api-token"] = request.headers.get("api-token")
         captured["json"] = json.loads(request.content.decode())
         captured["params"] = dict(request.url.params)
         return httpx.Response(201, json={"id": "INV-1"})
@@ -54,7 +54,7 @@ def test_create_invoice_builds_expected_request():
     assert captured["authorization"] == "key-123"
     assert captured["accept"] == "application/json"
     assert captured["content-type"] == "application/json; charset=UTF-8"
-    assert captured["api-key"] is None
+    assert captured["api-token"] == "token-abc"
     assert captured["json"] == {"total": 100}
     assert captured["params"] == {}
 
