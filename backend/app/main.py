@@ -123,7 +123,6 @@ def get_contifico_client_dependency() -> Generator[ContificoClient, None, None]:
         rate_limit_per_minute=settings.contifico_rate_limit_per_minute,
         max_retries=settings.contifico_max_retries,
         retry_backoff_seconds=settings.contifico_retry_backoff_seconds,
-        company_id=settings.contifico_company_id,
     )
     try:
         yield client

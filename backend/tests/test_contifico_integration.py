@@ -17,7 +17,7 @@ from app.integrations import (  # noqa: E402
 )
 
 
-def build_contifico_client(handler, *, company_id: str | None = "EMP-001", **kwargs):
+def build_contifico_client(handler, **kwargs):
     client = ContificoClient(
         base_url="https://api.example.com/sistema/api/v1",
         api_key="key-123",
@@ -26,7 +26,6 @@ def build_contifico_client(handler, *, company_id: str | None = "EMP-001", **kwa
         rate_limit_per_minute=100,
         sleep_func=lambda _seconds: None,
         client=httpx.Client(transport=httpx.MockTransport(handler)),
-        company_id=company_id,
         **kwargs,
     )
     return client
@@ -37,23 +36,19 @@ def test_create_invoice_builds_expected_request():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
-        captured["path"] = request.url.path
         captured["authorization"] = request.headers.get("authorization")
         captured["api-key"] = request.headers.get("api-key")
         captured["json"] = json.loads(request.content.decode())
-        captured["params"] = dict(request.url.params)
         return httpx.Response(201, json={"id": "INV-1"})
 
     client = build_contifico_client(handler)
     response = client.create_invoice({"total": 100})
 
     assert response == {"id": "INV-1"}
-    assert captured["path"] == "/sistema/api/v1/documento/"
+    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/"
     assert captured["authorization"] == "Bearer token-abc"
     assert captured["api-key"] == "key-123"
     assert captured["json"] == {"total": 100}
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
 
 
 def test_update_invoice_uses_company_id_and_json():
@@ -61,19 +56,15 @@ def test_update_invoice_uses_company_id_and_json():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
-        captured["path"] = request.url.path
         captured["json"] = json.loads(request.content.decode())
-        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"status": "ok"})
 
     client = build_contifico_client(handler)
     response = client.update_invoice("INV-2", {"total": 200})
 
     assert response == {"status": "ok"}
-    assert captured["path"] == "/sistema/api/v1/documento/"
+    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/"
     assert captured["json"] == {"id": "INV-2", "total": 200}
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
 
 
 def test_get_invoice_fetches_specific_document():
@@ -81,17 +72,13 @@ def test_get_invoice_fetches_specific_document():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
-        captured["path"] = request.url.path
-        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"id": "INV-25"})
 
     client = build_contifico_client(handler)
     response = client.get_invoice("INV-25")
 
     assert response == {"id": "INV-25"}
-    assert captured["path"] == "/sistema/api/v1/documento/INV-25/"
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
+    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/INV-25/"
 
 
 def test_get_customer_by_document_sets_query_param():
@@ -99,7 +86,6 @@ def test_get_customer_by_document_sets_query_param():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
-        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"items": []})
 
     client = build_contifico_client(handler)
@@ -107,39 +93,8 @@ def test_get_customer_by_document_sets_query_param():
 
     assert (
         captured["url"]
-        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001&empresa_id=EMP-001"
+        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909"
     )
-    assert captured["params"]["identificacion"] == "0909090909"
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
-
-
-def test_company_id_does_not_override_explicit_param():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"items": []})
-
-    client = build_contifico_client(handler)
-    client._request("GET", "persona/", params={"empresa": "EXPL", "otro": "valor"})
-
-    assert captured["params"]["empresa"] == "EXPL"
-    assert captured["params"]["otro"] == "valor"
-    assert captured["params"]["empresa_id"] == "EMP-001"
-
-
-def test_omits_company_params_when_not_configured():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"items": []})
-
-    client = build_contifico_client(handler, company_id=None)
-    client.get_customer_by_document("0101010101")
-
-    assert captured["params"] == {"identificacion": "0101010101"}
 
 
 def test_raises_transient_on_rate_limit():

@@ -2,7 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import create_engine
@@ -15,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import auth, main, models  # noqa: E402
 from app.database import Base  # noqa: E402
-from app.integrations import ContificoClient, ContificoError  # noqa: E402
+from app.integrations import ContificoError  # noqa: E402
 
 
 engine = create_engine(
@@ -155,85 +154,3 @@ def test_get_order_invoice_handles_contifico_errors(db_session):
 
     assert exc_info.value.status_code == 502
     assert "Contifico" in exc_info.value.detail
-
-
-def test_get_order_invoice_forwards_company_param(db_session):
-    admin = create_user(db_session, "admin", models.UserRole.ADMIN)
-    order = create_order(db_session, invoice_number="INV-600")
-
-    payload = {
-        "estado": "AUTORIZADO",
-        "estado_pago": "PAGADO",
-        "totales": {
-            "subtotal": "100",
-            "impuestos": "12",
-            "total": "112",
-            "pagado": "112",
-        },
-        "fecha_pago": "2024-02-05T10:15:00",
-        "links": {
-            "pdf": "https://contifico.example/pdf/INV-600",
-            "publico": "https://contifico.example/share/INV-600",
-        },
-    }
-    captured: dict[str, str] = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured.update(dict(request.url.params))
-        return httpx.Response(200, json=payload)
-
-    contifico_client = ContificoClient(
-        base_url="https://api.example.com/sistema/api/v1",
-        api_key="key-123",
-        api_token="token-abc",
-        rate_limit_per_minute=100,
-        max_retries=0,
-        sleep_func=lambda _seconds: None,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
-        company_id="EMP-ORDER",
-    )
-
-    try:
-        summary = main.get_order_invoice_endpoint(
-            order.id,
-            db_session,
-            admin,
-            contifico_client=contifico_client,
-        )
-    finally:
-        contifico_client.close()
-
-    assert captured["empresa"] == "EMP-ORDER"
-    assert captured["empresa_id"] == "EMP-ORDER"
-    assert summary.download_url == "https://contifico.example/pdf/INV-600"
-    assert summary.share_url == "https://contifico.example/share/INV-600"
-
-
-def test_get_contifico_client_dependency_includes_company_id(monkeypatch):
-    monkeypatch.setattr(main.settings, "contifico_api_key", "key-123")
-    monkeypatch.setattr(main.settings, "contifico_api_token", "token-456")
-    monkeypatch.setattr(main.settings, "contifico_company_id", "EMP-XYZ")
-
-    created_clients = []
-
-    class FakeClient:
-        def __init__(self, **kwargs):
-            self.kwargs = kwargs
-            self.closed = False
-            created_clients.append(self)
-
-        def close(self):
-            self.closed = True
-
-    monkeypatch.setattr(main, "ContificoClient", FakeClient)
-
-    dependency = main.get_contifico_client_dependency()
-    client = next(dependency)
-
-    assert created_clients[0].kwargs["company_id"] == "EMP-XYZ"
-    assert client is created_clients[0]
-
-    with pytest.raises(StopIteration):
-        next(dependency)
-
-    assert created_clients[0].closed is True
