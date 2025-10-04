@@ -5323,7 +5323,18 @@ function renderContificoPreviewCustomerInvoices() {
       ? state.contificoPreviewCustomerInvoices
       : [];
 
-    if (invoices.length) {
+    if (
+      state.contificoPreviewCustomerInvoicesError &&
+      !state.contificoPreviewCustomerInvoicesLoading
+    ) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 7;
+      cell.className = 'error';
+      cell.textContent = state.contificoPreviewCustomerInvoicesError;
+      row.appendChild(cell);
+      contificoCustomerInvoicesTableBody.appendChild(row);
+    } else if (invoices.length) {
       invoices.forEach((invoice) => {
         const row = document.createElement('tr');
 
