@@ -242,7 +242,7 @@ class AuditLogRead(BaseModel):
 
 
 class ContificoProduct(BaseModel):
-    id: Optional[int] = None
+    id: Optional[Union[int, str]] = None
     codigo: Optional[str] = None
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
