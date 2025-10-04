@@ -5129,8 +5129,6 @@ function resetContificoPreviewState() {
   state.contificoPreviewInvoiceLookupError = null;
   state.contificoPreviewInvoiceLookupFetched = false;
   state.contificoPreviewInvoiceLookupNumber = '';
-  state.contificoCustomerInvoicesModalVisible = false;
-  state.contificoInvoiceLookupModalVisible = false;
   setContificoCustomerInvoicesVisible(false);
   setContificoInvoiceLookupVisible(false);
   renderContificoPreview();
