@@ -216,7 +216,7 @@ def test_find_invoice_by_document_number_strips_prefix_and_spaces() -> None:
 
     assert invoice == {"id": 7, "numero": "001-001-0000001"}
     assert len(requests) == 1
-    assert requests[0]["documento"] == "001-001-0000001"
+    assert requests[0]["documento"] == "FAC 001-001-0000001"
     assert requests[0]["numero"] == "001-001-0000001"
 
 
@@ -246,7 +246,71 @@ def test_find_invoice_by_document_number_retries_with_original_value() -> None:
     invoice = client.find_invoice_by_document_number("FAC 001-001-0000001")
 
     assert invoice == {"id": 5, "numero": "FAC 001-001-0000001"}
-    assert seen == ["001-001-0000001", "FAC 001-001-0000001"]
+    assert seen == ["FAC 001-001-0000001", "001-001-0000001"]
+
+
+def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
+    pages: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        page = int(params.get("result_page", 1))
+        pages.append(page)
+        if page == 1:
+            invoices = [
+                {"id": idx, "numero": f"001-001-0001{idx:03d}"}
+                for idx in range(200)
+            ]
+            return httpx.Response(200, json=invoices)
+        if page == 2:
+            return httpx.Response(
+                200,
+                json=[
+                    {"id": 2, "numero": "FAC 001-001-0000005"},
+                ],
+            )
+        return httpx.Response(200, json=[])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("FAC 001-001-0000005")
+
+    assert invoice == {"id": 2, "numero": "FAC 001-001-0000005"}
+    assert pages == [1, 2]
+
+
+def test_find_invoice_by_document_number_falls_back_to_smaller_page_size() -> None:
+    requests: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        if params.get("result_size") == str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE):
+            return httpx.Response(status.HTTP_504_GATEWAY_TIMEOUT, json={"mensaje": "Timeout"})
+        assert params.get("result_size") == str(ContificoClient.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES[0])
+        return httpx.Response(200, json=[{"id": 3, "numero": "001-001-0000001"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000001")
+
+    assert invoice == {"id": 3, "numero": "001-001-0000001"}
+    assert [params["result_size"] for params in requests] == [
+        str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE),
+        str(ContificoClient.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES[0]),
+    ]
 
 
 def test_find_invoice_by_document_number_handles_missing() -> None:
