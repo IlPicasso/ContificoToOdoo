@@ -39,9 +39,10 @@ def test_create_invoice_builds_expected_request():
         captured["url"] = str(request.url)
         captured["path"] = request.url.path
         captured["authorization"] = request.headers.get("authorization")
-        captured["api-key"] = request.headers.get("api-key")
+        captured["api-token"] = request.headers.get("api-token")
         captured["json"] = json.loads(request.content.decode())
         captured["params"] = dict(request.url.params)
+        captured["api-key"] = request.headers.get("api-key")
         return httpx.Response(201, json={"id": "INV-1"})
 
     client = build_contifico_client(handler)
@@ -49,8 +50,9 @@ def test_create_invoice_builds_expected_request():
 
     assert response == {"id": "INV-1"}
     assert captured["path"] == "/sistema/api/v1/documento/"
-    assert captured["authorization"] == "Bearer token-abc"
-    assert captured["api-key"] == "key-123"
+    assert captured["authorization"] == "key-123"
+    assert captured["api-token"] == "token-abc"
+    assert captured["api-key"] is None
     assert captured["json"] == {"total": 100}
     assert captured["params"] == {}
 
@@ -107,7 +109,8 @@ def test_get_customer_by_document_sets_query_param():
         == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001&empresa_id=EMP-001"
     )
     assert captured["params"]["identificacion"] == "0909090909"
-    assert "empresa_id" not in captured["params"]
+    assert captured["params"]["empresa"] == "EMP-001"
+    assert captured["params"]["empresa_id"] == "EMP-001"
 
 
 def test_omits_company_params_when_not_configured():
@@ -117,7 +120,7 @@ def test_omits_company_params_when_not_configured():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"items": []})
 
-    client = build_contifico_client(handler)
+    client = build_contifico_client(handler, company_id=None)
     client.get_customer_by_document("0101010101")
 
     assert captured["params"] == {"identificacion": "0101010101"}
