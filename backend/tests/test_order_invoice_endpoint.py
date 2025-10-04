@@ -87,8 +87,8 @@ class DummyContificoClient:
         self.error = error
         self.requested_invoice = None
 
-    def get_invoice(self, invoice_id: str, customer_document: str | None = None):
-        self.requested_invoice = (invoice_id, customer_document)
+    def get_invoice(self, invoice_id: str):
+        self.requested_invoice = invoice_id
         if self.error:
             raise self.error
         return self.payload
@@ -141,7 +141,7 @@ def test_get_order_invoice_returns_summary(db_session):
     assert summary.payment_date == "2024-02-05T10:15:00"
     assert summary.download_url == "https://contifico.example/pdf/INV-500"
     assert summary.share_url == "https://contifico.example/share/INV-500"
-    assert client.requested_invoice == ("INV-500", "0991234567")
+    assert client.requested_invoice == "INV-500"
 
 
 def test_get_order_invoice_handles_contifico_errors(db_session):
