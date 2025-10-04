@@ -469,3 +469,28 @@ def test_contifico_invoice_from_api_uses_documento_when_numero_missing() -> None
     invoice = schemas.ContificoInvoice.from_api(payload)
 
     assert invoice.numero == "001-002-0000007"
+
+
+def test_contifico_invoice_from_api_falls_back_to_persona_nombre() -> None:
+    payload = {
+        "persona_nombre": "Juan Ejemplo",
+        "persona_identificacion": "0999999999",
+    }
+
+    invoice = schemas.ContificoInvoice.from_api(payload)
+
+    assert invoice.cliente == "Juan Ejemplo"
+    assert invoice.identificacion == "0999999999"
+
+
+def test_contifico_invoice_from_api_handles_nested_persona_object() -> None:
+    payload = {
+        "persona": {
+            "nombre": "Ana",
+            "apellidos": "Díaz",
+        },
+    }
+
+    invoice = schemas.ContificoInvoice.from_api(payload)
+
+    assert invoice.cliente == "Ana Díaz"

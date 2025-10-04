@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -308,6 +309,61 @@ class ContificoInvoice(BaseModel):
         if not isinstance(payload, dict):
             raise TypeError("La factura devuelta por Contífico debe ser un diccionario")
 
+        def _normalize_string(value: Any) -> Optional[str]:
+            if isinstance(value, str):
+                candidate = value.strip()
+                return candidate or None
+            if isinstance(value, float):
+                if math.isnan(value):
+                    return None
+                return str(value)
+            if isinstance(value, int):
+                return str(value)
+            return None
+
+        def _extract_string(data: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+            for key in keys:
+                if key not in data:
+                    continue
+                value = data.get(key)
+                if isinstance(value, dict):
+                    nombres = _normalize_string(
+                        value.get("nombre")
+                        or value.get("NOMBRE")
+                        or value.get("nombres")
+                        or value.get("NOMBRES")
+                    )
+                    apellidos = _normalize_string(value.get("apellidos") or value.get("APELLIDOS"))
+                    if nombres and apellidos:
+                        return f"{nombres} {apellidos}".strip()
+                    if nombres:
+                        return nombres
+                    if apellidos:
+                        return apellidos
+                    # Algunos payloads anidan los datos del cliente bajo un objeto.
+                    nested_value = _extract_string(
+                        value,
+                        (
+                            "nombre",
+                            "nombre_completo",
+                            "nombreCompleto",
+                            "nombre_comercial",
+                            "nombreComercial",
+                            "razon_social",
+                            "razonSocial",
+                            "full_name",
+                            "FULL_NAME",
+                            "cliente",
+                            "CLIENTE",
+                        ),
+                    )
+                    if nested_value:
+                        return nested_value
+                normalized = _normalize_string(value)
+                if normalized:
+                    return normalized
+            return None
+
         numero = (
             payload.get("numero")
             or payload.get("numero_documento")
@@ -318,12 +374,35 @@ class ContificoInvoice(BaseModel):
             or payload.get("NUMERO_COMPROBANTE")
             or payload.get("DOCUMENTO")
         )
-        cliente = (
-            payload.get("cliente")
-            or payload.get("cliente_nombre")
-            or payload.get("CLIENTE")
-            or payload.get("CLIENTE_NOMBRE")
+        cliente = _extract_string(
+            payload,
+            (
+                "cliente",
+                "cliente_nombre",
+                "CLIENTE",
+                "CLIENTE_NOMBRE",
+                "cliente_nombre_comercial",
+                "CLIENTE_NOMBRE_COMERCIAL",
+                "cliente_razon_social",
+                "CLIENTE_RAZON_SOCIAL",
+                "razon_social",
+                "RAZON_SOCIAL",
+                "persona_nombre",
+                "PERSONA_NOMBRE",
+                "persona_razon_social",
+                "PERSONA_RAZON_SOCIAL",
+            ),
         )
+        if not cliente:
+            cliente = _extract_string(
+                payload,
+                (
+                    "persona",
+                    "cliente_detalle",
+                    "datos_cliente",
+                    "cliente_info",
+                ),
+            )
         identificacion = (
             payload.get("cliente_identificacion")
             or payload.get("identificacion_cliente")
@@ -335,6 +414,8 @@ class ContificoInvoice(BaseModel):
             or payload.get("IDENTIFICACION")
             or payload.get("documento")
             or payload.get("DOCUMENTO")
+            or payload.get("persona_identificacion")
+            or payload.get("PERSONA_IDENTIFICACION")
         )
         fecha = (
             payload.get("fecha_emision")
