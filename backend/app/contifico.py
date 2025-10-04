@@ -37,7 +37,7 @@ class ContificoClient:
     """Cliente HTTP pequeño para la API de Contífico."""
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
-    INVOICE_LOOKUP_PAGE_SIZE = 200
+    INVOICE_LOOKUP_PAGE_SIZE = 100
     INVOICE_LOOKUP_MAX_PAGES = 50
 
     def __init__(
@@ -272,11 +272,12 @@ class ContificoClient:
             raise ValueError("El número de documento de la factura es obligatorio.")
 
         trimmed_input = document_number.strip()
+        canonical_input = " ".join(trimmed_input.split())
         search_candidates = []
-        if normalized_target:
+        if canonical_input:
+            search_candidates.append(canonical_input)
+        if normalized_target and normalized_target != canonical_input:
             search_candidates.append(normalized_target)
-        if trimmed_input and trimmed_input != normalized_target:
-            search_candidates.append(trimmed_input)
 
         for candidate in search_candidates:
             seen_numbers: set[str] = set()
