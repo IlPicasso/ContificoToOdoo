@@ -37,7 +37,8 @@ class ContificoClient:
     """Cliente HTTP pequeño para la API de Contífico."""
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
-    INVOICE_LOOKUP_PAGE_SIZE = 200
+    INVOICE_LOOKUP_PAGE_SIZE = 100
+    INVOICE_LOOKUP_MAX_PAGES = 50
 
     def __init__(
         self,
@@ -271,29 +272,52 @@ class ContificoClient:
             raise ValueError("El número de documento de la factura es obligatorio.")
 
         trimmed_input = document_number.strip()
+        canonical_input = " ".join(trimmed_input.split())
         search_candidates = []
-        if normalized_target:
+        if canonical_input:
+            search_candidates.append(canonical_input)
+        if normalized_target and normalized_target != canonical_input:
             search_candidates.append(normalized_target)
-        if trimmed_input and trimmed_input != normalized_target:
-            search_candidates.append(trimmed_input)
 
         for candidate in search_candidates:
-            try:
-                invoices = list(
-                    self.list_invoices(
-                        page=1,
-                        page_size=self.INVOICE_LOOKUP_PAGE_SIZE,
-                        document_number=candidate,
+            seen_numbers: set[str] = set()
+            for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
+                try:
+                    invoices = list(
+                        self.list_invoices(
+                            page=page,
+                            page_size=self.INVOICE_LOOKUP_PAGE_SIZE,
+                            document_number=candidate,
+                        )
                     )
-                )
-            except ContificoAPIError as exc:
-                if exc.status_code == HTTPStatus.NOT_FOUND:
-                    continue
-                raise
+                except ContificoAPIError as exc:
+                    if exc.status_code == HTTPStatus.NOT_FOUND:
+                        break
+                    raise
 
-            match = self._match_invoice_by_number(invoices, normalized_target)
-            if match is not None:
-                return match
+                if not invoices:
+                    break
+
+                match = self._match_invoice_by_number(invoices, normalized_target)
+                if match is not None:
+                    return match
+
+                if len(invoices) < self.INVOICE_LOOKUP_PAGE_SIZE:
+                    break
+
+                page_numbers = set()
+                for invoice in invoices:
+                    candidate_number = self._extract_invoice_number(invoice)
+                    if not candidate_number:
+                        continue
+                    normalized_candidate = self._normalize_invoice_number(candidate_number)
+                    if normalized_candidate:
+                        page_numbers.add(normalized_candidate)
+
+                if page_numbers and page_numbers.issubset(seen_numbers):
+                    break
+
+                seen_numbers.update(page_numbers)
 
         return None
 
