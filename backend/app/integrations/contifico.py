@@ -40,7 +40,6 @@ class ContificoClient:
         client: Optional[httpx.Client] = None,
         sleep_func: Callable[[float], None] = time.sleep,
         monotonic_func: Callable[[], float] = time.monotonic,
-        company_id: Optional[str] = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         if not api_key or not api_token:
@@ -56,7 +55,6 @@ class ContificoClient:
         self._sleep = sleep_func
         self._monotonic = monotonic_func
         self._request_timestamps: Deque[float] = deque()
-        self.company_id = company_id
 
     def close(self) -> None:
         """Close the underlying HTTP client."""
@@ -105,11 +103,6 @@ class ContificoClient:
             "api-key": self.api_key,
         }
 
-        request_params = dict(params) if params else {}
-        if self.company_id:
-            for key in ("empresa", "empresa_id"):
-                request_params.setdefault(key, self.company_id)
-
         attempt = 0
         while True:
             self._respect_rate_limit()
@@ -118,7 +111,7 @@ class ContificoClient:
                 response = self._client.request(
                     method,
                     url,
-                    params=request_params or None,
+                    params=params,
                     json=json,
                     headers=headers,
                     timeout=self.timeout,
