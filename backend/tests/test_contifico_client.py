@@ -286,16 +286,16 @@ def test_build_invoice_page_handles_errors() -> None:
     assert "timeout" in exc_info.value.detail
 
 
-def test_build_invoice_page_returns_empty_on_not_found() -> None:
+def test_build_invoice_page_raises_http_exception_on_not_found() -> None:
     class StubClient:
         def list_invoices_by_customer_document(self, document_id: str, *, page: int, page_size: int):
             raise ContificoAPIError(status.HTTP_404_NOT_FOUND, "Sin resultados")
 
-    result = build_invoice_page(StubClient(), page=1, page_size=25, document_id="0912345678")
+    with pytest.raises(HTTPException) as exc_info:
+        build_invoice_page(StubClient(), page=1, page_size=25, document_id="0912345678")
 
-    assert result.page == 1
-    assert result.page_size == 25
-    assert result.items == []
+    assert exc_info.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Sin resultados" in exc_info.value.detail
 
 
 def test_fetch_invoice_by_document_number_success() -> None:
