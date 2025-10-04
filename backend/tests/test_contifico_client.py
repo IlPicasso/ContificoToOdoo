@@ -10,6 +10,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-value-32-chars!!")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app import schemas
 from app.contifico import (
     ContificoAPIError,
     ContificoClient,
@@ -353,3 +354,23 @@ def test_fetch_invoice_by_document_number_handles_api_404() -> None:
 
     assert exc_info.value.status_code == 404
     assert "No se encontró" in exc_info.value.detail
+
+
+def test_contifico_invoice_from_api_supports_uppercase_keys() -> None:
+    payload = {
+        "NUMERO": "FAC 001-005-000012109",
+        "CLIENTE": "María Demo",
+        "DOCUMENTO": "0912345678",
+        "FECHA_EMISION": "2023-11-01",
+        "ESTADO": "AUT",
+        "TOTAL": "123.45",
+    }
+
+    invoice = schemas.ContificoInvoice.from_api(payload)
+
+    assert invoice.numero == "FAC 001-005-000012109"
+    assert invoice.cliente == "María Demo"
+    assert invoice.identificacion == "0912345678"
+    assert invoice.fecha_emision == "2023-11-01"
+    assert invoice.estado == "AUT"
+    assert invoice.total == pytest.approx(123.45)
