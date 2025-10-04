@@ -126,7 +126,7 @@ class ContificoClient:
                 )
             except httpx.RequestError as exc:  # pragma: no cover - httpx RequestError holds detail
                 logger.warning("Transient network error contacting Contifico: %s", exc)
-                if attempt >= self.max_retries:
+                if attempt >= allowed_retries:
                     raise ContificoTransientError("Network error contacting Contifico") from exc
             else:
                 if response.status_code == httpx.codes.TOO_MANY_REQUESTS:
@@ -179,7 +179,13 @@ class ContificoClient:
 
         if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
             params = {"numero": invoice_id}
-            return self._request("GET", "documento/", params=params, max_retries=0)
+            try:
+                return self._request("GET", "documento/", params=params, max_retries=0)
+            except ContificoTransientError as exc:
+                logger.warning(
+                    "Falling back to Contifico invoice lookup by id after numero lookup failed: %s",
+                    exc,
+                )
 
         params = None
         if self.company_id:
@@ -191,6 +197,8 @@ class ContificoClient:
         """Fetch Contifico personas (clientes) filtered by identification number."""
 
         params = {"identificacion": document}
+        if self.company_id:
+            params.setdefault("empresa", self.company_id)
         return self._request("GET", "persona/", params=params)
 
     def __enter__(self) -> "ContificoClient":  # pragma: no cover - convenience

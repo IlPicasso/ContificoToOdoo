@@ -92,7 +92,30 @@ def test_get_invoice_fetches_specific_document():
 
     assert response == {"id": "INV-25"}
     assert captured["path"] == "/sistema/api/v1/documento/INV-25/"
-    assert captured["params"] == {}
+    assert captured["params"] == {"empresa": "EMP-001", "empresa_id": "EMP-001"}
+
+
+def test_get_invoice_falls_back_when_numero_lookup_times_out():
+    attempts = {"value": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts["value"] += 1
+        if attempts["value"] == 1:
+            assert request.url.path.endswith("/documento/")
+            assert request.url.params["numero"] == "001-001-000123456"
+            raise httpx.ReadTimeout("timeout", request=request)
+
+        assert request.url.path.endswith("/documento/001-001-000123456/")
+        params = dict(request.url.params)
+        assert params["empresa"] == "EMP-001"
+        assert params["empresa_id"] == "EMP-001"
+        return httpx.Response(200, json={"id": "001-001-000123456"})
+
+    client = build_contifico_client(handler)
+    response = client.get_invoice("001-001-000123456")
+
+    assert response == {"id": "001-001-000123456"}
+    assert attempts["value"] == 2
 
 
 def test_get_customer_by_document_sets_query_param():
@@ -108,10 +131,10 @@ def test_get_customer_by_document_sets_query_param():
 
     assert (
         captured["url"]
-        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001&empresa_id=EMP-001"
+        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001"
     )
     assert captured["params"]["identificacion"] == "0909090909"
-    assert "empresa_id" not in captured["params"]
+    assert captured["params"]["empresa"] == "EMP-001"
 
 
 def test_omits_company_params_when_not_configured():
@@ -121,7 +144,7 @@ def test_omits_company_params_when_not_configured():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"items": []})
 
-    client = build_contifico_client(handler)
+    client = build_contifico_client(handler, company_id=None)
     client.get_customer_by_document("0101010101")
 
     assert captured["params"] == {"identificacion": "0101010101"}
