@@ -60,13 +60,6 @@ class Settings(BaseSettings):
             "Loaded from the CONTIFICO_API_TOKEN environment variable or the .env file."
         ),
     )
-    contifico_company_numeric_id: str | None = Field(
-        None,
-        description=(
-            "Optional Contifico numeric company identifier used for the 'empresa_id' query "
-            "parameter. Loaded from CONTIFICO_COMPANY_NUMERIC_ID or the .env file."
-        ),
-    )
     contifico_timeout_seconds: float = Field(
         30.0,
         ge=0,

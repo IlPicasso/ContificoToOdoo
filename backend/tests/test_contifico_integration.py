@@ -17,12 +17,7 @@ from app.integrations import (  # noqa: E402
 )
 
 
-def build_contifico_client(
-    handler,
-    *,
-    company_numeric_id: str | None = None,
-    **kwargs,
-):
+def build_contifico_client(handler, **kwargs):
     client = ContificoClient(
         base_url="https://api.example.com/sistema/api/v1",
         api_key="key-123",
@@ -31,7 +26,6 @@ def build_contifico_client(
         rate_limit_per_minute=100,
         sleep_func=lambda _seconds: None,
         client=httpx.Client(transport=httpx.MockTransport(handler)),
-        company_numeric_id=company_numeric_id,
         **kwargs,
     )
     return client
@@ -112,39 +106,7 @@ def test_get_customer_by_document_sets_query_param():
         == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909"
     )
     assert captured["params"]["identificacion"] == "0909090909"
-    assert "empresa" not in captured["params"]
     assert "empresa_id" not in captured["params"]
-
-
-def test_adds_numeric_company_id_when_configured():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"items": []})
-
-    client = build_contifico_client(handler, company_numeric_id="42")
-    client.get_customer_by_document("0909090909")
-
-    assert captured["params"]["empresa_id"] == "42"
-
-
-def test_company_numeric_id_does_not_override_explicit_param():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"items": []})
-
-    client = build_contifico_client(handler, company_numeric_id="12345")
-    client._request(
-        "GET",
-        "persona/",
-        params={"empresa_id": "999", "otro": "valor"},
-    )
-
-    assert captured["params"]["otro"] == "valor"
-    assert captured["params"]["empresa_id"] == "999"
 
 
 def test_omits_company_params_when_not_configured():
