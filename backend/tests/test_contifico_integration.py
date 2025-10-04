@@ -90,20 +90,6 @@ def test_get_invoice_fetches_specific_document():
 
     assert response == {"id": "INV-25"}
     assert captured["path"] == "/sistema/api/v1/documento/INV-25/"
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
-
-
-def test_get_invoice_without_company_id_does_not_append_params():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"id": "INV-25"})
-
-    client = build_contifico_client(handler, company_id=None)
-    client.get_invoice("INV-25")
-
     assert captured["params"] == {}
 
 

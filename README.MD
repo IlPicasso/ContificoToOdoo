@@ -113,11 +113,8 @@ de autenticación del plugin oficial de WooCommerce y evitando duplicar el valor
 encabezado `api-key` separado. Cuando consultas una factura puedes entregar tanto el
 identificador numérico interno como el número legible (por ejemplo `001-005-000012717`);
 en este último caso el cliente convierte la solicitud en `GET documento/?numero=<valor>`
-para alinearse con la API oficial. Si configuraste `CONTIFICO_COMPANY_ID`, el cliente
-anexará automáticamente los parámetros `empresa` y `empresa_id` en ambas variantes
-de consulta para que Contifico resuelva la factura aun cuando requiera el contexto de
-empresa. Puedes utilizar el helper `ContificoClient` para crear y actualizar facturas o
-consultar clientes por identificación:
+para alinearse con la API oficial. Puedes utilizar el helper `ContificoClient` para crear y
+actualizar facturas o consultar clientes por identificación:
 
 ```python
 from app.integrations import ContificoClient
