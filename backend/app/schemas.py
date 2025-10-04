@@ -161,22 +161,6 @@ class OrderRead(OrderPublic):
     created_at: datetime
 
 
-class InvoiceSummary(BaseModel):
-    invoice_number: str
-    status: Optional[str] = None
-    payment_status: Optional[str] = None
-    subtotal: Optional[float] = None
-    tax_total: Optional[float] = None
-    total: Optional[float] = None
-    paid_total: Optional[float] = None
-    pending_total: Optional[float] = None
-    has_pending_balance: bool = False
-    currency: Optional[str] = None
-    payment_date: Optional[str] = None
-    download_url: Optional[str] = None
-    share_url: Optional[str] = None
-
-
 class OrderTaskBase(BaseModel):
     description: str = Field(..., max_length=255)
 
