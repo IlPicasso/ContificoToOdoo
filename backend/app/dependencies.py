@@ -1,6 +1,8 @@
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 
 from . import auth, models
+from .config import get_settings
+from .contifico import ContificoClient, ContificoConfigurationError
 
 
 async def get_current_active_user(
@@ -25,3 +27,29 @@ def vendor_or_admin_required():
 
 def tailor_or_admin_required():
     return auth.require_roles(models.UserRole.ADMIN, models.UserRole.SASTRE)
+
+
+def get_contifico_client() -> ContificoClient:
+    """Crea una instancia del cliente de Contífico usando la configuración actual."""
+
+    settings = get_settings()
+    if not settings.contifico_api_key or not settings.contifico_api_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "La integración con Contífico no está configurada. "
+                "Define CONTIFICO_API_KEY y CONTIFICO_API_TOKEN en el entorno."
+            ),
+        )
+    try:
+        return ContificoClient(
+            settings.contifico_api_key,
+            settings.contifico_api_token,
+            base_url=settings.contifico_api_base_url,
+            timeout=settings.contifico_timeout_seconds,
+        )
+    except ContificoConfigurationError as exc:  # pragma: no cover - validación defensiva
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc

@@ -1,5 +1,5 @@
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -37,6 +37,28 @@ class Settings(BaseSettings):
     api_reload: bool = Field(
         False,
         description="Enable auto reload when running the development server via python -m app.main.",
+    )
+    contifico_api_key: Optional[str] = Field(
+        default=None,
+        description=(
+            "API Key necesaria para autenticar las llamadas a la API de Contífico."
+        ),
+    )
+    contifico_api_token: Optional[str] = Field(
+        default=None,
+        description=(
+            "API Token asociado al punto de venta en Contífico para operaciones "
+            "como la emisión de documentos."
+        ),
+    )
+    contifico_api_base_url: str = Field(
+        default="https://api.contifico.com/sistema/api/v1",
+        description="URL base para la API de Contífico.",
+    )
+    contifico_timeout_seconds: float = Field(
+        default=30.0,
+        ge=1.0,
+        description="Tiempo máximo de espera (en segundos) para peticiones a Contífico.",
     )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")

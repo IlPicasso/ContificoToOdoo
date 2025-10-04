@@ -23,18 +23,30 @@ pip install -r requirements.txt
 ```
 
 Define la clave secreta JWT en un archivo `.env` dentro de la carpeta `backend` (o como
-variable de entorno) antes de iniciar la API:
+variable de entorno) antes de iniciar la API. En ese mismo archivo puedes configurar las
+credenciales de Contífico (`CONTIFICO_API_KEY` y `CONTIFICO_API_TOKEN`) si deseas usar la
+integración:
 
 ```bash
 cat <<'EOF' > .env
 SECRET_KEY="pon-aqui-una-clave-de-al-menos-32-caracteres"
+# Credenciales de Contífico
+CONTIFICO_API_KEY="tu-api-key"
+CONTIFICO_API_TOKEN="tu-api-token"
 EOF
 # También puedes exportarla directamente:
 export SECRET_KEY="pon-aqui-una-clave-de-al-menos-32-caracteres"
+# export CONTIFICO_API_KEY="tu-api-key"
+# export CONTIFICO_API_TOKEN="tu-api-token"
 ```
 
 La aplicación fallará con un mensaje descriptivo si `SECRET_KEY` no está definida o es
 demasiado corta.
+
+Para verificar que la integración con Contífico está lista, asegúrate de contar con ambos
+valores proporcionados por Contífico (la API Key y el API Token del punto de venta). Si
+faltan, los endpoints que dependan de Contífico responderán con un error `503` indicando
+que la integración no está configurada.
 
 Crear el primer usuario administrador:
 

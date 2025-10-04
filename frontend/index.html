@@ -133,6 +133,14 @@
             >
               Bitácora de auditoría
             </button>
+            <button
+              type="button"
+              class="dashboard-tab admin-only hidden"
+              data-tab="contificoPreviewPanel"
+              id="contificoPreviewTabButton"
+            >
+              Contífico (vista previa)
+            </button>
           </nav>
 
           <section class="card dashboard-panel hidden" id="customersPanel">
@@ -800,6 +808,94 @@
                 </thead>
                 <tbody id="auditLogTableBody"></tbody>
               </table>
+            </div>
+          </section>
+
+          <section class="card dashboard-panel hidden" id="contificoPreviewPanel">
+            <div class="contifico-preview-header">
+              <div>
+                <h3>Vista previa de Contífico</h3>
+                <p class="muted small">
+                  Consulta productos y bodegas directamente desde Contífico para validar la configuración de la
+                  integración. Esta sección es de solo lectura y visible únicamente para administradores.
+                </p>
+              </div>
+            </div>
+
+            <div class="contifico-preview-grid">
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
+                    <h4>Productos</h4>
+                    <p class="muted small">Solicita un listado paginado de productos tal como lo expone Contífico.</p>
+                  </div>
+                </header>
+                <form id="contificoPreviewProductsForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoPreviewPage">Página</label>
+                    <input type="number" id="contificoPreviewPage" min="1" step="1" value="1" />
+                  </div>
+                  <div class="form-row">
+                    <label for="contificoPreviewPageSize">Filas por página</label>
+                    <input type="number" id="contificoPreviewPageSize" min="1" max="200" step="1" value="25" />
+                  </div>
+                  <div class="form-row contifico-preview-submit">
+                    <button type="submit" class="primary">Consultar productos</button>
+                  </div>
+                </form>
+                <p
+                  id="contificoPreviewProductsStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Precio base</th>
+                      </tr>
+                    </thead>
+                    <tbody id="contificoPreviewProductsTableBody"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
+                    <h4>Bodegas</h4>
+                    <p class="muted small">Obtén la lista de bodegas configuradas en Contífico.</p>
+                  </div>
+                </header>
+                <div class="contifico-preview-actions">
+                  <button type="button" class="primary" id="contificoPreviewWarehousesButton">
+                    Cargar bodegas
+                  </button>
+                </div>
+                <p
+                  id="contificoPreviewWarehousesStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Dirección</th>
+                      </tr>
+                    </thead>
+                    <tbody id="contificoPreviewWarehousesTableBody"></tbody>
+                  </table>
+                </div>
+              </article>
             </div>
           </section>
         </div>
