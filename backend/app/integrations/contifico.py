@@ -103,6 +103,8 @@ class ContificoClient:
             "api-key": self.api_key,
         }
 
+        request_params = dict(params) if params else {}
+
         attempt = 0
         while True:
             self._respect_rate_limit()
@@ -111,7 +113,7 @@ class ContificoClient:
                 response = self._client.request(
                     method,
                     url,
-                    params=params,
+                    params=request_params or None,
                     json=json,
                     headers=headers,
                     timeout=self.timeout,
