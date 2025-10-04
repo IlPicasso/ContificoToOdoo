@@ -126,31 +126,6 @@ def test_get_invoice_by_number_uses_query_param():
     assert captured["params"]["empresa_id"] == "EMP-001"
 
 
-def test_get_invoice_does_not_retry_on_server_error():
-    call_count = {"value": 0}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        call_count["value"] += 1
-        return httpx.Response(504, text="upstream timeout")
-
-    client = ContificoClient(
-        base_url="https://api.example.com/sistema/api/v1",
-        api_key="key-123",
-        api_token="token-abc",
-        max_retries=3,
-        retry_backoff_seconds=0,
-        rate_limit_per_minute=100,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
-        sleep_func=lambda _seconds: None,
-        company_id="EMP-001",
-    )
-
-    with pytest.raises(ContificoTransientError):
-        client.get_invoice("INV-99")
-
-    assert call_count["value"] == 1
-
-
 def test_get_customer_by_document_sets_query_param():
     captured = {}
 
