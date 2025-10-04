@@ -41,7 +41,7 @@ def test_create_invoice_builds_expected_request():
         captured["authorization"] = request.headers.get("authorization")
         captured["accept"] = request.headers.get("accept")
         captured["content-type"] = request.headers.get("content-type")
-        captured["api-key"] = request.headers.get("api-key")
+        captured["api-token"] = request.headers.get("api-token")
         captured["json"] = json.loads(request.content.decode())
         captured["params"] = dict(request.url.params)
         return httpx.Response(201, json={"id": "INV-1"})
@@ -54,7 +54,7 @@ def test_create_invoice_builds_expected_request():
     assert captured["authorization"] == "key-123"
     assert captured["accept"] == "application/json"
     assert captured["content-type"] == "application/json; charset=UTF-8"
-    assert captured["api-key"] is None
+    assert captured["api-token"] == "token-abc"
     assert captured["json"] == {"total": 100}
     assert captured["params"] == {}
 
@@ -92,7 +92,62 @@ def test_get_invoice_fetches_specific_document():
 
     assert response == {"id": "INV-25"}
     assert captured["path"] == "/sistema/api/v1/documento/INV-25/"
-    assert captured["params"] == {}
+    assert captured["params"] == {"empresa": "EMP-001", "empresa_id": "EMP-001"}
+
+
+def test_get_invoice_by_numero_includes_company_param():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"id": "001-001-000123456"})
+
+    client = build_contifico_client(handler)
+    response = client.get_invoice("001-001-000123456", customer_document="0991234567")
+
+    assert response == {"id": "001-001-000123456"}
+    assert captured["path"].endswith("/documento/")
+    assert captured["params"]["numero"] == "001-001-000123456"
+    assert captured["params"]["establecimiento"] == "001"
+    assert captured["params"]["pto_emision"] == "001"
+    assert captured["params"]["secuencial"] == "000123456"
+    assert captured["params"]["empresa"] == "EMP-001"
+
+
+def test_get_invoice_falls_back_to_persona_lookup():
+    requested_paths: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requested_paths.append(request.url.path)
+        if request.url.path == "/sistema/api/v1/documento/":
+            return httpx.Response(504, text="timeout")
+        if request.url.path.endswith("/registro/documento/"):
+            payload = {
+                "results": [
+                    {
+                        "numero": "001-005-000012717",
+                        "documento": "abc123",
+                    }
+                ]
+            }
+            return httpx.Response(200, json=payload)
+        if request.url.path.endswith("/documento/abc123/"):
+            return httpx.Response(200, json={"id": "abc123", "numero": "001-005-000012717"})
+        raise AssertionError(f"Unexpected path: {request.url.path}")
+
+    client = build_contifico_client(handler)
+    response = client.get_invoice(
+        "001-005-000012717",
+        customer_document="0999999999",
+    )
+
+    assert response == {"id": "abc123", "numero": "001-005-000012717"}
+    assert requested_paths == [
+        "/sistema/api/v1/documento/",
+        "/sistema/api/v1/registro/documento/",
+        "/sistema/api/v1/documento/abc123/",
+    ]
 
 
 def test_get_customer_by_document_sets_query_param():
@@ -108,10 +163,10 @@ def test_get_customer_by_document_sets_query_param():
 
     assert (
         captured["url"]
-        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001&empresa_id=EMP-001"
+        == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001"
     )
     assert captured["params"]["identificacion"] == "0909090909"
-    assert "empresa_id" not in captured["params"]
+    assert captured["params"]["empresa"] == "EMP-001"
 
 
 def test_omits_company_params_when_not_configured():
@@ -121,7 +176,7 @@ def test_omits_company_params_when_not_configured():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"items": []})
 
-    client = build_contifico_client(handler)
+    client = build_contifico_client(handler, company_id=None)
     client.get_customer_by_document("0101010101")
 
     assert captured["params"] == {"identificacion": "0101010101"}
