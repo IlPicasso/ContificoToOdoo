@@ -82,6 +82,7 @@ def build_invoice_page(
 def fetch_invoice_by_document_number(
     contifico_client: ContificoClient, *, document_number: str
 ) -> schemas.ContificoInvoice:
+    invoice = None
     try:
         invoice = contifico_client.find_invoice_by_document_number(document_number)
     except ValueError as exc:
@@ -92,7 +93,10 @@ def fetch_invoice_by_document_number(
             detail=exc.detail,
         ) from exc
     except ContificoAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            invoice = None
+        else:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
     if invoice is None:
         raise HTTPException(

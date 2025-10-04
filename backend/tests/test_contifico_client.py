@@ -202,6 +202,23 @@ def test_find_invoice_by_document_number_handles_missing() -> None:
     assert invoice is None
 
 
+def test_find_invoice_by_document_number_handles_404_error() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(status.HTTP_404_NOT_FOUND, json={"mensaje": "No existe"})
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000005")
+
+    assert invoice is None
+
+
 def test_build_product_page_success() -> None:
     class StubClient:
         def list_products(self, *, page: int, page_size: int):
@@ -318,6 +335,19 @@ def test_fetch_invoice_by_document_number_not_found() -> None:
 
     with pytest.raises(HTTPException) as exc_info:
         fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000004")
+
+    assert exc_info.value.status_code == 404
+    assert "No se encontró" in exc_info.value.detail
+
+
+def test_fetch_invoice_by_document_number_handles_api_404() -> None:
+    class StubClient:
+        def find_invoice_by_document_number(self, document_number: str):
+            assert document_number == "001-001-0000005"
+            raise ContificoAPIError(status.HTTP_404_NOT_FOUND, "Sin resultados")
+
+    with pytest.raises(HTTPException) as exc_info:
+        fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000005")
 
     assert exc_info.value.status_code == 404
     assert "No se encontró" in exc_info.value.detail
