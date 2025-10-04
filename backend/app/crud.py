@@ -9,6 +9,22 @@ from . import auth, models, schemas
 DEFAULT_TASK_PREFIX = "Trabajo"
 DEFAULT_TASK_FALLBACK_LABEL = f"{DEFAULT_TASK_PREFIX} sin descripción"
 
+DOCUMENT_SANITIZE_CHARS = ["-", " ", ".", "/", "_"]
+
+
+def _normalize_document_value(document: str) -> str:
+    sanitized = document.strip().lower()
+    for char in DOCUMENT_SANITIZE_CHARS:
+        sanitized = sanitized.replace(char, "")
+    return sanitized
+
+
+def _normalize_document_column(column):
+    normalized = func.lower(column)
+    for char in DOCUMENT_SANITIZE_CHARS:
+        normalized = func.replace(normalized, char, "")
+    return normalized
+
 
 # Serialization helpers -----------------------------------------------------
 
@@ -418,12 +434,35 @@ def search_orders(
     if customer_document:
         trimmed_document = customer_document.strip()
         if trimmed_document:
+            normalized_document = _normalize_document_value(trimmed_document)
+            order_conditions = [
+                models.Order.customer_document == trimmed_document,
+            ]
+            customer_conditions = [
+                models.Customer.document_id == trimmed_document,
+            ]
+            if normalized_document:
+                normalized_order_document = _normalize_document_column(
+                    models.Order.customer_document
+                )
+                normalized_customer_document = _normalize_document_column(
+                    models.Customer.document_id
+                )
+                order_conditions.append(
+                    normalized_order_document == normalized_document
+                )
+                customer_conditions.append(
+                    normalized_customer_document == normalized_document
+                )
+            customer_filter = (
+                or_(*customer_conditions)
+                if len(customer_conditions) > 1
+                else customer_conditions[0]
+            )
             query = query.filter(
                 or_(
-                    models.Order.customer_document == trimmed_document,
-                    models.Order.customer.has(
-                        models.Customer.document_id == trimmed_document
-                    ),
+                    *order_conditions,
+                    models.Order.customer.has(customer_filter),
                 )
             )
     return query.order_by(models.Order.updated_at.desc()).all()
@@ -539,3 +578,4 @@ def update_order_task(
     db.commit()
     db.refresh(db_task)
     return db_task
+
