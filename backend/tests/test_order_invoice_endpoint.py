@@ -157,7 +157,7 @@ def test_get_order_invoice_handles_contifico_errors(db_session):
     assert "Contifico" in exc_info.value.detail
 
 
-def test_get_order_invoice_forwards_company_param(db_session):
+def test_get_order_invoice_requests_invoice(db_session):
     admin = create_user(db_session, "admin", models.UserRole.ADMIN)
     order = create_order(db_session, invoice_number="INV-600")
 
@@ -176,10 +176,10 @@ def test_get_order_invoice_forwards_company_param(db_session):
             "publico": "https://contifico.example/share/INV-600",
         },
     }
-    captured: dict[str, str] = {}
+    requested_urls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        captured.update(dict(request.url.params))
+        requested_urls.append(str(request.url))
         return httpx.Response(200, json=payload)
 
     contifico_client = ContificoClient(
@@ -190,7 +190,6 @@ def test_get_order_invoice_forwards_company_param(db_session):
         max_retries=0,
         sleep_func=lambda _seconds: None,
         client=httpx.Client(transport=httpx.MockTransport(handler)),
-        company_id="EMP-ORDER",
     )
 
     try:
@@ -203,16 +202,16 @@ def test_get_order_invoice_forwards_company_param(db_session):
     finally:
         contifico_client.close()
 
-    assert captured["empresa"] == "EMP-ORDER"
-    assert captured["empresa_id"] == "EMP-ORDER"
+    assert requested_urls == [
+        "https://api.example.com/sistema/api/v1/documento/INV-600/"
+    ]
     assert summary.download_url == "https://contifico.example/pdf/INV-600"
     assert summary.share_url == "https://contifico.example/share/INV-600"
 
 
-def test_get_contifico_client_dependency_includes_company_id(monkeypatch):
+def test_get_contifico_client_dependency(monkeypatch):
     monkeypatch.setattr(main.settings, "contifico_api_key", "key-123")
     monkeypatch.setattr(main.settings, "contifico_api_token", "token-456")
-    monkeypatch.setattr(main.settings, "contifico_company_id", "EMP-XYZ")
 
     created_clients = []
 
@@ -230,7 +229,6 @@ def test_get_contifico_client_dependency_includes_company_id(monkeypatch):
     dependency = main.get_contifico_client_dependency()
     client = next(dependency)
 
-    assert created_clients[0].kwargs["company_id"] == "EMP-XYZ"
     assert client is created_clients[0]
 
     with pytest.raises(StopIteration):
