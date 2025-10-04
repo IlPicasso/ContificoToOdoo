@@ -110,8 +110,11 @@ CONTIFICO_API_TOKEN="80a8e763-b45e-4f9e-9b41-39a03dcea1a5"
 El cliente envía el encabezado `Authorization` con la API key (sin el prefijo `Bearer`)
 y el encabezado `api-token` con el token provisto por Contifico, replicando el esquema
 de autenticación del plugin oficial de WooCommerce y evitando duplicar el valor en un
-encabezado `api-key` separado. Puedes utilizar el
-helper `ContificoClient` para crear y actualizar facturas o consultar clientes por identificación:
+encabezado `api-key` separado. Cuando consultas una factura puedes entregar tanto el
+identificador numérico interno como el número legible (por ejemplo `001-005-000012717`);
+en este último caso el cliente convierte la solicitud en `GET documento/?numero=<valor>`
+para alinearse con la API oficial. Puedes utilizar el helper `ContificoClient` para crear y
+actualizar facturas o consultar clientes por identificación:
 
 ```python
 from app.integrations import ContificoClient

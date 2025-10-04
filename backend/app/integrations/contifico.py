@@ -176,6 +176,10 @@ class ContificoClient:
     def get_invoice(self, invoice_id: str) -> Dict[str, Any]:
         """Fetch a Contifico document by its identifier."""
 
+        if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
+            params = {"numero": invoice_id}
+            return self._request("GET", "documento/", params=params)
+
         return self._request("GET", f"documento/{invoice_id}/")
 
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
