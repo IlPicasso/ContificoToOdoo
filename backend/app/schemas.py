@@ -312,9 +312,11 @@ class ContificoInvoice(BaseModel):
             payload.get("numero")
             or payload.get("numero_documento")
             or payload.get("numero_comprobante")
+            or payload.get("documento")
             or payload.get("NUMERO")
             or payload.get("NUMERO_DOCUMENTO")
             or payload.get("NUMERO_COMPROBANTE")
+            or payload.get("DOCUMENTO")
         )
         cliente = (
             payload.get("cliente")

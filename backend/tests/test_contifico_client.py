@@ -164,14 +164,17 @@ def test_list_invoices_by_customer_document_validates_input() -> None:
         list(client.list_invoices_by_customer_document(""))
 
 
-def test_find_invoice_by_document_number_returns_first() -> None:
+def test_find_invoice_by_document_number_returns_matching_invoice() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params.get("documento") == "001-001-0000001"
+        params = dict(request.url.params)
+        assert params.get("documento") == "001-001-0000001"
+        assert params.get("numero") == "001-001-0000001"
+        assert params.get("result_size") == str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE)
         return httpx.Response(
             200,
             json=[
+                {"id": 99, "numero": "001-001-0000009"},
                 {"id": 1, "numero": "001-001-0000001"},
-                {"id": 2, "numero": "001-001-0000001"},
             ],
         )
 
@@ -188,6 +191,64 @@ def test_find_invoice_by_document_number_returns_first() -> None:
     assert invoice == {"id": 1, "numero": "001-001-0000001"}
 
 
+def test_find_invoice_by_document_number_strips_prefix_and_spaces() -> None:
+    requests: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        return httpx.Response(
+            200,
+            json=[
+                {"id": 7, "numero": "001-001-0000001"},
+            ],
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("  FAC  001-001-0000001  ")
+
+    assert invoice == {"id": 7, "numero": "001-001-0000001"}
+    assert len(requests) == 1
+    assert requests[0]["documento"] == "001-001-0000001"
+    assert requests[0]["numero"] == "001-001-0000001"
+
+
+def test_find_invoice_by_document_number_retries_with_original_value() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        seen.append(params.get("documento", ""))
+        if len(seen) == 1:
+            return httpx.Response(status.HTTP_404_NOT_FOUND, json={"mensaje": "No"})
+        return httpx.Response(
+            200,
+            json=[
+                {"id": 5, "numero": "FAC 001-001-0000001"},
+            ],
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("FAC 001-001-0000001")
+
+    assert invoice == {"id": 5, "numero": "FAC 001-001-0000001"}
+    assert seen == ["001-001-0000001", "FAC 001-001-0000001"]
+
+
 def test_find_invoice_by_document_number_handles_missing() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[])
@@ -201,6 +262,29 @@ def test_find_invoice_by_document_number_handles_missing() -> None:
     )
 
     invoice = client.find_invoice_by_document_number("001-001-0000002")
+
+    assert invoice is None
+
+
+def test_find_invoice_by_document_number_returns_none_when_no_match() -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json=[
+                {"id": 1, "numero": "001-001-0000003"},
+                {"id": 2, "numero": "001-001-0000004"},
+            ],
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000005")
 
     assert invoice is None
 
@@ -374,3 +458,14 @@ def test_contifico_invoice_from_api_supports_uppercase_keys() -> None:
     assert invoice.fecha_emision == "2023-11-01"
     assert invoice.estado == "AUT"
     assert invoice.total == pytest.approx(123.45)
+
+
+def test_contifico_invoice_from_api_uses_documento_when_numero_missing() -> None:
+    payload = {
+        "documento": "001-002-0000007",
+        "cliente": "Comercial SA",
+    }
+
+    invoice = schemas.ContificoInvoice.from_api(payload)
+
+    assert invoice.numero == "001-002-0000007"
