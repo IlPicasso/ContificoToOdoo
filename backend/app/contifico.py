@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any, Dict, Iterable, Optional
 
 import httpx
@@ -203,13 +204,18 @@ class ContificoClient:
         if not document_number or not document_number.strip():
             raise ValueError("El número de documento de la factura es obligatorio.")
 
-        invoices = list(
-            self.list_invoices(
-                page=1,
-                page_size=1,
-                document_number=document_number.strip(),
+        try:
+            invoices = list(
+                self.list_invoices(
+                    page=1,
+                    page_size=1,
+                    document_number=document_number.strip(),
+                )
             )
-        )
+        except ContificoAPIError as exc:
+            if exc.status_code == HTTPStatus.NOT_FOUND:
+                return None
+            raise
         if not invoices:
             return None
         return invoices[0]
