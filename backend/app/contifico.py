@@ -151,3 +151,66 @@ class ContificoClient:
             payload=data,
         )
 
+    def list_invoices(
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+        customer_document: str | None = None,
+        document_number: str | None = None,
+    ) -> Iterable[Dict[str, Any]]:
+        """Obtiene facturas desde Contífico con los filtros disponibles."""
+
+        params: Dict[str, Any] = {"result_page": page, "result_size": page_size}
+        if customer_document:
+            params["cliente_identificacion"] = customer_document.strip()
+        if document_number:
+            params["numero_documento"] = document_number.strip()
+
+        data = self._request("GET", "factura/", params=params)
+        if data is None:
+            return []
+        if isinstance(data, list):
+            return data
+        raise ContificoAPIError(
+            status_code=200,
+            detail="El formato de respuesta para facturas no es el esperado.",
+            payload=data,
+        )
+
+    def list_invoices_by_customer_document(
+        self,
+        document_id: str,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+    ) -> Iterable[Dict[str, Any]]:
+        """Lista facturas usando la identificación del cliente registrado en Contífico."""
+
+        if not document_id or not document_id.strip():
+            raise ValueError("El número de documento del cliente es obligatorio.")
+        return self.list_invoices(
+            page=page,
+            page_size=page_size,
+            customer_document=document_id.strip(),
+        )
+
+    def find_invoice_by_document_number(
+        self, document_number: str
+    ) -> Optional[Dict[str, Any]]:
+        """Busca una factura específica por su número de documento."""
+
+        if not document_number or not document_number.strip():
+            raise ValueError("El número de documento de la factura es obligatorio.")
+
+        invoices = list(
+            self.list_invoices(
+                page=1,
+                page_size=1,
+                document_number=document_number.strip(),
+            )
+        )
+        if not invoices:
+            return None
+        return invoices[0]
+
