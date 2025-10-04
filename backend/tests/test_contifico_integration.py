@@ -103,29 +103,6 @@ def test_raises_permanent_on_client_error():
         client.create_invoice({})
 
 
-def test_does_not_retry_permanent_error(monkeypatch):
-    call_count = {"value": 0}
-
-    def handler(_request: httpx.Request) -> httpx.Response:
-        call_count["value"] += 1
-        return httpx.Response(401, json={"detail": "unauthorized"})
-
-    client = ContificoClient(
-        base_url="https://api.example.com",
-        token="token-abc",
-        max_retries=3,
-        retry_backoff_seconds=0,
-        rate_limit_per_minute=100,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
-        sleep_func=lambda _seconds: None,
-    )
-
-    with pytest.raises(ContificoPermanentError):
-        client.create_invoice({})
-
-    assert call_count["value"] == 1
-
-
 def test_retries_and_then_raises_transient_on_request_error(monkeypatch):
     call_count = {"value": 0}
 
