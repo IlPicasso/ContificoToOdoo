@@ -51,6 +51,11 @@ const state = {
   customerRequestId: 0,
   orderRequestId: 0,
   customerOptionsRequestId: 0,
+  orderInvoiceCache: {},
+  orderInvoicePending: {},
+  orderInvoiceErrorCache: {},
+  orderInvoiceErrorNotified: {},
+  orderInvoicePendingBalanceNotified: {},
 };
 
 const TOKEN_STORAGE_KEY = 'sastreria.authToken';
@@ -199,6 +204,7 @@ const orderDetailStatusSelect = document.getElementById('orderDetailStatus');
 const orderDetailTailorSelect = document.getElementById('orderDetailTailor');
 const orderDetailVendorSelect = document.getElementById('orderDetailVendor');
 const orderDetailInvoiceInput = document.getElementById('orderDetailInvoice');
+const orderDetailInvoiceInfo = document.getElementById('orderDetailInvoiceInfo');
 const orderDetailOriginSelect = document.getElementById('orderDetailOrigin');
 const orderDetailDeliveryDateInput = document.getElementById('orderDetailDeliveryDate');
 const orderDetailNotesTextarea = document.getElementById('orderDetailNotes');
@@ -218,6 +224,10 @@ const currentUserRoleElement = document.getElementById('currentUserRole');
 const usersTabButton = document.getElementById('usersTabButton');
 const auditLogTabButton = document.getElementById('auditLogTabButton');
 const auditLogTableBody = document.getElementById('auditLogTableBody');
+
+if (orderDetailInvoiceInfo) {
+  renderInvoicePlaceholder(orderDetailInvoiceInfo, '', 'Sin número registrado', { muted: true });
+}
 const usersTableBody = document.getElementById('usersTableBody');
 const userCreateContainer = document.getElementById('userCreateContainer');
 const toggleCreateUserButton = document.getElementById('toggleCreateUserButton');
@@ -660,6 +670,487 @@ function toInputDateTimeValue(value) {
   }
 
   return '';
+}
+
+let invoiceRenderSequence = 0;
+
+function normalizeInvoiceNumber(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.trim();
+}
+
+function getInvoiceCacheKey(orderId, invoiceNumber) {
+  const normalizedNumber = normalizeInvoiceNumber(invoiceNumber);
+  const numericId = Number(orderId);
+  if (!normalizedNumber || !Number.isFinite(numericId)) {
+    return '';
+  }
+  return `${numericId}::${normalizedNumber.toUpperCase()}`;
+}
+
+function ensureInvoiceCacheState() {
+  if (!state.orderInvoiceCache) {
+    state.orderInvoiceCache = {};
+  }
+  if (!state.orderInvoicePending) {
+    state.orderInvoicePending = {};
+  }
+  if (!state.orderInvoiceErrorCache) {
+    state.orderInvoiceErrorCache = {};
+  }
+  if (!state.orderInvoiceErrorNotified) {
+    state.orderInvoiceErrorNotified = {};
+  }
+  if (!state.orderInvoicePendingBalanceNotified) {
+    state.orderInvoicePendingBalanceNotified = {};
+  }
+}
+
+function resetInvoiceCaches() {
+  state.orderInvoiceCache = {};
+  state.orderInvoicePending = {};
+  state.orderInvoiceErrorCache = {};
+  state.orderInvoiceErrorNotified = {};
+  state.orderInvoicePendingBalanceNotified = {};
+}
+
+function clearInvoiceCacheForOrder(orderId) {
+  ensureInvoiceCacheState();
+  const numericId = Number(orderId);
+  if (!Number.isFinite(numericId)) {
+    return;
+  }
+  const prefix = `${numericId}::`;
+  Object.keys(state.orderInvoiceCache).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete state.orderInvoiceCache[key];
+    }
+  });
+  Object.keys(state.orderInvoicePending).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete state.orderInvoicePending[key];
+    }
+  });
+  Object.keys(state.orderInvoiceErrorCache).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete state.orderInvoiceErrorCache[key];
+    }
+  });
+  Object.keys(state.orderInvoiceErrorNotified).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete state.orderInvoiceErrorNotified[key];
+    }
+  });
+  Object.keys(state.orderInvoicePendingBalanceNotified).forEach((key) => {
+    if (key.startsWith(prefix)) {
+      delete state.orderInvoicePendingBalanceNotified[key];
+    }
+  });
+}
+
+function fetchInvoiceSummary(orderId, invoiceNumber) {
+  ensureInvoiceCacheState();
+  const cacheKey = getInvoiceCacheKey(orderId, invoiceNumber);
+  if (!cacheKey) {
+    return Promise.resolve(null);
+  }
+  if (state.orderInvoiceCache[cacheKey]) {
+    return Promise.resolve(state.orderInvoiceCache[cacheKey]);
+  }
+  if (state.orderInvoiceErrorCache[cacheKey]) {
+    return Promise.reject(new Error(state.orderInvoiceErrorCache[cacheKey]));
+  }
+  if (state.orderInvoicePending[cacheKey]) {
+    return state.orderInvoicePending[cacheKey];
+  }
+  const request = apiFetch(`/orders/${orderId}/invoice`)
+    .then((data) => {
+      state.orderInvoiceCache[cacheKey] = data;
+      delete state.orderInvoiceErrorCache[cacheKey];
+      return data;
+    })
+    .catch((error) => {
+      state.orderInvoiceErrorCache[cacheKey] = error?.message || 'No se pudo consultar la factura.';
+      throw error;
+    })
+    .finally(() => {
+      delete state.orderInvoicePending[cacheKey];
+    });
+  state.orderInvoicePending[cacheKey] = request;
+  return request;
+}
+
+function formatInvoiceAmount(amount, currency) {
+  if (typeof amount !== 'number' || Number.isNaN(amount)) {
+    return '';
+  }
+  const normalizedCurrency = typeof currency === 'string' && currency.trim()
+    ? currency.trim().toUpperCase()
+    : 'USD';
+  try {
+    return new Intl.NumberFormat('es-EC', {
+      style: 'currency',
+      currency: normalizedCurrency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch (error) {
+    return `${normalizedCurrency} ${amount.toFixed(2)}`;
+  }
+}
+
+function formatInvoiceDateForDisplay(rawDate) {
+  if (!rawDate) {
+    return '';
+  }
+  if (rawDate instanceof Date) {
+    return formatDate(rawDate.toISOString());
+  }
+  const stringValue = String(rawDate).trim();
+  if (!stringValue) {
+    return '';
+  }
+  const direct = new Date(stringValue);
+  if (!Number.isNaN(direct.getTime())) {
+    return formatDate(direct.toISOString());
+  }
+  const slashMatch = stringValue.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/,
+  );
+  if (slashMatch) {
+    const [, day, month, year, hour = '00', minute = '00', second = '00'] = slashMatch;
+    const isoCandidate = `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${second.padStart(2, '0')}`;
+    const parsed = new Date(isoCandidate);
+    if (!Number.isNaN(parsed.getTime())) {
+      return formatDate(parsed.toISOString());
+    }
+  }
+  return stringValue;
+}
+
+function renderInvoicePlaceholder(element, invoiceNumber, message = '', options = {}) {
+  if (!element) {
+    return;
+  }
+  const normalizedNumber = normalizeInvoiceNumber(invoiceNumber);
+  element.innerHTML = '';
+  element.classList.add('invoice-meta');
+  element.classList.toggle('muted', options.muted === true);
+  element.classList.remove('has-pending-balance');
+  const numberSpan = document.createElement('span');
+  numberSpan.className = 'invoice-meta-number';
+  numberSpan.textContent = normalizedNumber
+    ? `Factura: ${normalizedNumber}`
+    : 'Factura: Sin número registrado';
+  element.appendChild(numberSpan);
+  if (message) {
+    const note = document.createElement('span');
+    note.className = 'invoice-meta-note';
+    note.textContent = message;
+    element.appendChild(note);
+  }
+  delete element.dataset.invoiceCacheKey;
+}
+
+function createInvoiceChip(text, variant = 'info') {
+  const chip = document.createElement('span');
+  chip.className = 'invoice-chip';
+  if (variant) {
+    chip.classList.add(`invoice-chip--${variant}`);
+  }
+  chip.textContent = text;
+  return chip;
+}
+
+function getInvoiceStatusVariant(text, hasPendingBalance) {
+  const normalized = typeof text === 'string' ? text.toLowerCase() : '';
+  if (hasPendingBalance || normalized.includes('pend') || normalized.includes('deud')) {
+    return 'pending';
+  }
+  if (normalized.includes('rech') || normalized.includes('anul')) {
+    return 'error';
+  }
+  if (
+    normalized.includes('pag') ||
+    normalized.includes('cobr') ||
+    normalized.includes('autoriz') ||
+    normalized.includes('emit') ||
+    normalized.includes('cancel')
+  ) {
+    return 'success';
+  }
+  return 'info';
+}
+
+function renderInvoiceSummaryElement(element, invoiceNumber, summary) {
+  if (!element) {
+    return;
+  }
+  const normalizedNumber = normalizeInvoiceNumber(invoiceNumber);
+  element.innerHTML = '';
+  element.classList.add('invoice-meta');
+  element.classList.remove('muted');
+  element.classList.toggle('has-pending-balance', Boolean(summary?.has_pending_balance));
+
+  const numberSpan = document.createElement('span');
+  numberSpan.className = 'invoice-meta-number';
+  numberSpan.textContent = normalizedNumber
+    ? `Factura: ${normalizedNumber}`
+    : 'Factura: Sin número registrado';
+  element.appendChild(numberSpan);
+
+  const seenStatuses = new Set();
+  const statusesToShow = [];
+  if (summary?.payment_status) {
+    statusesToShow.push({
+      text: summary.payment_status,
+      variant: getInvoiceStatusVariant(summary.payment_status, summary?.has_pending_balance),
+    });
+  }
+  if (summary?.status && summary.status !== summary.payment_status) {
+    statusesToShow.push({
+      text: summary.status,
+      variant: getInvoiceStatusVariant(summary.status, summary?.has_pending_balance),
+    });
+  }
+  statusesToShow.forEach((statusInfo) => {
+    const normalizedStatus = normalizeInvoiceNumber(statusInfo.text);
+    if (!normalizedStatus) {
+      return;
+    }
+    const lowered = normalizedStatus.toLowerCase();
+    if (seenStatuses.has(lowered)) {
+      return;
+    }
+    seenStatuses.add(lowered);
+    element.appendChild(createInvoiceChip(normalizedStatus, statusInfo.variant));
+  });
+
+  if (typeof summary?.total === 'number' && !Number.isNaN(summary.total)) {
+    const totalLabel = document.createElement('span');
+    totalLabel.className = 'invoice-meta-amount';
+    const formattedTotal = formatInvoiceAmount(summary.total, summary?.currency);
+    totalLabel.textContent = formattedTotal ? `Total: ${formattedTotal}` : `Total: ${summary.total.toFixed(2)}`;
+    element.appendChild(totalLabel);
+  }
+
+  if (typeof summary?.pending_total === 'number' && summary.pending_total > 0) {
+    const formattedPending = formatInvoiceAmount(summary.pending_total, summary?.currency);
+    const pendingChip = createInvoiceChip(
+      formattedPending ? `Pendiente: ${formattedPending}` : `Pendiente: ${summary.pending_total.toFixed(2)}`,
+      'pending',
+    );
+    element.appendChild(pendingChip);
+  }
+
+  if (summary?.payment_date) {
+    const formattedDate = formatInvoiceDateForDisplay(summary.payment_date);
+    if (formattedDate) {
+      const paymentNote = document.createElement('span');
+      paymentNote.className = 'invoice-meta-note';
+      paymentNote.textContent = `Pago: ${formattedDate}`;
+      element.appendChild(paymentNote);
+    }
+  }
+
+  const links = [];
+  if (summary?.download_url) {
+    const downloadLink = document.createElement('a');
+    downloadLink.href = summary.download_url;
+    downloadLink.target = '_blank';
+    downloadLink.rel = 'noopener noreferrer';
+    downloadLink.textContent = 'Descargar';
+    links.push(downloadLink);
+  }
+  if (summary?.share_url && summary.share_url !== summary.download_url) {
+    const shareLink = document.createElement('a');
+    shareLink.href = summary.share_url;
+    shareLink.target = '_blank';
+    shareLink.rel = 'noopener noreferrer';
+    shareLink.textContent = 'Ver en línea';
+    links.push(shareLink);
+  }
+  if (links.length) {
+    const linksWrapper = document.createElement('span');
+    linksWrapper.className = 'invoice-meta-links';
+    links.forEach((link) => {
+      linksWrapper.appendChild(link);
+    });
+    element.appendChild(linksWrapper);
+  }
+}
+
+function getInvoiceErrorMessages(error) {
+  const baseInline = 'No se pudo obtener los detalles de la factura.';
+  const baseToast = 'No fue posible consultar la factura en Contifico.';
+  const message = typeof error?.message === 'string' ? error.message.trim() : '';
+  const isGeneric = !message || message === 'Error en la solicitud';
+  return {
+    inline: isGeneric ? baseInline : `${baseInline} (${message})`,
+    toast: isGeneric ? `${baseToast} Intenta nuevamente más tarde.` : `${baseToast} ${message}.`,
+    detail: message,
+  };
+}
+
+function maybeNotifyInvoiceError(cacheKey, toastMessage) {
+  if (!toastMessage) {
+    return;
+  }
+  ensureInvoiceCacheState();
+  if (cacheKey && state.orderInvoiceErrorNotified[cacheKey]) {
+    return;
+  }
+  if (cacheKey) {
+    state.orderInvoiceErrorNotified[cacheKey] = true;
+  }
+  showToast(toastMessage, 'error');
+}
+
+function renderInvoiceErrorElement(element, invoiceNumber, error, cacheKey, options = {}) {
+  if (!element) {
+    return;
+  }
+  const normalizedNumber = normalizeInvoiceNumber(invoiceNumber);
+  const messages = getInvoiceErrorMessages(error);
+  element.innerHTML = '';
+  element.classList.add('invoice-meta');
+  element.classList.remove('muted');
+  element.classList.remove('has-pending-balance');
+
+  const numberSpan = document.createElement('span');
+  numberSpan.className = 'invoice-meta-number';
+  numberSpan.textContent = normalizedNumber
+    ? `Factura: ${normalizedNumber}`
+    : 'Factura: Sin número registrado';
+  element.appendChild(numberSpan);
+
+  const errorSpan = document.createElement('span');
+  errorSpan.className = 'invoice-meta-error';
+  errorSpan.textContent = messages.inline;
+  if (messages.detail) {
+    errorSpan.title = messages.detail;
+  }
+  element.appendChild(errorSpan);
+
+  if (options.notify === true) {
+    maybeNotifyInvoiceError(cacheKey, messages.toast);
+  }
+}
+
+function maybeNotifyInvoicePendingBalance(cacheKey, summary, invoiceNumber) {
+  ensureInvoiceCacheState();
+  if (!cacheKey || !summary) {
+    return;
+  }
+  const hasPendingBalance =
+    summary.has_pending_balance === true ||
+    (typeof summary.pending_total === 'number' && summary.pending_total > 0);
+  if (!hasPendingBalance) {
+    return;
+  }
+  if (state.orderInvoicePendingBalanceNotified[cacheKey]) {
+    return;
+  }
+  state.orderInvoicePendingBalanceNotified[cacheKey] = true;
+
+  let formattedPending = null;
+  if (typeof summary.pending_total === 'number' && summary.pending_total > 0) {
+    formattedPending = formatInvoiceAmount(summary.pending_total, summary.currency);
+    if (!formattedPending) {
+      formattedPending = summary.pending_total.toFixed(2);
+    }
+  }
+
+  const normalizedNumber = normalizeInvoiceNumber(invoiceNumber || summary.invoice_number || '');
+  const invoiceLabel = normalizedNumber ? `Factura ${normalizedNumber}` : 'Esta factura';
+  const message = formattedPending
+    ? `${invoiceLabel} tiene un saldo pendiente de ${formattedPending}.`
+    : `${invoiceLabel} tiene un saldo pendiente.`;
+  showToast(message, 'warning');
+}
+
+function updateInvoiceInfoDisplay(element, order, options = {}) {
+  if (!element) {
+    return;
+  }
+  const invoiceNumber = normalizeInvoiceNumber(order?.invoice_number || '');
+  invoiceRenderSequence += 1;
+  const renderId = `invoice-${invoiceRenderSequence}`;
+  element.dataset.invoiceRenderId = renderId;
+
+  if (!invoiceNumber) {
+    renderInvoicePlaceholder(element, '', 'Sin número registrado', { muted: true });
+    return;
+  }
+
+  const orderId = Number(order?.id);
+  if (!Number.isFinite(orderId)) {
+    renderInvoicePlaceholder(element, invoiceNumber, '', { muted: false });
+    return;
+  }
+
+  if (!state.token) {
+    renderInvoicePlaceholder(
+      element,
+      invoiceNumber,
+      'Inicia sesión para consultar la factura.',
+      { muted: false },
+    );
+    return;
+  }
+
+  const cacheKey = getInvoiceCacheKey(orderId, invoiceNumber);
+  element.dataset.invoiceCacheKey = cacheKey;
+
+  ensureInvoiceCacheState();
+  if (state.orderInvoiceCache[cacheKey]) {
+    if (options.context === 'detail') {
+      maybeNotifyInvoicePendingBalance(cacheKey, state.orderInvoiceCache[cacheKey], invoiceNumber);
+    }
+    renderInvoiceSummaryElement(element, invoiceNumber, state.orderInvoiceCache[cacheKey]);
+    return;
+  }
+  if (state.orderInvoiceErrorCache[cacheKey]) {
+    renderInvoiceErrorElement(
+      element,
+      invoiceNumber,
+      new Error(state.orderInvoiceErrorCache[cacheKey]),
+      cacheKey,
+      { notify: options.context === 'detail' },
+    );
+    return;
+  }
+
+  renderInvoicePlaceholder(element, invoiceNumber, 'Consultando estado…', { muted: false });
+
+  fetchInvoiceSummary(orderId, invoiceNumber)
+    .then((summary) => {
+      if (element.dataset.invoiceRenderId !== renderId) {
+        return;
+      }
+      if (summary) {
+        if (options.context === 'detail') {
+          maybeNotifyInvoicePendingBalance(cacheKey, summary, invoiceNumber);
+        }
+        renderInvoiceSummaryElement(element, invoiceNumber, summary);
+      } else {
+        renderInvoicePlaceholder(element, invoiceNumber, 'Sin información disponible.', { muted: false });
+      }
+    })
+    .catch((error) => {
+      if (element.dataset.invoiceRenderId !== renderId) {
+        return;
+      }
+      renderInvoiceErrorElement(
+        element,
+        invoiceNumber,
+        error,
+        cacheKey,
+        { notify: options.context === 'detail' },
+      );
+    });
 }
 
 function normalizeText(value) {
@@ -2343,6 +2834,7 @@ function handleLogout(auto = false) {
   clearStoredToken();
   state.token = null;
   state.user = null;
+  resetInvoiceCaches();
   state.orders = [];
   state.tailors = [];
   state.vendors = [];
@@ -2657,9 +3149,7 @@ function renderCustomerOrderHistory(customer) {
 
     const invoice = document.createElement('p');
     invoice.className = 'customer-order-history-item-invoice';
-    invoice.textContent = order.invoice_number
-      ? `Factura: ${order.invoice_number}`
-      : 'Factura: Sin número registrado';
+    updateInvoiceInfoDisplay(invoice, order, { context: 'history' });
 
     const meta = document.createElement('p');
     meta.className = 'customer-order-history-item-meta';
@@ -3042,6 +3532,9 @@ function populateOrderDetail(order, options = {}) {
   if (orderDetailInvoiceInput) {
     orderDetailInvoiceInput.value = order.invoice_number || '';
   }
+  if (orderDetailInvoiceInfo) {
+    updateInvoiceInfoDisplay(orderDetailInvoiceInfo, order, { context: 'detail' });
+  }
   if (orderDetailOriginSelect) {
     populateEstablishmentSelect(orderDetailOriginSelect, order.origin_branch || '');
   }
@@ -3103,6 +3596,9 @@ function clearOrderDetail(options = {}) {
   if (orderDetailTailorSelect) populateTailorSelect(orderDetailTailorSelect);
   if (orderDetailVendorSelect) populateVendorSelect(orderDetailVendorSelect);
   if (orderDetailInvoiceInput) orderDetailInvoiceInput.value = '';
+  if (orderDetailInvoiceInfo) {
+    renderInvoicePlaceholder(orderDetailInvoiceInfo, '', 'Sin número registrado', { muted: true });
+  }
   if (orderDetailOriginSelect) populateEstablishmentSelect(orderDetailOriginSelect);
   if (orderDetailDeliveryDateInput) orderDetailDeliveryDateInput.value = '';
   if (orderDetailNotesTextarea) orderDetailNotesTextarea.value = '';
@@ -3191,6 +3687,18 @@ async function handleOrderUpdate(event) {
       },
     });
     orderUpdatedSuccessfully = true;
+    clearInvoiceCacheForOrder(state.selectedOrderId);
+    if (orderDetailInvoiceInfo) {
+      if (invoiceValueRaw) {
+        updateInvoiceInfoDisplay(
+          orderDetailInvoiceInfo,
+          { id: state.selectedOrderId, invoice_number: invoiceValueRaw },
+          { context: 'detail' },
+        );
+      } else {
+        renderInvoicePlaceholder(orderDetailInvoiceInfo, '', 'Sin número registrado', { muted: true });
+      }
+    }
     if (affectedCustomerId) {
       delete state.customerOrdersCache[String(affectedCustomerId)];
       delete state.customerDisplayCache[String(affectedCustomerId)];
@@ -3552,6 +4060,7 @@ if (deleteOrderButton) {
     try {
       await apiFetch(`/orders/${orderId}`, { method: 'DELETE' });
       showToast('Orden eliminada correctamente.', 'success');
+      clearInvoiceCacheForOrder(orderId);
       if (affectedCustomerId !== null && affectedCustomerId !== undefined) {
         delete state.customerOrdersCache[String(affectedCustomerId)];
         delete state.customerDisplayCache[String(affectedCustomerId)];

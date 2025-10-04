@@ -166,6 +166,11 @@ class ContificoClient:
         body["id"] = invoice_id
         return self._request("PUT", "documento/", json=body)
 
+    def get_invoice(self, invoice_id: str) -> Dict[str, Any]:
+        """Fetch a Contifico document by its identifier."""
+
+        return self._request("GET", f"documento/{invoice_id}/")
+
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
         """Fetch Contifico personas (clientes) filtered by identification number."""
 
