@@ -95,27 +95,21 @@ def test_get_invoice_fetches_specific_document():
     assert captured["params"] == {"empresa": "EMP-001", "empresa_id": "EMP-001"}
 
 
-def test_get_invoice_falls_back_when_numero_lookup_times_out():
-    attempts = {"value": 0}
+def test_get_invoice_by_numero_includes_company_param():
+    captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        attempts["value"] += 1
-        if attempts["value"] == 1:
-            assert request.url.path.endswith("/documento/")
-            assert request.url.params["numero"] == "001-001-000123456"
-            raise httpx.ReadTimeout("timeout", request=request)
-
-        assert request.url.path.endswith("/documento/001-001-000123456/")
-        params = dict(request.url.params)
-        assert params["empresa"] == "EMP-001"
-        assert params["empresa_id"] == "EMP-001"
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"id": "001-001-000123456"})
 
     client = build_contifico_client(handler)
     response = client.get_invoice("001-001-000123456")
 
     assert response == {"id": "001-001-000123456"}
-    assert attempts["value"] == 2
+    assert captured["path"].endswith("/documento/")
+    assert captured["params"]["numero"] == "001-001-000123456"
+    assert captured["params"]["empresa"] == "EMP-001"
 
 
 def test_get_customer_by_document_sets_query_param():

@@ -178,20 +178,16 @@ class ContificoClient:
         """Fetch a Contifico document by its identifier."""
 
         if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
-            params = {"numero": invoice_id}
-            try:
-                return self._request("GET", "documento/", params=params, max_retries=0)
-            except ContificoTransientError as exc:
-                logger.warning(
-                    "Falling back to Contifico invoice lookup by id after numero lookup failed: %s",
-                    exc,
-                )
+            params: Dict[str, Any] = {"numero": invoice_id}
+            if self.company_id:
+                params["empresa"] = self.company_id
+            return self._request("GET", "documento/", params=params)
 
         params = None
         if self.company_id:
             params = {"empresa": self.company_id, "empresa_id": self.company_id}
 
-        return self._request("GET", f"documento/{invoice_id}/", params=params, max_retries=0)
+        return self._request("GET", f"documento/{invoice_id}/", params=params)
 
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
         """Fetch Contifico personas (clientes) filtered by identification number."""
