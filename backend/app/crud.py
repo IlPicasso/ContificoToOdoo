@@ -412,9 +412,20 @@ def search_orders(
 ) -> List[models.Order]:
     query = db.query(models.Order).options(joinedload(models.Order.customer))
     if order_number:
-        query = query.filter(models.Order.order_number == order_number)
+        trimmed_number = order_number.strip()
+        if trimmed_number:
+            query = query.filter(models.Order.order_number == trimmed_number)
     if customer_document:
-        query = query.filter(models.Order.customer_document == customer_document)
+        trimmed_document = customer_document.strip()
+        if trimmed_document:
+            query = query.filter(
+                or_(
+                    models.Order.customer_document == trimmed_document,
+                    models.Order.customer.has(
+                        models.Customer.document_id == trimmed_document
+                    ),
+                )
+            )
     return query.order_by(models.Order.updated_at.desc()).all()
 
 
