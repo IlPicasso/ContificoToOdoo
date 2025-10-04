@@ -37,6 +37,7 @@ class ContificoClient:
     """Cliente HTTP pequeño para la API de Contífico."""
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
+    INVOICE_LOOKUP_PAGE_SIZE = 200
 
     def __init__(
         self,
@@ -121,6 +122,58 @@ class ContificoClient:
             return text
         return f"Error {response.status_code} al comunicarse con Contífico"
 
+    @staticmethod
+    def _normalize_invoice_number(value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            return ""
+        if normalized.upper().startswith("FAC"):
+            normalized = normalized[3:]
+        normalized = normalized.strip().lstrip("-:")
+        normalized = normalized.replace(" ", "")
+        return normalized
+
+    @classmethod
+    def _extract_invoice_number(cls, payload: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(payload, dict):
+            return None
+        keys = (
+            "numero",
+            "numero_documento",
+            "numero_comprobante",
+            "documento",
+            "NUMERO",
+            "NUMERO_DOCUMENTO",
+            "NUMERO_COMPROBANTE",
+            "DOCUMENTO",
+        )
+        for key in keys:
+            value = payload.get(key)
+            if value is None:
+                continue
+            if isinstance(value, (int, float)):
+                candidate = str(value)
+            elif isinstance(value, str):
+                candidate = value.strip()
+            else:
+                continue
+            if candidate:
+                return candidate
+        return None
+
+    @classmethod
+    def _match_invoice_by_number(
+        cls, invoices: Iterable[Dict[str, Any]], normalized_target: str
+    ) -> Optional[Dict[str, Any]]:
+        for invoice in invoices:
+            candidate = cls._extract_invoice_number(invoice)
+            if not candidate:
+                continue
+            normalized_candidate = cls._normalize_invoice_number(candidate)
+            if normalized_candidate and normalized_candidate == normalized_target:
+                return invoice
+        return None
+
     def list_products(
         self, *, page: int = 1, page_size: int = 100
     ) -> Iterable[Dict[str, Any]]:
@@ -162,13 +215,22 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Obtiene facturas desde Contífico con los filtros disponibles."""
 
-        params: Dict[str, Any] = {"result_page": page, "result_size": page_size}
+        params: Dict[str, Any] = {
+            "result_page": page,
+            "result_size": page_size,
+            "tipo_registro": "CLI",
+            "tipo": "FAC",
+        }
         if customer_document:
-            params["cliente_identificacion"] = customer_document.strip()
+            params["persona_identificacion"] = customer_document.strip()
         if document_number:
-            params["numero_documento"] = document_number.strip()
+            trimmed_number = document_number.strip()
+            params["documento"] = trimmed_number
+            normalized_number = self._normalize_invoice_number(trimmed_number)
+            if normalized_number:
+                params["numero"] = normalized_number
 
-        data = self._request("GET", "factura/", params=params)
+        data = self._request("GET", "registro/documento/", params=params)
         if data is None:
             return []
         if isinstance(data, list):
@@ -204,19 +266,34 @@ class ContificoClient:
         if not document_number or not document_number.strip():
             raise ValueError("El número de documento de la factura es obligatorio.")
 
-        try:
-            invoices = list(
-                self.list_invoices(
-                    page=1,
-                    page_size=1,
-                    document_number=document_number.strip(),
+        normalized_target = self._normalize_invoice_number(document_number)
+        if not normalized_target:
+            raise ValueError("El número de documento de la factura es obligatorio.")
+
+        trimmed_input = document_number.strip()
+        search_candidates = []
+        if normalized_target:
+            search_candidates.append(normalized_target)
+        if trimmed_input and trimmed_input != normalized_target:
+            search_candidates.append(trimmed_input)
+
+        for candidate in search_candidates:
+            try:
+                invoices = list(
+                    self.list_invoices(
+                        page=1,
+                        page_size=self.INVOICE_LOOKUP_PAGE_SIZE,
+                        document_number=candidate,
+                    )
                 )
-            )
-        except ContificoAPIError as exc:
-            if exc.status_code == HTTPStatus.NOT_FOUND:
-                return None
-            raise
-        if not invoices:
-            return None
-        return invoices[0]
+            except ContificoAPIError as exc:
+                if exc.status_code == HTTPStatus.NOT_FOUND:
+                    continue
+                raise
+
+            match = self._match_invoice_by_number(invoices, normalized_target)
+            if match is not None:
+                return match
+
+        return None
 
