@@ -821,10 +821,7 @@ def get_order_invoice_endpoint(
         )
 
     try:
-        invoice_payload = contifico_client.get_invoice(
-            invoice_number,
-            customer_document=(order.customer_document or None),
-        )
+        invoice_payload = contifico_client.get_invoice(invoice_number)
     except ContificoError as exc:  # pragma: no cover - integration error path
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
