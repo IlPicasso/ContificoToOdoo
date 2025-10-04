@@ -90,8 +90,6 @@ cat <<'EOF' >> .env
 CONTIFICO_BASE_URL="https://api.contifico.com/sistema/api/v1"
 CONTIFICO_API_KEY="tu-api-key-entregada-por-contifico"
 CONTIFICO_API_TOKEN="tu-api-token-entregado-por-contifico"
-# Opcional: mantenido por compatibilidad con despliegues previos.
-# CONTIFICO_COMPANY_ID="identificador-de-empresa-en-contifico"
 CONTIFICO_TIMEOUT_SECONDS=30
 CONTIFICO_RATE_LIMIT_PER_MINUTE=50
 CONTIFICO_MAX_RETRIES=3
