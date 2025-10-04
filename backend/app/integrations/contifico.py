@@ -101,13 +101,11 @@ class ContificoClient:
     ) -> Dict[str, Any]:
         url = self._build_url(path)
         headers = {
-            "Authorization": self.api_key,
+            "Authorization": f"Bearer {self.api_token}",
+            "api-key": self.api_key,
         }
 
         request_params = dict(params) if params else {}
-        if self.company_id and params is not None:
-            request_params.setdefault("empresa", self.company_id)
-            request_params.setdefault("empresa_id", self.company_id)
 
         attempt = 0
         while True:

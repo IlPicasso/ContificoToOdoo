@@ -99,9 +99,8 @@ CONTIFICO_RETRY_BACKOFF_SECONDS=2
 EOF
 ```
 
-El cliente envía el encabezado `Authorization` con la API key (sin el prefijo `Bearer`),
-replicando el esquema de autenticación del plugin oficial de WooCommerce y evitando
-duplicar el valor en un encabezado `api-key` separado. Puedes utilizar el
+El cliente envía ambos encabezados (`Authorization: Bearer <token>` y `api-key: <clave>`) tal
+como exige la documentación de Contifico. Puedes utilizar el
 helper `ContificoClient` para crear y actualizar facturas o consultar clientes por identificación:
 
 ```python
