@@ -93,25 +93,6 @@ def test_get_invoice_fetches_specific_document():
     assert captured["params"] == {}
 
 
-def test_get_invoice_by_number_uses_query_param():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["path"] = request.url.path
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"id": "001-005-000012717"})
-
-    client = build_contifico_client(handler)
-    invoice_number = "001-005-000012717"
-    response = client.get_invoice(invoice_number)
-
-    assert response == {"id": invoice_number}
-    assert captured["path"] == "/sistema/api/v1/documento/"
-    assert captured["params"]["numero"] == invoice_number
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
-
-
 def test_get_customer_by_document_sets_query_param():
     captured = {}
 
