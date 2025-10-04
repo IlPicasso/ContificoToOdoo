@@ -20,8 +20,7 @@ from app.integrations import (  # noqa: E402
 def build_contifico_client(handler, **kwargs):
     client = ContificoClient(
         base_url="https://api.example.com/sistema/api/v1",
-        api_key="key-123",
-        api_token="token-abc",
+        token="token-abc",
         max_retries=0,
         rate_limit_per_minute=100,
         sleep_func=lambda _seconds: None,
@@ -37,7 +36,6 @@ def test_create_invoice_builds_expected_request():
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
         captured["authorization"] = request.headers.get("authorization")
-        captured["api-key"] = request.headers.get("api-key")
         captured["json"] = json.loads(request.content.decode())
         return httpx.Response(201, json={"id": "INV-1"})
 
@@ -46,8 +44,7 @@ def test_create_invoice_builds_expected_request():
 
     assert response == {"id": "INV-1"}
     assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/"
-    assert captured["authorization"] == "Bearer token-abc"
-    assert captured["api-key"] == "key-123"
+    assert captured["authorization"] == "token-abc"
     assert captured["json"] == {"total": 100}
 
 
@@ -115,8 +112,7 @@ def test_retries_and_then_raises_transient_on_request_error(monkeypatch):
 
     client = ContificoClient(
         base_url="https://api.example.com",
-        api_key="key-123",
-        api_token="token-abc",
+        token="token-abc",
         max_retries=1,
         retry_backoff_seconds=0,
         rate_limit_per_minute=100,

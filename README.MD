@@ -88,9 +88,7 @@ backend (o como variables de entorno) para poder consumir los endpoints oficiale
 ```bash
 cat <<'EOF' >> .env
 CONTIFICO_BASE_URL="https://api.contifico.com/sistema/api/v1"
-CONTIFICO_API_KEY="tu-api-key-entregada-por-contifico"
-CONTIFICO_API_TOKEN="tu-api-token-entregado-por-contifico"
-CONTIFICO_COMPANY_ID="opcional-si-tu-empresa-lo-requiere"
+CONTIFICO_TOKEN="tu-api-key-entregada-por-contifico"
 CONTIFICO_TIMEOUT_SECONDS=30
 CONTIFICO_RATE_LIMIT_PER_MINUTE=50
 CONTIFICO_MAX_RETRIES=3
@@ -98,9 +96,8 @@ CONTIFICO_RETRY_BACKOFF_SECONDS=2
 EOF
 ```
 
-El cliente envía ambos encabezados (`Authorization: Bearer <token>` y `api-key: <clave>`) tal
-como exige la documentación de Contifico. Puedes utilizar el helper `ContificoClient`
-para crear y actualizar
+El token se envía en el encabezado `Authorization` tal como exige la documentación
+de Contifico. Puedes utilizar el helper `ContificoClient` para crear y actualizar
 facturas o consultar clientes por identificación:
 
 ```python
@@ -111,8 +108,7 @@ settings = get_settings()
 
 with ContificoClient(
     base_url=settings.contifico_base_url,
-    api_key=settings.contifico_api_key,
-    api_token=settings.contifico_api_token,
+    token=settings.contifico_token,
 ) as contifico:
     factura = contifico.create_invoice({
         "tipo_documento": "FAC",
