@@ -2108,6 +2108,52 @@ th {
   color: var(--primary);
 }
 
+.contifico-invoice-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contifico-invoice-detail-list {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr);
+  gap: 0.35rem 1rem;
+  padding: 0;
+  margin: 0;
+}
+
+.contifico-invoice-detail-list dt {
+  font-weight: 600;
+  color: var(--muted-strong);
+}
+
+.contifico-invoice-detail-list dd {
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.contifico-preview-card details {
+  font-size: 0.85rem;
+}
+
+.contifico-preview-card summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.contifico-preview-card details pre {
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(7, 10, 12, 0.04);
+  border-radius: 12px;
+  overflow: auto;
+}
+
+.contifico-invoice-raw summary {
+  margin-bottom: 0.25rem;
+}
+
 .public-order-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
