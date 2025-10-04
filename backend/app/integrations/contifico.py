@@ -180,7 +180,11 @@ class ContificoClient:
             params = {"numero": invoice_id}
             return self._request("GET", "documento/", params=params)
 
-        return self._request("GET", f"documento/{invoice_id}/")
+        params = None
+        if self.company_id:
+            params = {"empresa": self.company_id, "empresa_id": self.company_id}
+
+        return self._request("GET", f"documento/{invoice_id}/", params=params)
 
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
         """Fetch Contifico personas (clientes) filtered by identification number."""
