@@ -98,6 +98,7 @@ class ContificoClient:
         *,
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Dict[str, Any]] = None,
+        max_retries: Optional[int] = None,
     ) -> Dict[str, Any]:
         url = self._build_url(path)
         headers = {
@@ -111,6 +112,7 @@ class ContificoClient:
             request_params.setdefault("empresa_id", self.company_id)
 
         attempt = 0
+        allowed_retries = self.max_retries if max_retries is None else max(0, max_retries)
         while True:
             self._respect_rate_limit()
             try:
@@ -153,7 +155,7 @@ class ContificoClient:
                         logger.error("Invalid JSON from Contifico: %s", exc)
                         raise ContificoPermanentError("Invalid JSON response from Contifico") from exc
 
-                if attempt >= self.max_retries:
+                if attempt >= allowed_retries:
                     raise error
 
             attempt += 1
@@ -178,13 +180,13 @@ class ContificoClient:
 
         if "-" in invoice_id and invoice_id.replace("-", "").isdigit():
             params = {"numero": invoice_id}
-            return self._request("GET", "documento/", params=params)
+            return self._request("GET", "documento/", params=params, max_retries=0)
 
         params = None
         if self.company_id:
             params = {"empresa": self.company_id, "empresa_id": self.company_id}
 
-        return self._request("GET", f"documento/{invoice_id}/", params=params)
+        return self._request("GET", f"documento/{invoice_id}/", params=params, max_retries=0)
 
     def get_customer_by_document(self, document: str) -> Dict[str, Any]:
         """Fetch Contifico personas (clientes) filtered by identification number."""
