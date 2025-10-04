@@ -10,6 +10,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-value-32-chars!!")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app import schemas
 from app.contifico import (
     ContificoAPIError,
     ContificoClient,
@@ -107,7 +108,7 @@ def test_list_invoices_success() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["params"] = dict(request.url.params)
-        assert request.url.path.endswith("/factura/")
+        assert request.url.path.endswith("/registro/documento/")
         return httpx.Response(200, json=[{"id": "inv-1", "numero": "001-001-0000001"}])
 
     transport = httpx.MockTransport(handler)
@@ -132,8 +133,10 @@ def test_list_invoices_success() -> None:
     assert isinstance(params, dict)
     assert params["result_page"] == "3"
     assert params["result_size"] == "25"
-    assert params["cliente_identificacion"] == "0912345678"
-    assert params["numero_documento"] == "001-001-0000001"
+    assert params["tipo_registro"] == "CLI"
+    assert params["tipo"] == "FAC"
+    assert params["persona_identificacion"] == "0912345678"
+    assert params["documento"] == "001-001-0000001"
 
 
 def test_list_invoices_requires_list_response() -> None:
@@ -163,7 +166,7 @@ def test_list_invoices_by_customer_document_validates_input() -> None:
 
 def test_find_invoice_by_document_number_returns_first() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params.get("numero_documento") == "001-001-0000001"
+        assert request.url.params.get("documento") == "001-001-0000001"
         return httpx.Response(
             200,
             json=[
@@ -351,3 +354,23 @@ def test_fetch_invoice_by_document_number_handles_api_404() -> None:
 
     assert exc_info.value.status_code == 404
     assert "No se encontró" in exc_info.value.detail
+
+
+def test_contifico_invoice_from_api_supports_uppercase_keys() -> None:
+    payload = {
+        "NUMERO": "FAC 001-005-000012109",
+        "CLIENTE": "María Demo",
+        "DOCUMENTO": "0912345678",
+        "FECHA_EMISION": "2023-11-01",
+        "ESTADO": "AUT",
+        "TOTAL": "123.45",
+    }
+
+    invoice = schemas.ContificoInvoice.from_api(payload)
+
+    assert invoice.numero == "FAC 001-005-000012109"
+    assert invoice.cliente == "María Demo"
+    assert invoice.identificacion == "0912345678"
+    assert invoice.fecha_emision == "2023-11-01"
+    assert invoice.estado == "AUT"
+    assert invoice.total == pytest.approx(123.45)

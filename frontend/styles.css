@@ -1370,6 +1370,27 @@ button[disabled] {
   gap: 1.5rem;
 }
 
+.contifico-modal {
+  gap: 1rem;
+}
+
+.contifico-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.contifico-modal-header h4 {
+  margin: 0;
+}
+
+.contifico-modal .table-wrapper,
+.contifico-modal .contifico-invoice-details {
+  max-height: min(60vh, 480px);
+  overflow: auto;
+}
+
 body.modal-open {
   overflow: hidden;
 }

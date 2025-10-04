@@ -944,22 +944,14 @@
                   role="status"
                   aria-live="polite"
                 ></p>
-                <div class="table-wrapper">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Número</th>
-                        <th>Cliente</th>
-                        <th>Documento</th>
-                        <th>Fecha</th>
-                        <th>Estado</th>
-                        <th>Total</th>
-                        <th>Detalle</th>
-                      </tr>
-                    </thead>
-                    <tbody id="contificoCustomerInvoicesTableBody"></tbody>
-                  </table>
-                </div>
+                <button
+                  type="button"
+                  class="secondary hidden"
+                  id="contificoCustomerInvoicesModalButton"
+                  aria-hidden="true"
+                >
+                  Ver resultados
+                </button>
               </article>
 
               <article class="contifico-preview-card">
@@ -993,8 +985,108 @@
                   role="status"
                   aria-live="polite"
                 ></p>
-                <div id="contificoInvoiceLookupDetails" class="contifico-invoice-details"></div>
+                <button
+                  type="button"
+                  class="secondary hidden"
+                  id="contificoInvoiceLookupModalButton"
+                  aria-hidden="true"
+                >
+                  Ver detalle
+                </button>
               </article>
+            </div>
+            <div
+              id="contificoCustomerInvoicesOverlay"
+              class="modal-overlay hidden"
+              aria-hidden="true"
+            >
+              <div class="modal-backdrop" data-modal-close="contifico-customer-invoices"></div>
+              <div
+                id="contificoCustomerInvoicesDialog"
+                class="modal-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="contificoCustomerInvoicesModalTitle"
+                tabindex="-1"
+              >
+                <div
+                  id="contificoCustomerInvoicesModal"
+                  class="modal-content contifico-modal hidden"
+                  aria-hidden="true"
+                >
+                  <div class="contifico-modal-header">
+                    <h4 id="contificoCustomerInvoicesModalTitle">Facturas del cliente</h4>
+                    <button
+                      type="button"
+                      class="link-button"
+                      data-modal-close="contifico-customer-invoices"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                  <p
+                    id="contificoCustomerInvoicesModalStatus"
+                    class="contifico-preview-status muted small"
+                    role="status"
+                    aria-live="polite"
+                  ></p>
+                  <div class="table-wrapper">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Número</th>
+                          <th>Cliente</th>
+                          <th>Documento</th>
+                          <th>Fecha</th>
+                          <th>Estado</th>
+                          <th>Total</th>
+                          <th>Detalle</th>
+                        </tr>
+                      </thead>
+                      <tbody id="contificoCustomerInvoicesModalTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div
+              id="contificoInvoiceLookupOverlay"
+              class="modal-overlay hidden"
+              aria-hidden="true"
+            >
+              <div class="modal-backdrop" data-modal-close="contifico-invoice-lookup"></div>
+              <div
+                id="contificoInvoiceLookupDialog"
+                class="modal-dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="contificoInvoiceLookupModalTitle"
+                tabindex="-1"
+              >
+                <div
+                  id="contificoInvoiceLookupModal"
+                  class="modal-content contifico-modal hidden"
+                  aria-hidden="true"
+                >
+                  <div class="contifico-modal-header">
+                    <h4 id="contificoInvoiceLookupModalTitle">Detalle de la factura</h4>
+                    <button
+                      type="button"
+                      class="link-button"
+                      data-modal-close="contifico-invoice-lookup"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                  <p
+                    id="contificoInvoiceLookupModalStatus"
+                    class="contifico-preview-status muted small"
+                    role="status"
+                    aria-live="polite"
+                  ></p>
+                  <div id="contificoInvoiceLookupModalDetails" class="contifico-invoice-details"></div>
+                </div>
+              </div>
             </div>
           </section>
         </div>
