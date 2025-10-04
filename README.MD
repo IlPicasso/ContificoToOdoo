@@ -90,7 +90,7 @@ cat <<'EOF' >> .env
 CONTIFICO_BASE_URL="https://api.contifico.com/sistema/api/v1"
 CONTIFICO_API_KEY="tu-api-key-entregada-por-contifico"
 CONTIFICO_API_TOKEN="tu-api-token-entregado-por-contifico"
-CONTIFICO_COMPANY_ID="opcional-si-tu-empresa-lo-requiere"
+CONTIFICO_COMPANY_NUMERIC_ID="opcional-si-tu-empresa-lo-requiere"
 CONTIFICO_TIMEOUT_SECONDS=30
 CONTIFICO_RATE_LIMIT_PER_MINUTE=50
 CONTIFICO_MAX_RETRIES=3
@@ -99,9 +99,10 @@ EOF
 ```
 
 El cliente envía ambos encabezados (`Authorization: Bearer <token>` y `api-key: <clave>`) tal
-como exige la documentación de Contifico. Puedes utilizar el helper `ContificoClient`
-para crear y actualizar
-facturas o consultar clientes por identificación:
+como exige la documentación de Contifico. Si tu instancia requiere filtrar por empresa,
+configura `CONTIFICO_COMPANY_NUMERIC_ID`; el valor se agrega automáticamente como
+parámetro `empresa_id` sin sobrescribir valores enviados explícitamente. Puedes utilizar el
+helper `ContificoClient` para crear y actualizar facturas o consultar clientes por identificación:
 
 ```python
 from app.integrations import ContificoClient
