@@ -71,7 +71,6 @@ class ContificoClient:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = {
             "Authorization": self.api_key,
-            "X-Api-Token": self.api_token,
             "Accept": "application/json",
             "Content-Type": "application/json; charset=UTF-8",
         }

@@ -9,13 +9,18 @@ from sqlalchemy.orm import Session
 from . import auth, crud, models, schemas
 from .config import get_settings
 from .database import Base, engine, get_db
-from .contifico import ContificoAPIError, ContificoClient, ContificoTransportError
+from .contifico import ContificoClient
 from .dependencies import (
     admin_required,
     get_contifico_client,
     staff_required,
     tailor_or_admin_required,
     vendor_or_admin_required,
+)
+from .temp_contifico import (
+    build_product_page,
+    build_warehouse_list,
+    router as contifico_preview_router,
 )
 from .migrations import apply_schema_upgrades
 
@@ -58,6 +63,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(contifico_preview_router)
 
 def _validate_assigned_tailor(
     db: Session, assigned_tailor_id: Optional[int]
@@ -140,18 +147,7 @@ def list_contifico_products(
     """Devuelve un listado de productos desde Contífico."""
 
     _ = current_user
-    try:
-        products = contifico_client.list_products(page=page, page_size=page_size)
-    except ContificoTransportError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=exc.detail,
-        ) from exc
-    except ContificoAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-    items = [schemas.ContificoProduct.from_api(product) for product in products]
-    return schemas.ContificoProductPage(page=page, page_size=page_size, items=items)
+    return build_product_page(contifico_client, page=page, page_size=page_size)
 
 
 @app.get(
@@ -165,17 +161,7 @@ def list_contifico_warehouses(
     """Lista las bodegas disponibles en Contífico."""
 
     _ = current_user
-    try:
-        warehouses = contifico_client.list_warehouses()
-    except ContificoTransportError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=exc.detail,
-        ) from exc
-    except ContificoAPIError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
-
-    return [schemas.ContificoWarehouse.from_api(bodega) for bodega in warehouses]
+    return build_warehouse_list(contifico_client)
 
 
 @app.post(

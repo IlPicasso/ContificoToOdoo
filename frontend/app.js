@@ -1,6 +1,8 @@
 const API_BASE_URL = window.API_BASE_URL || 'http://localhost:8000';
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 15, 20, 25, 30, 35, 40, 45, 50];
+const CONTIFICO_DEFAULT_PAGE_SIZE = 25;
+const CONTIFICO_MAX_PAGE_SIZE = 200;
 const ESTABLISHMENTS = ['Urdesa', 'Batan', 'Indie'];
 const ORDER_TASK_STATUS_PENDING = 'pendiente';
 const ORDER_TASK_STATUS_COMPLETED = 'completado';
@@ -51,6 +53,16 @@ const state = {
   customerRequestId: 0,
   orderRequestId: 0,
   customerOptionsRequestId: 0,
+  contificoPreviewProducts: [],
+  contificoPreviewProductsPage: 1,
+  contificoPreviewProductsPageSize: CONTIFICO_DEFAULT_PAGE_SIZE,
+  contificoPreviewProductsLoading: false,
+  contificoPreviewProductsError: null,
+  contificoPreviewProductsFetched: false,
+  contificoPreviewWarehouses: [],
+  contificoPreviewWarehousesLoading: false,
+  contificoPreviewWarehousesError: null,
+  contificoPreviewWarehousesFetched: false,
 };
 
 const TOKEN_STORAGE_KEY = 'sastreria.authToken';
@@ -110,8 +122,9 @@ const DASHBOARD_TAB_IDS = [
   'customersPanel',
   'usersPanel',
   'auditLogPanel',
+  'contificoPreviewPanel',
 ];
-const ADMIN_ONLY_TABS = new Set(['usersPanel', 'auditLogPanel']);
+const ADMIN_ONLY_TABS = new Set(['usersPanel', 'auditLogPanel', 'contificoPreviewPanel']);
 const dashboardTabButtons = Array.from(document.querySelectorAll('[data-tab]')).filter((btn) =>
   DASHBOARD_TAB_IDS.includes(btn.dataset.tab)
 );
@@ -218,6 +231,15 @@ const currentUserRoleElement = document.getElementById('currentUserRole');
 const usersTabButton = document.getElementById('usersTabButton');
 const auditLogTabButton = document.getElementById('auditLogTabButton');
 const auditLogTableBody = document.getElementById('auditLogTableBody');
+const contificoPreviewTabButton = document.getElementById('contificoPreviewTabButton');
+const contificoPreviewProductsForm = document.getElementById('contificoPreviewProductsForm');
+const contificoPreviewPageInput = document.getElementById('contificoPreviewPage');
+const contificoPreviewPageSizeInput = document.getElementById('contificoPreviewPageSize');
+const contificoPreviewProductsStatus = document.getElementById('contificoPreviewProductsStatus');
+const contificoPreviewProductsTableBody = document.getElementById('contificoPreviewProductsTableBody');
+const contificoPreviewWarehousesButton = document.getElementById('contificoPreviewWarehousesButton');
+const contificoPreviewWarehousesStatus = document.getElementById('contificoPreviewWarehousesStatus');
+const contificoPreviewWarehousesTableBody = document.getElementById('contificoPreviewWarehousesTableBody');
 const usersTableBody = document.getElementById('usersTableBody');
 const userCreateContainer = document.getElementById('userCreateContainer');
 const toggleCreateUserButton = document.getElementById('toggleCreateUserButton');
@@ -571,6 +593,7 @@ updateDashboardShortcutHighlight();
 updateDashboardShortcutVisibility();
 setActiveOrdersView(state.activeOrdersView || 'list');
 applyRoleVisibility();
+renderContificoPreview();
 
 if (dashboardShortcutButtons.length) {
   dashboardShortcutButtons.forEach((shortcut) => {
@@ -660,6 +683,26 @@ function toInputDateTimeValue(value) {
   }
 
   return '';
+}
+
+function formatCurrencyUSD(value) {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+  const numericValue = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numericValue)) {
+    return '—';
+  }
+  try {
+    return new Intl.NumberFormat('es-EC', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(numericValue);
+  } catch (error) {
+    return `$${numericValue.toFixed(2)}`;
+  }
 }
 
 function normalizeText(value) {
@@ -1848,6 +1891,7 @@ function updateUserInfo() {
   renderOrderTasks();
   updateDashboardShortcutVisibility();
   updateOrderActionButtons();
+  renderContificoPreview();
 }
 
 function showDashboard() {
@@ -2381,6 +2425,7 @@ function handleLogout(auto = false) {
   state.usersLoaded = false;
   state.usersLoadError = null;
   state.editingUserId = null;
+  resetContificoPreviewState();
   if (currentUserNameElement) {
     currentUserNameElement.textContent = '';
   }
@@ -2405,6 +2450,9 @@ function handleLogout(auto = false) {
   }
   if (usersTabButton) {
     usersTabButton.classList.add('hidden');
+  }
+  if (contificoPreviewTabButton) {
+    contificoPreviewTabButton.classList.add('hidden');
   }
   setActiveDashboardTab('ordersPanel');
   hideDashboard();
@@ -2497,6 +2545,14 @@ if (logoutButton) {
     handleLogout(false);
     showToast('Sesión cerrada correctamente.', 'success');
   });
+}
+
+if (contificoPreviewProductsForm) {
+  contificoPreviewProductsForm.addEventListener('submit', handleContificoPreviewProductsFetch);
+}
+
+if (contificoPreviewWarehousesButton) {
+  contificoPreviewWarehousesButton.addEventListener('click', handleContificoPreviewWarehousesFetch);
 }
 
 function getOrdersForCustomer(customerId) {
@@ -4909,6 +4965,356 @@ async function handleEditUserSubmit(event) {
   }
 }
 
+
+function updateContificoStatus(element, { text = '', tone = 'info' } = {}) {
+  if (!element) return;
+  element.textContent = text;
+  element.classList.remove('loading', 'error', 'success');
+  if (tone === 'loading') {
+    element.classList.add('loading');
+    element.setAttribute('aria-live', 'polite');
+  } else if (tone === 'error') {
+    element.classList.add('error');
+    element.setAttribute('aria-live', 'assertive');
+  } else if (tone === 'success') {
+    element.classList.add('success');
+    element.setAttribute('aria-live', 'polite');
+  } else {
+    element.setAttribute('aria-live', 'polite');
+  }
+}
+
+function resetContificoPreviewState() {
+  state.contificoPreviewProducts = [];
+  state.contificoPreviewProductsPage = 1;
+  state.contificoPreviewProductsPageSize = CONTIFICO_DEFAULT_PAGE_SIZE;
+  state.contificoPreviewProductsLoading = false;
+  state.contificoPreviewProductsError = null;
+  state.contificoPreviewProductsFetched = false;
+  state.contificoPreviewWarehouses = [];
+  state.contificoPreviewWarehousesLoading = false;
+  state.contificoPreviewWarehousesError = null;
+  state.contificoPreviewWarehousesFetched = false;
+  renderContificoPreview();
+}
+
+function renderContificoPreviewProducts() {
+  const isAdmin = state.token && state.user?.role === 'administrador';
+  if (!isAdmin) {
+    if (contificoPreviewProductsForm) {
+      const elements = contificoPreviewProductsForm.querySelectorAll('input, button');
+      elements.forEach((element) => {
+        element.disabled = true;
+      });
+    }
+    if (contificoPreviewProductsTableBody) {
+      contificoPreviewProductsTableBody.innerHTML = '';
+    }
+    updateContificoStatus(contificoPreviewProductsStatus, {
+      text: 'Inicia sesión como administrador para consultar productos en Contífico.',
+      tone: 'info',
+    });
+    return;
+  }
+
+  if (contificoPreviewProductsForm) {
+    const elements = contificoPreviewProductsForm.querySelectorAll('input, button');
+    elements.forEach((element) => {
+      element.disabled = state.contificoPreviewProductsLoading;
+    });
+  }
+
+  if (contificoPreviewPageInput) {
+    contificoPreviewPageInput.value = String(state.contificoPreviewProductsPage || 1);
+  }
+  if (contificoPreviewPageSizeInput) {
+    contificoPreviewPageSizeInput.value = String(
+      state.contificoPreviewProductsPageSize || CONTIFICO_DEFAULT_PAGE_SIZE
+    );
+  }
+
+  if (contificoPreviewProductsTableBody) {
+    contificoPreviewProductsTableBody.innerHTML = '';
+    const products = Array.isArray(state.contificoPreviewProducts)
+      ? state.contificoPreviewProducts
+      : [];
+
+    if (products.length) {
+      products.forEach((product) => {
+        const row = document.createElement('tr');
+
+        const idCell = document.createElement('td');
+        const productId = product?.id;
+        idCell.textContent =
+          productId === null || productId === undefined || productId === ''
+            ? '—'
+            : String(productId);
+        idCell.dataset.label = 'ID';
+
+        const codeCell = document.createElement('td');
+        const productCode = product?.codigo;
+        codeCell.textContent =
+          productCode === null || productCode === undefined || productCode === ''
+            ? '—'
+            : String(productCode);
+        codeCell.dataset.label = 'Código';
+
+        const nameCell = document.createElement('td');
+        const productName = product?.nombre || product?.descripcion;
+        nameCell.textContent =
+          productName === null || productName === undefined || productName === ''
+            ? '—'
+            : String(productName);
+        nameCell.dataset.label = 'Nombre';
+
+        const priceCell = document.createElement('td');
+        priceCell.textContent = formatCurrencyUSD(product?.pvp1);
+        priceCell.dataset.label = 'Precio base';
+
+        row.appendChild(idCell);
+        row.appendChild(codeCell);
+        row.appendChild(nameCell);
+        row.appendChild(priceCell);
+        contificoPreviewProductsTableBody.appendChild(row);
+      });
+    } else if (
+      state.contificoPreviewProductsFetched &&
+      !state.contificoPreviewProductsLoading &&
+      !state.contificoPreviewProductsError
+    ) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 4;
+      cell.className = 'muted';
+      cell.textContent = 'No se recibieron productos para la página consultada.';
+      row.appendChild(cell);
+      contificoPreviewProductsTableBody.appendChild(row);
+    }
+  }
+
+  let statusMessage = '';
+  let tone = 'info';
+  if (state.contificoPreviewProductsLoading) {
+    statusMessage = 'Consultando productos en Contífico...';
+    tone = 'loading';
+  } else if (state.contificoPreviewProductsError) {
+    statusMessage = state.contificoPreviewProductsError;
+    tone = 'error';
+  } else if (state.contificoPreviewProductsFetched) {
+    if (state.contificoPreviewProducts.length) {
+      statusMessage = `Se muestran ${state.contificoPreviewProducts.length} productos (página ${state.contificoPreviewProductsPage}).`;
+      tone = 'success';
+    } else {
+      statusMessage = 'No se recibieron productos para la página consultada.';
+    }
+  } else {
+    statusMessage = 'Define la página y presiona “Consultar productos” para obtener datos desde Contífico.';
+  }
+  updateContificoStatus(contificoPreviewProductsStatus, { text: statusMessage, tone });
+}
+
+function renderContificoPreviewWarehouses() {
+  const isAdmin = state.token && state.user?.role === 'administrador';
+  if (!isAdmin) {
+    if (contificoPreviewWarehousesButton) {
+      contificoPreviewWarehousesButton.disabled = true;
+      contificoPreviewWarehousesButton.removeAttribute('aria-busy');
+      contificoPreviewWarehousesButton.textContent = 'Cargar bodegas';
+    }
+    if (contificoPreviewWarehousesTableBody) {
+      contificoPreviewWarehousesTableBody.innerHTML = '';
+    }
+    updateContificoStatus(contificoPreviewWarehousesStatus, {
+      text: 'Inicia sesión como administrador para consultar bodegas en Contífico.',
+      tone: 'info',
+    });
+    return;
+  }
+
+  if (contificoPreviewWarehousesButton) {
+    contificoPreviewWarehousesButton.disabled = state.contificoPreviewWarehousesLoading;
+    if (state.contificoPreviewWarehousesLoading) {
+      contificoPreviewWarehousesButton.setAttribute('aria-busy', 'true');
+      contificoPreviewWarehousesButton.textContent = 'Consultando…';
+    } else {
+      contificoPreviewWarehousesButton.removeAttribute('aria-busy');
+      contificoPreviewWarehousesButton.textContent = 'Cargar bodegas';
+    }
+  }
+
+  if (contificoPreviewWarehousesTableBody) {
+    contificoPreviewWarehousesTableBody.innerHTML = '';
+    const warehouses = Array.isArray(state.contificoPreviewWarehouses)
+      ? state.contificoPreviewWarehouses
+      : [];
+
+    if (warehouses.length) {
+      warehouses.forEach((warehouse) => {
+        const row = document.createElement('tr');
+
+        const idCell = document.createElement('td');
+        const warehouseId = warehouse?.id;
+        idCell.textContent =
+          warehouseId === null || warehouseId === undefined || warehouseId === ''
+            ? '—'
+            : String(warehouseId);
+        idCell.dataset.label = 'ID';
+
+        const codeCell = document.createElement('td');
+        const warehouseCode = warehouse?.codigo;
+        codeCell.textContent =
+          warehouseCode === null || warehouseCode === undefined || warehouseCode === ''
+            ? '—'
+            : String(warehouseCode);
+        codeCell.dataset.label = 'Código';
+
+        const nameCell = document.createElement('td');
+        const warehouseName = warehouse?.nombre || warehouse?.descripcion;
+        nameCell.textContent =
+          warehouseName === null || warehouseName === undefined || warehouseName === ''
+            ? '—'
+            : String(warehouseName);
+        nameCell.dataset.label = 'Nombre';
+
+        const addressCell = document.createElement('td');
+        const warehouseAddress = warehouse?.direccion;
+        addressCell.textContent =
+          warehouseAddress === null || warehouseAddress === undefined || warehouseAddress === ''
+            ? '—'
+            : String(warehouseAddress);
+        addressCell.dataset.label = 'Dirección';
+
+        row.appendChild(idCell);
+        row.appendChild(codeCell);
+        row.appendChild(nameCell);
+        row.appendChild(addressCell);
+        contificoPreviewWarehousesTableBody.appendChild(row);
+      });
+    } else if (
+      state.contificoPreviewWarehousesFetched &&
+      !state.contificoPreviewWarehousesLoading &&
+      !state.contificoPreviewWarehousesError
+    ) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 4;
+      cell.className = 'muted';
+      cell.textContent = 'No se encontraron bodegas configuradas en Contífico.';
+      row.appendChild(cell);
+      contificoPreviewWarehousesTableBody.appendChild(row);
+    }
+  }
+
+  let statusMessage = '';
+  let tone = 'info';
+  if (state.contificoPreviewWarehousesLoading) {
+    statusMessage = 'Consultando bodegas en Contífico...';
+    tone = 'loading';
+  } else if (state.contificoPreviewWarehousesError) {
+    statusMessage = state.contificoPreviewWarehousesError;
+    tone = 'error';
+  } else if (state.contificoPreviewWarehousesFetched) {
+    if (state.contificoPreviewWarehouses.length) {
+      statusMessage = `Se muestran ${state.contificoPreviewWarehouses.length} bodegas.`;
+      tone = 'success';
+    } else {
+      statusMessage = 'No se encontraron bodegas configuradas en Contífico.';
+    }
+  } else {
+    statusMessage = 'Haz clic en “Cargar bodegas” para consultar la API de Contífico.';
+  }
+  updateContificoStatus(contificoPreviewWarehousesStatus, { text: statusMessage, tone });
+}
+
+function renderContificoPreview() {
+  renderContificoPreviewProducts();
+  renderContificoPreviewWarehouses();
+}
+
+async function handleContificoPreviewProductsFetch(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden consultar Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewProductsLoading) {
+    return;
+  }
+
+  const rawPage = Number(contificoPreviewPageInput?.value ?? state.contificoPreviewProductsPage ?? 1);
+  const rawPageSize = Number(
+    contificoPreviewPageSizeInput?.value ??
+      state.contificoPreviewProductsPageSize ??
+      CONTIFICO_DEFAULT_PAGE_SIZE
+  );
+  const normalizedPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
+  const normalizedPageSize = Number.isFinite(rawPageSize) && rawPageSize > 0
+    ? Math.min(Math.floor(rawPageSize), CONTIFICO_MAX_PAGE_SIZE)
+    : CONTIFICO_DEFAULT_PAGE_SIZE;
+
+  state.contificoPreviewProductsPage = normalizedPage;
+  state.contificoPreviewProductsPageSize = normalizedPageSize;
+  state.contificoPreviewProductsLoading = true;
+  state.contificoPreviewProductsError = null;
+  renderContificoPreviewProducts();
+
+  try {
+    const response = await apiFetch(
+      `/temp/contifico/products?page=${normalizedPage}&page_size=${normalizedPageSize}`
+    );
+    const items = Array.isArray(response?.items) ? response.items : [];
+    state.contificoPreviewProducts = items;
+    state.contificoPreviewProductsPage = Number.isFinite(response?.page)
+      ? response.page
+      : normalizedPage;
+    state.contificoPreviewProductsPageSize = Number.isFinite(response?.page_size)
+      ? response.page_size
+      : normalizedPageSize;
+    state.contificoPreviewProductsFetched = true;
+    renderContificoPreviewProducts();
+  } catch (error) {
+    state.contificoPreviewProductsError = error.message || 'No se pudieron consultar los productos.';
+    state.contificoPreviewProducts = [];
+    state.contificoPreviewProductsFetched = true;
+    renderContificoPreviewProducts();
+    showToast(state.contificoPreviewProductsError, 'error');
+  } finally {
+    state.contificoPreviewProductsLoading = false;
+    renderContificoPreviewProducts();
+  }
+}
+
+async function handleContificoPreviewWarehousesFetch() {
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden consultar Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewWarehousesLoading) {
+    return;
+  }
+
+  state.contificoPreviewWarehousesLoading = true;
+  state.contificoPreviewWarehousesError = null;
+  renderContificoPreviewWarehouses();
+
+  try {
+    const response = await apiFetch('/temp/contifico/warehouses');
+    state.contificoPreviewWarehouses = Array.isArray(response) ? response : [];
+    state.contificoPreviewWarehousesFetched = true;
+    renderContificoPreviewWarehouses();
+  } catch (error) {
+    state.contificoPreviewWarehousesError = error.message || 'No se pudieron consultar las bodegas.';
+    state.contificoPreviewWarehouses = [];
+    state.contificoPreviewWarehousesFetched = true;
+    renderContificoPreviewWarehouses();
+    showToast(state.contificoPreviewWarehousesError, 'error');
+  } finally {
+    state.contificoPreviewWarehousesLoading = false;
+    renderContificoPreviewWarehouses();
+  }
+}
 
 function renderAuditLogs() {
   if (!auditLogTableBody) return;
