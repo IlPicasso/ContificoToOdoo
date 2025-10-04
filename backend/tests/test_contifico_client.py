@@ -29,6 +29,7 @@ def test_list_products_success() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["authorization"] = request.headers.get("Authorization")
+        captured["api_token"] = request.headers.get("X-Api-Token")
         captured["url"] = str(request.url)
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json=[{"id": 1, "codigo": "SKU-1"}])
@@ -45,6 +46,7 @@ def test_list_products_success() -> None:
 
     assert products == [{"id": 1, "codigo": "SKU-1"}]
     assert captured["authorization"] == "key123"
+    assert captured["api_token"] == "pos-token-abc"
     assert client.api_token == "pos-token-abc"
     params = captured["params"]
     assert isinstance(params, dict)
