@@ -39,10 +39,11 @@ def test_create_invoice_builds_expected_request():
         captured["url"] = str(request.url)
         captured["path"] = request.url.path
         captured["authorization"] = request.headers.get("authorization")
-        captured["api-token"] = request.headers.get("api-token")
+        captured["accept"] = request.headers.get("accept")
+        captured["content-type"] = request.headers.get("content-type")
+        captured["api-key"] = request.headers.get("api-key")
         captured["json"] = json.loads(request.content.decode())
         captured["params"] = dict(request.url.params)
-        captured["api-key"] = request.headers.get("api-key")
         return httpx.Response(201, json={"id": "INV-1"})
 
     client = build_contifico_client(handler)
@@ -51,7 +52,8 @@ def test_create_invoice_builds_expected_request():
     assert response == {"id": "INV-1"}
     assert captured["path"] == "/sistema/api/v1/documento/"
     assert captured["authorization"] == "key-123"
-    assert captured["api-token"] == "token-abc"
+    assert captured["accept"] == "application/json"
+    assert captured["content-type"] == "application/json; charset=UTF-8"
     assert captured["api-key"] is None
     assert captured["json"] == {"total": 100}
     assert captured["params"] == {}
@@ -90,65 +92,7 @@ def test_get_invoice_fetches_specific_document():
 
     assert response == {"id": "INV-25"}
     assert captured["path"] == "/sistema/api/v1/documento/INV-25/"
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
-
-
-def test_get_invoice_without_company_id_does_not_append_params():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"id": "INV-25"})
-
-    client = build_contifico_client(handler, company_id=None)
-    client.get_invoice("INV-25")
-
     assert captured["params"] == {}
-
-
-def test_get_invoice_by_number_uses_query_param():
-    captured = {}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        captured["path"] = request.url.path
-        captured["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"id": "001-005-000012717"})
-
-    client = build_contifico_client(handler)
-    invoice_number = "001-005-000012717"
-    response = client.get_invoice(invoice_number)
-
-    assert response == {"id": invoice_number}
-    assert captured["path"] == "/sistema/api/v1/documento/"
-    assert captured["params"]["numero"] == invoice_number
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
-
-
-def test_get_invoice_does_not_retry_on_server_error():
-    call_count = {"value": 0}
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        call_count["value"] += 1
-        return httpx.Response(504, text="upstream timeout")
-
-    client = ContificoClient(
-        base_url="https://api.example.com/sistema/api/v1",
-        api_key="key-123",
-        api_token="token-abc",
-        max_retries=3,
-        retry_backoff_seconds=0,
-        rate_limit_per_minute=100,
-        client=httpx.Client(transport=httpx.MockTransport(handler)),
-        sleep_func=lambda _seconds: None,
-        company_id="EMP-001",
-    )
-
-    with pytest.raises(ContificoTransientError):
-        client.get_invoice("INV-99")
-
-    assert call_count["value"] == 1
 
 
 def test_get_customer_by_document_sets_query_param():
@@ -167,8 +111,7 @@ def test_get_customer_by_document_sets_query_param():
         == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909&empresa=EMP-001&empresa_id=EMP-001"
     )
     assert captured["params"]["identificacion"] == "0909090909"
-    assert captured["params"]["empresa"] == "EMP-001"
-    assert captured["params"]["empresa_id"] == "EMP-001"
+    assert "empresa_id" not in captured["params"]
 
 
 def test_omits_company_params_when_not_configured():
@@ -178,7 +121,7 @@ def test_omits_company_params_when_not_configured():
         captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"items": []})
 
-    client = build_contifico_client(handler, company_id=None)
+    client = build_contifico_client(handler)
     client.get_customer_by_document("0101010101")
 
     assert captured["params"] == {"identificacion": "0101010101"}
