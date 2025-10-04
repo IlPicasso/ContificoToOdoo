@@ -107,7 +107,7 @@ def test_list_invoices_success() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["params"] = dict(request.url.params)
-        assert request.url.path.endswith("/factura/")
+        assert request.url.path.endswith("/registro/documento/")
         return httpx.Response(200, json=[{"id": "inv-1", "numero": "001-001-0000001"}])
 
     transport = httpx.MockTransport(handler)
@@ -132,8 +132,10 @@ def test_list_invoices_success() -> None:
     assert isinstance(params, dict)
     assert params["result_page"] == "3"
     assert params["result_size"] == "25"
-    assert params["cliente_identificacion"] == "0912345678"
-    assert params["numero_documento"] == "001-001-0000001"
+    assert params["tipo_registro"] == "CLI"
+    assert params["tipo"] == "FAC"
+    assert params["persona_identificacion"] == "0912345678"
+    assert params["documento"] == "001-001-0000001"
 
 
 def test_list_invoices_requires_list_response() -> None:
@@ -163,7 +165,7 @@ def test_list_invoices_by_customer_document_validates_input() -> None:
 
 def test_find_invoice_by_document_number_returns_first() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.params.get("numero_documento") == "001-001-0000001"
+        assert request.url.params.get("documento") == "001-001-0000001"
         return httpx.Response(
             200,
             json=[

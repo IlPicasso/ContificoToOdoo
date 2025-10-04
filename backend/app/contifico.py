@@ -162,13 +162,18 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Obtiene facturas desde Contífico con los filtros disponibles."""
 
-        params: Dict[str, Any] = {"result_page": page, "result_size": page_size}
+        params: Dict[str, Any] = {
+            "result_page": page,
+            "result_size": page_size,
+            "tipo_registro": "CLI",
+            "tipo": "FAC",
+        }
         if customer_document:
-            params["cliente_identificacion"] = customer_document.strip()
+            params["persona_identificacion"] = customer_document.strip()
         if document_number:
-            params["numero_documento"] = document_number.strip()
+            params["documento"] = document_number.strip()
 
-        data = self._request("GET", "factura/", params=params)
+        data = self._request("GET", "registro/documento/", params=params)
         if data is None:
             return []
         if isinstance(data, list):
