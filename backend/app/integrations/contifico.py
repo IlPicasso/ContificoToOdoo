@@ -99,9 +99,12 @@ class ContificoClient:
     ) -> Dict[str, Any]:
         url = self._build_url(path)
         headers = {
-            "Authorization": f"Bearer {self.api_token}",
-            "api-key": self.api_key,
+            "Authorization": self.api_key,
+            "Accept": "application/json",
+            "Content-Type": "application/json; charset=UTF-8",
         }
+
+        request_params = dict(params) if params else {}
 
         attempt = 0
         while True:
@@ -111,7 +114,7 @@ class ContificoClient:
                 response = self._client.request(
                     method,
                     url,
-                    params=params,
+                    params=request_params or None,
                     json=json,
                     headers=headers,
                     timeout=self.timeout,

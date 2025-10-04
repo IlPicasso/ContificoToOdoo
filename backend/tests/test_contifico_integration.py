@@ -36,35 +36,45 @@ def test_create_invoice_builds_expected_request():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
+        captured["path"] = request.url.path
         captured["authorization"] = request.headers.get("authorization")
+        captured["accept"] = request.headers.get("accept")
+        captured["content-type"] = request.headers.get("content-type")
         captured["api-key"] = request.headers.get("api-key")
         captured["json"] = json.loads(request.content.decode())
+        captured["params"] = dict(request.url.params)
         return httpx.Response(201, json={"id": "INV-1"})
 
     client = build_contifico_client(handler)
     response = client.create_invoice({"total": 100})
 
     assert response == {"id": "INV-1"}
-    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/"
-    assert captured["authorization"] == "Bearer token-abc"
-    assert captured["api-key"] == "key-123"
+    assert captured["path"] == "/sistema/api/v1/documento/"
+    assert captured["authorization"] == "key-123"
+    assert captured["accept"] == "application/json"
+    assert captured["content-type"] == "application/json; charset=UTF-8"
+    assert captured["api-key"] is None
     assert captured["json"] == {"total": 100}
+    assert captured["params"] == {}
 
 
-def test_update_invoice_uses_company_id_and_json():
+def test_update_invoice_sends_payload():
     captured = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
+        captured["path"] = request.url.path
         captured["json"] = json.loads(request.content.decode())
+        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"status": "ok"})
 
     client = build_contifico_client(handler)
     response = client.update_invoice("INV-2", {"total": 200})
 
     assert response == {"status": "ok"}
-    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/"
+    assert captured["path"] == "/sistema/api/v1/documento/"
     assert captured["json"] == {"id": "INV-2", "total": 200}
+    assert captured["params"] == {}
 
 
 def test_get_invoice_fetches_specific_document():
@@ -72,13 +82,16 @@ def test_get_invoice_fetches_specific_document():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
+        captured["path"] = request.url.path
+        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"id": "INV-25"})
 
     client = build_contifico_client(handler)
     response = client.get_invoice("INV-25")
 
     assert response == {"id": "INV-25"}
-    assert captured["url"] == "https://api.example.com/sistema/api/v1/documento/INV-25/"
+    assert captured["path"] == "/sistema/api/v1/documento/INV-25/"
+    assert captured["params"] == {}
 
 
 def test_get_customer_by_document_sets_query_param():
@@ -86,6 +99,7 @@ def test_get_customer_by_document_sets_query_param():
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
+        captured["params"] = dict(request.url.params)
         return httpx.Response(200, json={"items": []})
 
     client = build_contifico_client(handler)
@@ -95,6 +109,21 @@ def test_get_customer_by_document_sets_query_param():
         captured["url"]
         == "https://api.example.com/sistema/api/v1/persona/?identificacion=0909090909"
     )
+    assert captured["params"]["identificacion"] == "0909090909"
+    assert "empresa_id" not in captured["params"]
+
+
+def test_omits_company_params_when_not_configured():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"items": []})
+
+    client = build_contifico_client(handler)
+    client.get_customer_by_document("0101010101")
+
+    assert captured["params"] == {"identificacion": "0101010101"}
 
 
 def test_raises_transient_on_rate_limit():
