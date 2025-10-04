@@ -103,6 +103,7 @@ class ContificoClient:
         url = self._build_url(path)
         headers = {
             "Authorization": self.api_key,
+            "api-token": self.api_token,
             "Accept": "application/json",
             "Content-Type": "application/json; charset=UTF-8",
         }
