@@ -106,6 +106,9 @@ class ContificoClient:
         }
 
         request_params = dict(params) if params else {}
+        if self.company_id:
+            for key in ("empresa", "empresa_id"):
+                request_params.setdefault(key, self.company_id)
 
         attempt = 0
         while True:
