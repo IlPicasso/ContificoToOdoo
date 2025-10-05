@@ -2,6 +2,7 @@ import logging
 import json
 import os
 import sys
+from http import HTTPStatus
 from pathlib import Path
 
 import httpx
@@ -153,6 +154,78 @@ def test_list_invoices_success() -> None:
     assert params["tipo"] == "FAC"
     assert params["persona_identificacion"] == "0912345678"
     assert params["documento"] == "001-001-0000001"
+
+
+def test_list_invoices_recovers_from_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[dict[str, str]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    attempts_by_size: dict[int, int] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        size = int(params["result_size"])
+        attempts_by_size[size] = attempts_by_size.get(size, 0) + 1
+        if size == 25:
+            return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
+        assert size == 10, f"Unexpected fallback size: {size}"
+        return httpx.Response(200, json=[{"id": "inv-1", "numero": "001-001-0000001"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoices = list(client.list_invoices(page_size=25))
+
+    assert invoices == [{"id": "inv-1", "numero": "001-001-0000001"}]
+    assert [params["result_size"] for params in requests] == ["25", "25", "25", "10"]
+    assert attempts_by_size[25] == ContificoClient.INVOICE_LOOKUP_SERVER_RETRIES + 1
+    assert attempts_by_size[10] == 1
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
+
+
+def test_list_invoices_raises_last_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    with pytest.raises(ContificoAPIError) as exc_info:
+        list(client.list_invoices(page_size=5))
+
+    assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
 
 
 def test_list_invoices_requires_list_response() -> None:
