@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -13,6 +14,9 @@ from uuid import uuid4
 
 from .config import get_settings
 from .contifico import ContificoClient, ContificoClientError, ContificoConfigurationError
+
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceLookupJobStatus(str, Enum):
@@ -154,8 +158,7 @@ class InvoiceLookupJobManager:
         except asyncio.TimeoutError:
             if not lookup_task.done():
                 lookup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await lookup_task
+                self._detach_lookup_task(lookup_task)
             await self._update_job(
                 job_id,
                 status=InvoiceLookupJobStatus.FAILED,
@@ -170,8 +173,7 @@ class InvoiceLookupJobManager:
         except asyncio.CancelledError:
             if not lookup_task.done():
                 lookup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await lookup_task
+                self._detach_lookup_task(lookup_task)
             raise
         except InvoiceNotFoundError as exc:
             await self._update_job(
@@ -192,8 +194,7 @@ class InvoiceLookupJobManager:
         except Exception as exc:  # pragma: no cover - defensivo
             if not lookup_task.done():
                 lookup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await lookup_task
+                self._detach_lookup_task(lookup_task)
             await self._update_job(
                 job_id,
                 status=InvoiceLookupJobStatus.FAILED,
@@ -254,6 +255,18 @@ class InvoiceLookupJobManager:
             asyncio.run_coroutine_threadsafe(_update(), loop)
 
         return callback
+
+    def _detach_lookup_task(self, task: asyncio.Task[Any]) -> None:
+        async def _await_task() -> None:
+            with contextlib.suppress(asyncio.CancelledError):
+                try:
+                    await task
+                except Exception:  # pragma: no cover - defensivo
+                    logger.exception(
+                        "La tarea de búsqueda de Contífico falló tras la cancelación.",
+                    )
+
+        asyncio.create_task(_await_task())
 
     async def _update_job(self, job_id: str, **changes: Any) -> None:
         async with self._lock:
