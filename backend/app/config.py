@@ -60,6 +60,13 @@ class Settings(BaseSettings):
         ge=1.0,
         description="Tiempo máximo de espera (en segundos) para peticiones a Contífico.",
     )
+    contifico_invoice_cache_path: str | None = Field(
+        default="./data/contifico_invoice_cache.json",
+        description=(
+            "Ruta del archivo JSON donde se almacenan facturas descargadas de Contífico "
+            "para búsquedas locales."
+        ),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
