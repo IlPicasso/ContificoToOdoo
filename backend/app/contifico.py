@@ -43,6 +43,12 @@ class ContificoClient:
     INVOICE_LOOKUP_MAX_PAGES = 50
     INVOICE_LOOKUP_SERVER_RETRIES = 2
     INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
+    INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 2
+    INVOICE_LOOKUP_SERVER_COOLDOWN_BASE = 2.0
+    INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 200
+    INVOICE_LOOKUP_CATALOG_MAX_PAGES = 400
+    INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 2
+    INVOICE_LOOKUP_CATALOG_BACKOFF_BASE = 1.0
     INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES = {
         HTTPStatus.BAD_REQUEST,
         HTTPStatus.NOT_FOUND,
@@ -71,6 +77,8 @@ class ContificoClient:
         self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self._transport = transport
+        self._invoice_cache: Dict[str, Dict[str, Any]] = {}
+        self._invoice_catalog_complete = False
 
     def _request(
         self,
@@ -303,92 +311,146 @@ class ContificoClient:
 
         trimmed_input = document_number.strip()
         canonical_input = " ".join(trimmed_input.split())
+        compact_target = (
+            normalized_target.replace("-", "") if "-" in normalized_target else None
+        )
+
+        cached_invoice = self._get_cached_invoice(normalized_target, compact_target)
+        if cached_invoice is not None:
+            return cached_invoice
 
         direct_invoice = self._lookup_invoice_direct(normalized_target)
         if direct_invoice is not None:
+            self._cache_invoice(direct_invoice)
             return direct_invoice
 
-        search_candidates = []
-        if canonical_input:
-            search_candidates.append(canonical_input)
-        if normalized_target and normalized_target != canonical_input:
-            search_candidates.append(normalized_target)
+        search_candidates: list[str] = []
+        seen_candidates: set[str] = set()
+        for candidate in (canonical_input, normalized_target, compact_target):
+            if not candidate:
+                continue
+            if candidate in seen_candidates:
+                continue
+            seen_candidates.add(candidate)
+            search_candidates.append(candidate)
 
         last_server_error: ContificoAPIError | None = None
 
-        for candidate in search_candidates:
-            for page_size in self._invoice_lookup_page_sizes():
-                seen_numbers: set[str] = set()
-                encountered_server_error = False
+        for search_attempt in range(
+            self.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS + 1
+        ):
+            last_server_error = None
 
-                for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
-                    retry_attempt = 0
-                    should_stop_paging = False
-                    while True:
-                        try:
-                            invoices = list(
-                                self.list_invoices(
-                                    page=page,
-                                    page_size=page_size,
-                                    document_number=candidate,
-                                )
-                            )
-                            break
-                        except ContificoAPIError as exc:
-                            if exc.status_code == HTTPStatus.NOT_FOUND:
-                                should_stop_paging = True
-                                invoices = []
-                                break
-                            if HTTPStatus.BAD_GATEWAY <= exc.status_code < 600:
-                                last_server_error = exc
-                                if retry_attempt < self.INVOICE_LOOKUP_SERVER_RETRIES:
-                                    backoff = self.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * (
-                                        2**retry_attempt
+            for candidate in search_candidates:
+                for page_size in self._invoice_lookup_page_sizes():
+                    seen_numbers: set[str] = set()
+                    encountered_server_error = False
+
+                    for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
+                        retry_attempt = 0
+                        should_stop_paging = False
+                        while True:
+                            try:
+                                invoices = list(
+                                    self.list_invoices(
+                                        page=page,
+                                        page_size=page_size,
+                                        document_number=candidate,
                                     )
-                                    retry_attempt += 1
-                                    self._sleep(backoff)
-                                    continue
-                                encountered_server_error = True
+                                )
                                 break
-                            raise
+                            except ContificoAPIError as exc:
+                                if exc.status_code == HTTPStatus.NOT_FOUND:
+                                    should_stop_paging = True
+                                    invoices = []
+                                    break
+                                if HTTPStatus.BAD_GATEWAY <= exc.status_code < 600:
+                                    last_server_error = exc
+                                    if (
+                                        retry_attempt
+                                        < self.INVOICE_LOOKUP_SERVER_RETRIES
+                                    ):
+                                        backoff = (
+                                            self.INVOICE_LOOKUP_RETRY_BACKOFF_BASE
+                                            * (2**retry_attempt)
+                                        )
+                                        retry_attempt += 1
+                                        self._sleep(backoff)
+                                        continue
+                                    encountered_server_error = True
+                                    break
+                                raise
+
+                        if encountered_server_error:
+                            break
+
+                        if should_stop_paging or not invoices:
+                            break
+
+                        for invoice in invoices:
+                            self._cache_invoice(invoice)
+
+                        match = self._match_invoice_by_number(
+                            invoices, normalized_target
+                        )
+                        if match is not None:
+                            self._cache_invoice(match)
+                            return match
+
+                        if len(invoices) < page_size:
+                            break
+
+                        page_numbers = set()
+                        for invoice in invoices:
+                            candidate_number = self._extract_invoice_number(invoice)
+                            if not candidate_number:
+                                continue
+                            normalized_candidate = self._normalize_invoice_number(
+                                candidate_number
+                            )
+                            if normalized_candidate:
+                                page_numbers.add(normalized_candidate)
+
+                        if page_numbers and page_numbers.issubset(seen_numbers):
+                            break
+
+                        seen_numbers.update(page_numbers)
 
                     if encountered_server_error:
-                        break
+                        continue
 
-                    if should_stop_paging or not invoices:
-                        break
+                    last_server_error = None
+                    break
 
-                    match = self._match_invoice_by_number(invoices, normalized_target)
-                    if match is not None:
-                        return match
+            if last_server_error is None:
+                return self._get_cached_invoice(normalized_target, compact_target)
 
-                    if len(invoices) < page_size:
-                        break
+            if (
+                search_attempt
+                < self.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS
+            ):
+                cooldown = self.INVOICE_LOOKUP_SERVER_COOLDOWN_BASE * (
+                    2**search_attempt
+                )
+                self._sleep(cooldown)
+                continue
+            break
 
-                    page_numbers = set()
-                    for invoice in invoices:
-                        candidate_number = self._extract_invoice_number(invoice)
-                        if not candidate_number:
-                            continue
-                        normalized_candidate = self._normalize_invoice_number(candidate_number)
-                        if normalized_candidate:
-                            page_numbers.add(normalized_candidate)
+        if last_server_error is not None or self._invoice_catalog_complete:
+            try:
+                catalog_match = self._lookup_invoice_from_catalog(
+                    normalized_target, compact_target
+                )
+            except ContificoClientError:
+                if last_server_error is not None:
+                    raise last_server_error
+            else:
+                if catalog_match is not None:
+                    return catalog_match
+            if last_server_error is not None:
+                raise last_server_error
 
-                    if page_numbers and page_numbers.issubset(seen_numbers):
-                        break
-
-                    seen_numbers.update(page_numbers)
-
-                if encountered_server_error:
-                    continue
-
-                last_server_error = None
-                break
-
-        if last_server_error is not None:
-            raise last_server_error
-
-        return None
+        return self._get_cached_invoice(normalized_target, compact_target)
 
     def _lookup_invoice_direct(self, normalized_target: str) -> Optional[Dict[str, Any]]:
         """Try to retrieve an invoice directly using the document number."""
@@ -402,8 +464,8 @@ class ContificoClient:
             payload = self._request(
                 "GET", f"registro/documento/{normalized_target}/"
             )
-        except ContificoAPIError as exc:
-            if exc.status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES:
+        except ContificoClientError as exc:
+            if self._should_fallback_from_direct_lookup(exc):
                 return None
             raise
 
@@ -435,11 +497,89 @@ class ContificoClient:
                         return invoice
             if len(payload) == 1 and isinstance(payload[0], dict):
                 return payload[0]
-            return None
 
-        raise ContificoAPIError(
-            status_code=200,
-            detail="El formato de respuesta para facturas no es el esperado.",
-            payload=payload,
-        )
+        return None
+
+    def _should_fallback_from_direct_lookup(self, exc: ContificoClientError) -> bool:
+        if isinstance(exc, ContificoTransportError):
+            return True
+        if isinstance(exc, ContificoAPIError):
+            status_code = exc.status_code
+            if status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES:
+                return True
+            if HTTPStatus.INTERNAL_SERVER_ERROR <= status_code < 600:
+                return True
+        return False
+
+    def _cache_invoice(self, invoice: Dict[str, Any]) -> None:
+        if not isinstance(invoice, dict):
+            return
+        candidate = self._extract_invoice_number(invoice)
+        if not candidate:
+            return
+        normalized_candidate = self._normalize_invoice_number(candidate)
+        if not normalized_candidate:
+            return
+        self._invoice_cache[normalized_candidate] = invoice
+        if "-" in normalized_candidate:
+            compact_candidate = normalized_candidate.replace("-", "")
+            if compact_candidate and compact_candidate not in self._invoice_cache:
+                self._invoice_cache[compact_candidate] = invoice
+
+    def _get_cached_invoice(
+        self, normalized_target: str, compact_target: str | None
+    ) -> Optional[Dict[str, Any]]:
+        for key in (normalized_target, compact_target):
+            if not key:
+                continue
+            cached = self._invoice_cache.get(key)
+            if cached is not None:
+                return cached
+        return None
+
+    def _lookup_invoice_from_catalog(
+        self, normalized_target: str, compact_target: str | None
+    ) -> Optional[Dict[str, Any]]:
+        self._ensure_invoice_catalog()
+        return self._get_cached_invoice(normalized_target, compact_target)
+
+    def _ensure_invoice_catalog(self) -> None:
+        if self._invoice_catalog_complete:
+            return
+        self._download_invoice_catalog()
+        self._invoice_catalog_complete = True
+
+    def _download_invoice_catalog(self) -> None:
+        for page in range(1, self.INVOICE_LOOKUP_CATALOG_MAX_PAGES + 1):
+            retry_attempt = 0
+            while True:
+                try:
+                    invoices = list(
+                        self.list_invoices(
+                            page=page,
+                            page_size=self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE,
+                        )
+                    )
+                    break
+                except ContificoAPIError as exc:
+                    if (
+                        HTTPStatus.BAD_GATEWAY <= exc.status_code < 600
+                        and retry_attempt < self.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES
+                    ):
+                        backoff = self.INVOICE_LOOKUP_CATALOG_BACKOFF_BASE * (
+                            2**retry_attempt
+                        )
+                        retry_attempt += 1
+                        self._sleep(backoff)
+                        continue
+                    raise
+
+            if not invoices:
+                return
+
+            for invoice in invoices:
+                self._cache_invoice(invoice)
+
+            if len(invoices) < self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE:
+                return
 
