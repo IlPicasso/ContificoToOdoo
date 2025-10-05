@@ -1,6 +1,7 @@
 """Endpoints temporales para validar la integración con Contífico."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.concurrency import run_in_threadpool
 
 from . import schemas
 from .contifico import ContificoAPIError, ContificoClient, ContificoTransportError
@@ -148,7 +149,7 @@ def preview_contifico_invoices_by_customer(
 
 
 @router.get("/invoices/by-number", response_model=schemas.ContificoInvoice)
-def preview_contifico_invoice_by_number(
+async def preview_contifico_invoice_by_number(
     document_number: str = Query(..., min_length=3, max_length=40),
     contifico_client: ContificoClient = Depends(get_contifico_client),
     current_user=Depends(admin_required()),
@@ -157,8 +158,10 @@ def preview_contifico_invoice_by_number(
 
     _ = current_user
     normalized_number = document_number.strip()
-    return fetch_invoice_by_document_number(
-        contifico_client, document_number=normalized_number
+    return await run_in_threadpool(
+        fetch_invoice_by_document_number,
+        contifico_client,
+        document_number=normalized_number,
     )
 
 
