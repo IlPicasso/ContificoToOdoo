@@ -45,6 +45,10 @@ class ContificoClient:
     INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
     INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 2
     INVOICE_LOOKUP_SERVER_COOLDOWN_BASE = 2.0
+    INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 200
+    INVOICE_LOOKUP_CATALOG_MAX_PAGES = 400
+    INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 2
+    INVOICE_LOOKUP_CATALOG_BACKOFF_BASE = 1.0
     INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES = {
         HTTPStatus.BAD_REQUEST,
         HTTPStatus.NOT_FOUND,
@@ -73,6 +77,8 @@ class ContificoClient:
         self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self._transport = transport
+        self._invoice_cache: Dict[str, Dict[str, Any]] = {}
+        self._invoice_catalog_complete = False
 
     def _request(
         self,
@@ -309,8 +315,13 @@ class ContificoClient:
             normalized_target.replace("-", "") if "-" in normalized_target else None
         )
 
+        cached_invoice = self._get_cached_invoice(normalized_target, compact_target)
+        if cached_invoice is not None:
+            return cached_invoice
+
         direct_invoice = self._lookup_invoice_direct(normalized_target)
         if direct_invoice is not None:
+            self._cache_invoice(direct_invoice)
             return direct_invoice
 
         search_candidates: list[str] = []
@@ -376,10 +387,14 @@ class ContificoClient:
                         if should_stop_paging or not invoices:
                             break
 
+                        for invoice in invoices:
+                            self._cache_invoice(invoice)
+
                         match = self._match_invoice_by_number(
                             invoices, normalized_target
                         )
                         if match is not None:
+                            self._cache_invoice(match)
                             return match
 
                         if len(invoices) < page_size:
@@ -408,7 +423,7 @@ class ContificoClient:
                     break
 
             if last_server_error is None:
-                return None
+                return self._get_cached_invoice(normalized_target, compact_target)
 
             if (
                 search_attempt
@@ -421,10 +436,21 @@ class ContificoClient:
                 continue
             break
 
-        if last_server_error is not None:
-            raise last_server_error
+        if last_server_error is not None or self._invoice_catalog_complete:
+            try:
+                catalog_match = self._lookup_invoice_from_catalog(
+                    normalized_target, compact_target
+                )
+            except ContificoClientError:
+                if last_server_error is not None:
+                    raise last_server_error
+            else:
+                if catalog_match is not None:
+                    return catalog_match
+            if last_server_error is not None:
+                raise last_server_error
 
-        return None
+        return self._get_cached_invoice(normalized_target, compact_target)
 
     def _lookup_invoice_direct(self, normalized_target: str) -> Optional[Dict[str, Any]]:
         """Try to retrieve an invoice directly using the document number."""
@@ -484,4 +510,76 @@ class ContificoClient:
             if HTTPStatus.INTERNAL_SERVER_ERROR <= status_code < 600:
                 return True
         return False
+
+    def _cache_invoice(self, invoice: Dict[str, Any]) -> None:
+        if not isinstance(invoice, dict):
+            return
+        candidate = self._extract_invoice_number(invoice)
+        if not candidate:
+            return
+        normalized_candidate = self._normalize_invoice_number(candidate)
+        if not normalized_candidate:
+            return
+        self._invoice_cache[normalized_candidate] = invoice
+        if "-" in normalized_candidate:
+            compact_candidate = normalized_candidate.replace("-", "")
+            if compact_candidate and compact_candidate not in self._invoice_cache:
+                self._invoice_cache[compact_candidate] = invoice
+
+    def _get_cached_invoice(
+        self, normalized_target: str, compact_target: str | None
+    ) -> Optional[Dict[str, Any]]:
+        for key in (normalized_target, compact_target):
+            if not key:
+                continue
+            cached = self._invoice_cache.get(key)
+            if cached is not None:
+                return cached
+        return None
+
+    def _lookup_invoice_from_catalog(
+        self, normalized_target: str, compact_target: str | None
+    ) -> Optional[Dict[str, Any]]:
+        self._ensure_invoice_catalog()
+        return self._get_cached_invoice(normalized_target, compact_target)
+
+    def _ensure_invoice_catalog(self) -> None:
+        if self._invoice_catalog_complete:
+            return
+        self._download_invoice_catalog()
+        self._invoice_catalog_complete = True
+
+    def _download_invoice_catalog(self) -> None:
+        for page in range(1, self.INVOICE_LOOKUP_CATALOG_MAX_PAGES + 1):
+            retry_attempt = 0
+            while True:
+                try:
+                    invoices = list(
+                        self.list_invoices(
+                            page=page,
+                            page_size=self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE,
+                        )
+                    )
+                    break
+                except ContificoAPIError as exc:
+                    if (
+                        HTTPStatus.BAD_GATEWAY <= exc.status_code < 600
+                        and retry_attempt < self.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES
+                    ):
+                        backoff = self.INVOICE_LOOKUP_CATALOG_BACKOFF_BASE * (
+                            2**retry_attempt
+                        )
+                        retry_attempt += 1
+                        self._sleep(backoff)
+                        continue
+                    raise
+
+            if not invoices:
+                return
+
+            for invoice in invoices:
+                self._cache_invoice(invoice)
+
+            if len(invoices) < self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE:
+                return
 

@@ -523,6 +523,124 @@ def test_find_invoice_by_document_number_retries_after_cooldown(monkeypatch: pyt
     assert fallback_requests[-1].get("documento") == "001-001-0000033"
 
 
+def test_find_invoice_by_document_number_downloads_catalog_after_timeouts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[tuple[str, dict[str, str]]] = []
+    catalog_requests: list[dict[str, str]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if request.url.path.endswith("/registro/documento/001-001-0000044/"):
+            requests.append(("direct", {}))
+            return httpx.Response(
+                status.HTTP_504_GATEWAY_TIMEOUT,
+                json={"mensaje": "Timeout"},
+            )
+        if request.url.path.endswith("/registro/documento/"):
+            if params.get("documento") in {"001-001-0000044", "0010010000044"}:
+                requests.append(("search", params))
+                return httpx.Response(
+                    status.HTTP_504_GATEWAY_TIMEOUT,
+                    json={"mensaje": "Timeout"},
+                )
+            if "documento" not in params:
+                catalog_requests.append(params)
+                assert params.get("result_page") == "1"
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": 44, "numero": "001-001-0000044"},
+                        {"id": 45, "numero": "001-001-0000045"},
+                    ],
+                )
+        raise AssertionError("Unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    client.INVOICE_LOOKUP_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = ()
+    client.INVOICE_LOOKUP_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_SERVER_RETRIES = 0
+    client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
+    client.INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 2
+    client.INVOICE_LOOKUP_CATALOG_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 0
+
+    invoice = client.find_invoice_by_document_number("001-001-0000044")
+
+    assert invoice == {"id": 44, "numero": "001-001-0000044"}
+    assert requests
+    assert requests[0][0] == "direct"
+    assert any(kind == "search" for kind, _ in requests)
+    assert catalog_requests == [{"result_page": "1", "result_size": "2", "tipo_registro": "CLI", "tipo": "FAC"}]
+    assert client._invoice_catalog_complete is True
+    assert "001-001-0000044" in client._invoice_cache
+    assert sleeps == []
+
+
+def test_find_invoice_by_document_number_reuses_catalog_without_http() -> None:
+    catalog_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal catalog_calls
+        params = dict(request.url.params)
+        if request.url.path.endswith("/registro/documento/001-001-0000045/"):
+            return httpx.Response(
+                status.HTTP_504_GATEWAY_TIMEOUT,
+                json={"mensaje": "Timeout"},
+            )
+        if "documento" not in params:
+            catalog_calls += 1
+            return httpx.Response(
+                200,
+                json=[{"id": 45, "numero": "001-001-0000045"}],
+            )
+        return httpx.Response(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            json={"mensaje": "Timeout"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    client.INVOICE_LOOKUP_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = ()
+    client.INVOICE_LOOKUP_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_SERVER_RETRIES = 0
+    client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
+    client.INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_CATALOG_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 0
+
+    invoice = client.find_invoice_by_document_number("001-001-0000045")
+    assert invoice == {"id": 45, "numero": "001-001-0000045"}
+    assert catalog_calls == 1
+
+    def failing_handler(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("HTTP should not be called when catalog is cached")
+
+    client._transport = httpx.MockTransport(failing_handler)
+
+    cached_invoice = client.find_invoice_by_document_number("001-001-0000045")
+    assert cached_invoice == {"id": 45, "numero": "001-001-0000045"}
 def test_find_invoice_by_document_number_handles_missing() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/registro/documento/001-001-0000002/"):
