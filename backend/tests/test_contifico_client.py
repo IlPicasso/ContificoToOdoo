@@ -466,7 +466,7 @@ def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
         if page == 1:
             invoices = [
                 {"id": idx, "numero": f"001-001-0001{idx:03d}"}
-                for idx in range(400)
+                for idx in range(800)
             ]
             return httpx.Response(200, json=invoices)
         if page == 2:
