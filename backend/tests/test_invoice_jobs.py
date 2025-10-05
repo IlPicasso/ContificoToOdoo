@@ -1,4 +1,5 @@
 import asyncio
+import time
 from typing import Callable
 
 from app.contifico import ContificoTransportError
@@ -95,3 +96,29 @@ def test_invoice_lookup_job_manager_reports_transport_error() -> None:
     assert final_job.status == InvoiceLookupJobStatus.FAILED
     assert final_job.stage == "error"
     assert final_job.error == "falló"
+
+
+def test_invoice_lookup_job_manager_times_out_long_running_job() -> None:
+    class SlowClient:
+        def find_invoice_by_document_number(self, document_number: str, *, progress_callback=None):
+            if progress_callback:
+                progress_callback("start", {"progress": 5, "document_number": document_number})
+            time.sleep(0.05)
+            if progress_callback:
+                progress_callback("direct_lookup_success", {"progress": 100})
+            return {"numero": document_number}
+
+    manager = InvoiceLookupJobManager(
+        client_factory=lambda: SlowClient(),
+        max_job_duration=0.01,
+    )
+
+    async def scenario() -> object:
+        job = await manager.start_job("001-001-0000001")
+        return await wait_for_completion(manager, job.id)
+
+    final_job = asyncio.run(scenario())
+
+    assert final_job.status == InvoiceLookupJobStatus.FAILED
+    assert final_job.stage == "timeout"
+    assert "tiempo" in (final_job.error or "").lower()

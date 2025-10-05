@@ -144,6 +144,7 @@ const INVOICE_LOOKUP_STAGE_MESSAGES = {
   catalog_lookup_success: 'Factura encontrada en el catálogo descargado.',
   not_found: 'No se encontró una factura con el número consultado.',
   error: 'Ocurrió un error al consultar Contífico.',
+  timeout: 'La consulta superó el tiempo límite y se canceló.',
   completed: 'Búsqueda finalizada.',
 };
 

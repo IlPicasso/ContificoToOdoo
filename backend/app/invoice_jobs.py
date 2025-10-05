@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import time
 from dataclasses import dataclass, field
@@ -83,11 +84,26 @@ class InvoiceLookupJobManager:
         self,
         *,
         client_factory: Callable[[], ContificoClient] | None = None,
+        max_job_duration: float | None = None,
     ) -> None:
         self._jobs: Dict[str, InvoiceLookupJob] = {}
         self._lock = asyncio.Lock()
         self._loop: asyncio.AbstractEventLoop | None = None
         self._client_factory = client_factory or _default_client_factory
+        self._max_job_duration: float | None
+        if max_job_duration is not None:
+            self._max_job_duration = (
+                max_job_duration if max_job_duration > 0 else None
+            )
+        else:
+            settings = get_settings()
+            default_timeout = getattr(
+                settings, "contifico_invoice_lookup_job_timeout_seconds", None
+            )
+            if default_timeout is None or default_timeout <= 0:
+                self._max_job_duration = None
+            else:
+                self._max_job_duration = float(default_timeout)
 
     async def start_job(self, document_number: str) -> InvoiceLookupJob:
         """Inicia un trabajo en segundo plano para buscar la factura."""
@@ -120,12 +136,43 @@ class InvoiceLookupJobManager:
         loop = self._loop or asyncio.get_running_loop()
         progress_callback = self._create_progress_callback(job_id, loop)
 
-        try:
-            result = await asyncio.to_thread(
+        lookup_task = asyncio.create_task(
+            asyncio.to_thread(
                 self._execute_lookup,
                 document_number,
                 progress_callback,
             )
+        )
+
+        try:
+            if self._max_job_duration is not None and self._max_job_duration > 0:
+                result = await asyncio.wait_for(
+                    lookup_task, timeout=self._max_job_duration
+                )
+            else:
+                result = await lookup_task
+        except asyncio.TimeoutError:
+            if not lookup_task.done():
+                lookup_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await lookup_task
+            await self._update_job(
+                job_id,
+                status=InvoiceLookupJobStatus.FAILED,
+                stage="timeout",
+                progress=100,
+                error=(
+                    "La búsqueda de la factura superó el tiempo límite. "
+                    "Inténtalo nuevamente más tarde."
+                ),
+            )
+            return
+        except asyncio.CancelledError:
+            if not lookup_task.done():
+                lookup_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await lookup_task
+            raise
         except InvoiceNotFoundError as exc:
             await self._update_job(
                 job_id,
@@ -143,6 +190,10 @@ class InvoiceLookupJobManager:
                 error=exc.detail,
             )
         except Exception as exc:  # pragma: no cover - defensivo
+            if not lookup_task.done():
+                lookup_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await lookup_task
             await self._update_job(
                 job_id,
                 status=InvoiceLookupJobStatus.FAILED,
@@ -209,7 +260,21 @@ class InvoiceLookupJobManager:
             job = self._jobs.get(job_id)
             if job is None:
                 return
+            new_status = changes.pop("status", None)
+            status_was_updated = new_status is not None
+            if status_was_updated:
+                job.status = new_status
+            is_terminal = job.status in (
+                InvoiceLookupJobStatus.COMPLETED,
+                InvoiceLookupJobStatus.FAILED,
+            )
             for field_name, value in changes.items():
+                if (
+                    is_terminal
+                    and not status_was_updated
+                    and field_name in {"stage", "progress", "metadata"}
+                ):
+                    continue
                 if field_name == "progress":
                     coerced = max(0, min(int(value), 100))
                     job.progress = max(job.progress, coerced)
