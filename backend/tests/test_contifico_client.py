@@ -1,4 +1,5 @@
 import logging
+import json
 import os
 import sys
 from pathlib import Path
@@ -656,6 +657,54 @@ def test_find_invoice_by_document_number_reuses_catalog_without_http() -> None:
 
     cached_invoice = client.find_invoice_by_document_number("001-001-0000045")
     assert cached_invoice == {"id": 45, "numero": "001-001-0000045"}
+
+def test_find_invoice_lookup_uses_persistent_cache(tmp_path: Path) -> None:
+    cache_path = tmp_path / "invoices.json"
+    cache_path.write_text(
+        json.dumps({"001-001-0000007": {"id": 7, "numero": "001-001-0000007"}}),
+        encoding="utf-8",
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        pytest.fail("HTTP should not be called when the invoice exists in the cache")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+        invoice_cache_path=cache_path,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000007")
+    assert invoice == {"id": 7, "numero": "001-001-0000007"}
+
+
+def test_find_invoice_lookup_persists_results(tmp_path: Path) -> None:
+    cache_path = tmp_path / "persist.json"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000008/"):
+            return httpx.Response(200, json={"id": 8, "numero": "001-001-0000008"})
+        return httpx.Response(200, json=[])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+        invoice_cache_path=cache_path,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000008")
+    assert invoice == {"id": 8, "numero": "001-001-0000008"}
+
+    persisted = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert "001-001-0000008" in persisted
+    assert persisted["001-001-0000008"]["numero"] == "001-001-0000008"
+
 def test_find_invoice_by_document_number_handles_missing() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/registro/documento/001-001-0000002/"):
