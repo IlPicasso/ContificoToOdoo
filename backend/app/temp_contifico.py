@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from . import schemas
 from .contifico import ContificoAPIError, ContificoClient, ContificoTransportError
 from .dependencies import admin_required, get_contifico_client
+from .invoice_jobs import get_invoice_lookup_job_manager
 
 
 DEFAULT_PAGE_SIZE = 25
@@ -103,6 +104,27 @@ def fetch_invoice_by_document_number(
     return schemas.ContificoInvoice.from_api(invoice)
 
 
+def serialize_invoice_lookup_job(job) -> schemas.ContificoInvoiceLookupJob:
+    invoice = job.result
+    invoice_schema = (
+        schemas.ContificoInvoice.from_api(invoice)
+        if isinstance(invoice, dict)
+        else invoice
+    )
+    return schemas.ContificoInvoiceLookupJob(
+        id=job.id,
+        document_number=job.document_number,
+        status=schemas.ContificoInvoiceLookupJobStatus(job.status.value),
+        progress=job.progress,
+        stage=job.stage,
+        error=job.error,
+        result=invoice_schema,
+        metadata=dict(job.metadata),
+        created_at=job.created_at,
+        updated_at=job.updated_at,
+    )
+
+
 @router.get("/products", response_model=schemas.ContificoProductPage)
 def preview_contifico_products(
     page: int = Query(default=1, ge=1),
@@ -160,6 +182,44 @@ def preview_contifico_invoice_by_number(
     return fetch_invoice_by_document_number(
         contifico_client, document_number=normalized_number
     )
+
+
+@router.post(
+    "/invoices/by-number/jobs",
+    response_model=schemas.ContificoInvoiceLookupJob,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def start_contifico_invoice_lookup_job(
+    payload: schemas.ContificoInvoiceLookupRequest,
+    job_manager=Depends(get_invoice_lookup_job_manager),
+    current_user=Depends(admin_required()),
+):
+    """Inicia una búsqueda asíncrona de factura en Contífico."""
+
+    _ = current_user
+    job = await job_manager.start_job(payload.document_number)
+    return serialize_invoice_lookup_job(job)
+
+
+@router.get(
+    "/invoices/by-number/jobs/{job_id}",
+    response_model=schemas.ContificoInvoiceLookupJob,
+)
+async def get_contifico_invoice_lookup_job(
+    job_id: str,
+    job_manager=Depends(get_invoice_lookup_job_manager),
+    current_user=Depends(admin_required()),
+):
+    """Recupera el estado actual de un trabajo de búsqueda de factura."""
+
+    _ = current_user
+    job = await job_manager.get_job(job_id)
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No existe un trabajo con el identificador proporcionado.",
+        )
+    return serialize_invoice_lookup_job(job)
 
 
 __all__ = [

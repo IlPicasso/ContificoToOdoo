@@ -4,6 +4,8 @@ import math
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from enum import Enum
+
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from .models import Establishment, OrderStatus, OrderTaskStatus, UserRole
@@ -461,3 +463,27 @@ class ContificoInvoicePage(BaseModel):
     items: List[ContificoInvoice] = Field(default_factory=list)
     page: int
     page_size: int
+
+
+class ContificoInvoiceLookupRequest(BaseModel):
+    document_number: str = Field(min_length=3, max_length=40)
+
+
+class ContificoInvoiceLookupJobStatus(str, Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class ContificoInvoiceLookupJob(BaseModel):
+    id: str
+    document_number: str
+    status: ContificoInvoiceLookupJobStatus
+    progress: int = Field(ge=0, le=100)
+    stage: str
+    error: Optional[str] = None
+    result: Optional[ContificoInvoice] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    created_at: float
+    updated_at: float

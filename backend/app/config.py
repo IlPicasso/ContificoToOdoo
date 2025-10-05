@@ -60,6 +60,21 @@ class Settings(BaseSettings):
         ge=1.0,
         description="Tiempo máximo de espera (en segundos) para peticiones a Contífico.",
     )
+    contifico_invoice_cache_path: str | None = Field(
+        default="./data/contifico_invoice_cache.json",
+        description=(
+            "Ruta del archivo JSON donde se almacenan facturas descargadas de Contífico "
+            "para búsquedas locales."
+        ),
+    )
+    contifico_invoice_lookup_job_timeout_seconds: float | None = Field(
+        default=120.0,
+        ge=0.0,
+        description=(
+            "Tiempo máximo permitido para la búsqueda asíncrona de una factura puntual. "
+            "Define 0 para desactivar el límite."
+        ),
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
