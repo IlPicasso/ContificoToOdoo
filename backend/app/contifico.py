@@ -303,16 +303,23 @@ class ContificoClient:
 
         trimmed_input = document_number.strip()
         canonical_input = " ".join(trimmed_input.split())
+        compact_target = (
+            normalized_target.replace("-", "") if "-" in normalized_target else None
+        )
 
         direct_invoice = self._lookup_invoice_direct(normalized_target)
         if direct_invoice is not None:
             return direct_invoice
 
-        search_candidates = []
-        if canonical_input:
-            search_candidates.append(canonical_input)
-        if normalized_target and normalized_target != canonical_input:
-            search_candidates.append(normalized_target)
+        search_candidates: list[str] = []
+        seen_candidates: set[str] = set()
+        for candidate in (canonical_input, normalized_target, compact_target):
+            if not candidate:
+                continue
+            if candidate in seen_candidates:
+                continue
+            seen_candidates.add(candidate)
+            search_candidates.append(candidate)
 
         last_server_error: ContificoAPIError | None = None
 
