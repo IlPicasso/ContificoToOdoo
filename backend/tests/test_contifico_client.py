@@ -25,6 +25,7 @@ from app.temp_contifico import (
     build_invoice_page,
     build_product_page,
     build_warehouse_list,
+    fetch_invoice_by_customer_and_document,
     fetch_invoice_by_document_number,
 )
 
@@ -336,6 +337,100 @@ def test_find_invoice_by_document_number_returns_matching_invoice() -> None:
     invoice = client.find_invoice_by_document_number("001-001-0000001")
 
     assert invoice == {"id": 1, "numero": "001-001-0000001"}
+
+
+def test_find_invoice_by_document_number_prefers_customer_lookup() -> None:
+    captured: list[tuple[str, dict[str, str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append((request.url.path, dict(request.url.params)))
+        if request.url.path.endswith("/registro/documento/"):
+            params = dict(request.url.params)
+            assert params.get("persona_identificacion") == "0912345678"
+            assert params.get("documento") == "001-001-0000001"
+            assert params.get("numero") == "001-001-0000001"
+            payload = [
+                {
+                    "id": 77,
+                    "numero": "001-001-0000001",
+                    "identificacion": "0912345678",
+                }
+            ]
+            return httpx.Response(200, json=payload)
+        raise AssertionError("Unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number(
+        "001-001-0000001", customer_document="0912345678"
+    )
+
+    assert invoice is not None
+    assert invoice.get("id") == 77
+    assert captured and captured[0][0].endswith("/registro/documento/")
+    assert len(captured) == 1
+
+
+def test_find_invoice_by_document_number_ignores_mismatched_customer() -> None:
+    captured: list[tuple[str, dict[str, str]]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        captured.append((request.url.path, params))
+        if request.url.path.endswith("/registro/documento/") and params.get(
+            "persona_identificacion"
+        ) == "0912345678":
+            payload = [
+                {
+                    "id": 88,
+                    "numero": "001-001-0000001",
+                    "identificacion": "0000000000",
+                }
+            ]
+            return httpx.Response(200, json=payload)
+        if request.url.path.endswith("/registro/documento/001-001-0000001/"):
+            payload = {
+                "id": 101,
+                "numero": "001-001-0000001",
+                "identificacion": "0912345678",
+            }
+            return httpx.Response(200, json=payload)
+        raise AssertionError("Unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number(
+        "001-001-0000001", customer_document="0912345678"
+    )
+
+    assert invoice == {
+        "id": 101,
+        "numero": "001-001-0000001",
+        "identificacion": "0912345678",
+    }
+    assert any(path.endswith("/registro/documento/") for path, _ in captured)
+    assert any(path.endswith("/registro/documento/001-001-0000001/") for path, _ in captured)
+
+
+def test_find_invoice_by_document_number_validates_customer_document() -> None:
+    client = ContificoClient("key", "token")
+
+    with pytest.raises(ValueError):
+        client.find_invoice_by_document_number(
+            "001-001-0000001", customer_document="   "
+        )
 
 
 def test_find_invoice_by_document_number_strips_prefix_and_spaces() -> None:
@@ -1084,8 +1179,15 @@ def test_build_invoice_page_raises_http_exception_on_not_found() -> None:
 
 def test_fetch_invoice_by_document_number_success() -> None:
     class StubClient:
-        def find_invoice_by_document_number(self, document_number: str):
+        def find_invoice_by_document_number(
+            self,
+            document_number: str,
+            *,
+            customer_document: str | None = None,
+            progress_callback=None,
+        ):
             assert document_number == "001-001-0000003"
+            assert customer_document is None
             return {"id": 3, "numero": "001-001-0000003", "cliente": "Lucía"}
 
     result = fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000003")
@@ -1096,8 +1198,15 @@ def test_fetch_invoice_by_document_number_success() -> None:
 
 def test_fetch_invoice_by_document_number_not_found() -> None:
     class StubClient:
-        def find_invoice_by_document_number(self, document_number: str):
+        def find_invoice_by_document_number(
+            self,
+            document_number: str,
+            *,
+            customer_document: str | None = None,
+            progress_callback=None,
+        ):
             assert document_number == "001-001-0000004"
+            assert customer_document is None
             return None
 
     with pytest.raises(HTTPException) as exc_info:
@@ -1109,12 +1218,70 @@ def test_fetch_invoice_by_document_number_not_found() -> None:
 
 def test_fetch_invoice_by_document_number_handles_api_404() -> None:
     class StubClient:
-        def find_invoice_by_document_number(self, document_number: str):
+        def find_invoice_by_document_number(
+            self,
+            document_number: str,
+            *,
+            customer_document: str | None = None,
+            progress_callback=None,
+        ):
             assert document_number == "001-001-0000005"
+            assert customer_document is None
             raise ContificoAPIError(status.HTTP_404_NOT_FOUND, "Sin resultados")
 
     with pytest.raises(HTTPException) as exc_info:
         fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000005")
+
+    assert exc_info.value.status_code == 404
+    assert "No se encontró" in exc_info.value.detail
+
+
+def test_fetch_invoice_by_customer_and_document_success() -> None:
+    class StubClient:
+        def find_invoice_by_document_number(
+            self,
+            document_number: str,
+            *,
+            customer_document: str | None = None,
+            progress_callback=None,
+        ):
+            assert document_number == "001-001-0000006"
+            assert customer_document == "0912345678"
+            return {
+                "id": 6,
+                "numero": "001-001-0000006",
+                "identificacion": "0912345678",
+            }
+
+    result = fetch_invoice_by_customer_and_document(
+        StubClient(),
+        customer_document="0912345678",
+        document_number="001-001-0000006",
+    )
+
+    assert result.numero == "001-001-0000006"
+    assert result.identificacion == "0912345678"
+
+
+def test_fetch_invoice_by_customer_and_document_handles_missing() -> None:
+    class StubClient:
+        def find_invoice_by_document_number(
+            self,
+            document_number: str,
+            *,
+            customer_document: str | None = None,
+            progress_callback=None,
+        ):
+            assert document_number == "001-001-0000007"
+            assert customer_document == "0912345678"
+            return None
+
+    with pytest.raises(HTTPException) as exc_info:
+        fetch_invoice_by_customer_and_document(
+            StubClient(),
+            customer_document="0912345678",
+            document_number="001-001-0000007",
+        )
 
     assert exc_info.value.status_code == 404
     assert "No se encontró" in exc_info.value.detail

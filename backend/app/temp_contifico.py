@@ -105,6 +105,39 @@ def fetch_invoice_by_document_number(
     return schemas.ContificoInvoice.from_api(invoice)
 
 
+def fetch_invoice_by_customer_and_document(
+    contifico_client: ContificoClient,
+    *,
+    customer_document: str,
+    document_number: str,
+) -> schemas.ContificoInvoice:
+    invoice = None
+    try:
+        invoice = contifico_client.find_invoice_by_document_number(
+            document_number,
+            customer_document=customer_document,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ContificoTransportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.detail,
+        ) from exc
+    except ContificoAPIError as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            invoice = None
+        else:
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    if invoice is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No se encontró una factura con ese número de documento.",
+        )
+    return schemas.ContificoInvoice.from_api(invoice)
+
+
 def serialize_invoice_lookup_job(job) -> schemas.ContificoInvoiceLookupJob:
     invoice = job.result
     invoice_schema = (
@@ -183,6 +216,29 @@ async def preview_contifico_invoice_by_number(
     return await run_in_threadpool(
         fetch_invoice_by_document_number,
         contifico_client,
+        document_number=normalized_number,
+    )
+
+
+@router.get(
+    "/invoices/by-customer-and-number",
+    response_model=schemas.ContificoInvoice,
+)
+async def preview_contifico_invoice_by_customer_and_number(
+    customer_document: str = Query(..., min_length=3, max_length=30),
+    document_number: str = Query(..., min_length=3, max_length=40),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user=Depends(admin_required()),
+):
+    """Busca una factura específica combinando cliente y número de documento."""
+
+    _ = current_user
+    normalized_customer = customer_document.strip()
+    normalized_number = document_number.strip()
+    return await run_in_threadpool(
+        fetch_invoice_by_customer_and_document,
+        contifico_client,
+        customer_document=normalized_customer,
         document_number=normalized_number,
     )
 

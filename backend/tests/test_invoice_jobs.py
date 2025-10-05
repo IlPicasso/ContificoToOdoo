@@ -19,7 +19,13 @@ class FakeClient:
         self._invoice = invoice
         self._exception_factory = exception_factory
 
-    def find_invoice_by_document_number(self, document_number: str, *, progress_callback=None):
+    def find_invoice_by_document_number(
+        self,
+        document_number: str,
+        *,
+        customer_document: str | None = None,
+        progress_callback=None,
+    ):
         if progress_callback:
             progress_callback("start", {"progress": 5, "document_number": document_number})
         if self._exception_factory is not None:
@@ -100,7 +106,13 @@ def test_invoice_lookup_job_manager_reports_transport_error() -> None:
 
 def test_invoice_lookup_job_manager_times_out_long_running_job() -> None:
     class SlowClient:
-        def find_invoice_by_document_number(self, document_number: str, *, progress_callback=None):
+        def find_invoice_by_document_number(
+            self,
+            document_number: str,
+            *,
+            customer_document: str | None = None,
+            progress_callback=None,
+        ):
             if progress_callback:
                 progress_callback("start", {"progress": 5, "document_number": document_number})
             time.sleep(0.05)

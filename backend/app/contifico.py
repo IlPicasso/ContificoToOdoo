@@ -237,6 +237,97 @@ class ContificoClient:
         return None
 
     @classmethod
+    def _extract_invoice_customer_document(
+        cls, payload: Dict[str, Any]
+    ) -> Optional[str]:
+        if not isinstance(payload, dict):
+            return None
+        keys = (
+            "identificacion",
+            "persona_identificacion",
+            "identification",
+            "personaIdentificacion",
+            "IDENTIFICACION",
+            "PERSONA_IDENTIFICACION",
+            "IDENTIFICATION",
+        )
+        for key in keys:
+            value = payload.get(key)
+            if value is None:
+                continue
+            if isinstance(value, (int, float)):
+                candidate = str(value)
+            elif isinstance(value, str):
+                candidate = value.strip()
+            else:
+                continue
+            if candidate:
+                return candidate
+        # Algunos payloads anidan los datos del cliente bajo "cliente" u otras llaves.
+        for key in ("cliente", "CLIENTE"):
+            nested = payload.get(key)
+            if isinstance(nested, dict):
+                nested_value = nested.get("identificacion") or nested.get("IDENTIFICACION")
+                if isinstance(nested_value, str) and nested_value.strip():
+                    return nested_value.strip()
+        return None
+
+    @classmethod
+    def _invoice_matches_customer(
+        cls, invoice: Dict[str, Any], customer_document: str
+    ) -> bool:
+        normalized_customer = customer_document.strip()
+        if not normalized_customer:
+            return True
+        candidate = cls._extract_invoice_customer_document(invoice)
+        if not candidate:
+            return True
+        return candidate.strip() == normalized_customer
+
+    def _lookup_invoice_for_customer(
+        self,
+        customer_document: str,
+        normalized_target: str,
+        canonical_input: str,
+        compact_target: str | None,
+    ) -> Optional[Dict[str, Any]]:
+        """Busca rápidamente la factura filtrando por el cliente indicado."""
+
+        search_candidates: list[str] = []
+        seen: set[str] = set()
+        for candidate in (canonical_input, normalized_target, compact_target):
+            if not candidate:
+                continue
+            normalized_candidate = str(candidate)
+            if normalized_candidate in seen:
+                continue
+            seen.add(normalized_candidate)
+            search_candidates.append(normalized_candidate)
+
+        for candidate in search_candidates:
+            invoices = list(
+                self.list_invoices(
+                    page=1,
+                    page_size=self.INVOICE_LOOKUP_PAGE_SIZE,
+                    customer_document=customer_document,
+                    document_number=candidate,
+                )
+            )
+            if not invoices:
+                continue
+            for invoice in invoices:
+                self._cache_invoice(invoice)
+            for target in (normalized_target, compact_target):
+                if not target:
+                    continue
+                match = self._match_invoice_by_number(invoices, target)
+                if match is not None and self._invoice_matches_customer(
+                    match, customer_document
+                ):
+                    return match
+        return None
+
+    @classmethod
     def _match_invoice_by_number(
         cls, invoices: Iterable[Dict[str, Any]], normalized_target: str
     ) -> Optional[Dict[str, Any]]:
@@ -469,6 +560,7 @@ class ContificoClient:
         self,
         document_number: str,
         *,
+        customer_document: str | None = None,
         progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Busca una factura específica por su número de documento."""
@@ -486,73 +578,123 @@ class ContificoClient:
         compact_target = (
             normalized_target.replace("-", "") if "-" in normalized_target else None
         )
+        normalized_customer_document = None
+        if customer_document is not None:
+            normalized_customer_document = customer_document.strip()
+            if not normalized_customer_document:
+                raise ValueError("El número de documento del cliente es obligatorio.")
+
+        base_progress: Dict[str, Any] = {"document_number": normalized_target}
+        if normalized_customer_document:
+            base_progress["customer_document"] = normalized_customer_document
+
+        def emit(stage: str, *, progress: int | None = None, **extras: Any) -> None:
+            payload = dict(base_progress)
+            payload.update(extras)
+            if progress is None:
+                self._emit_progress(progress_callback, stage, **payload)
+            else:
+                self._emit_progress(
+                    progress_callback,
+                    stage,
+                    progress=progress,
+                    **payload,
+                )
 
         logger.info(
-            "Starting invoice lookup document_number=%r normalized=%s compact=%s",
+            "Starting invoice lookup document_number=%r normalized=%s compact=%s customer=%s",
             document_number,
             normalized_target,
             compact_target,
+            normalized_customer_document,
         )
-        self._emit_progress(
-            progress_callback,
-            "start",
-            progress=5,
-            document_number=normalized_target,
-        )
+        emit("start", progress=5)
 
         try:
             cached_invoice = self._get_cached_invoice(normalized_target, compact_target)
+            if (
+                cached_invoice is not None
+                and normalized_customer_document
+                and not self._invoice_matches_customer(
+                    cached_invoice, normalized_customer_document
+                )
+            ):
+                cached_invoice = None
             if cached_invoice is not None:
                 logger.info(
                     "Invoice %s resolved from local cache", normalized_target
                 )
-                self._emit_progress(
-                    progress_callback,
-                    "cache_hit",
-                    progress=100,
-                    document_number=normalized_target,
-                )
+                emit("cache_hit", progress=100)
                 return cached_invoice
 
-            self._emit_progress(
-                progress_callback,
-                "cache_miss",
-                progress=10,
-                document_number=normalized_target,
-            )
+            emit("cache_miss", progress=10)
+
+            if normalized_customer_document:
+                logger.info(
+                    "Attempting invoice lookup filtered by customer %s",
+                    normalized_customer_document,
+                )
+                emit("customer_lookup_start", progress=15)
+                try:
+                    customer_invoice = self._lookup_invoice_for_customer(
+                        normalized_customer_document,
+                        normalized_target,
+                        canonical_input,
+                        compact_target,
+                    )
+                except ContificoClientError as exc:
+                    if self._should_fallback_from_direct_lookup(exc):
+                        logger.warning(
+                            "Customer-filtered lookup failed for invoice %s with %s",
+                            normalized_target,
+                            exc,
+                        )
+                        emit(
+                            "customer_lookup_error",
+                            progress=18,
+                            error=str(exc),
+                        )
+                    else:
+                        raise
+                else:
+                    if customer_invoice is not None:
+                        self._cache_invoice(customer_invoice)
+                        logger.info(
+                            "Invoice %s retrieved while filtering by customer %s",
+                            normalized_target,
+                            normalized_customer_document,
+                        )
+                        emit("customer_lookup_success", progress=100)
+                        return customer_invoice
+                    emit("customer_lookup_miss", progress=20)
+
             logger.info(
                 "Attempting direct Contifico lookup for invoice %s", normalized_target
             )
-            self._emit_progress(
-                progress_callback,
-                "direct_lookup_start",
-                progress=20,
-                document_number=normalized_target,
-            )
+            emit("direct_lookup_start", progress=30)
             direct_invoice = self._lookup_invoice_direct(normalized_target)
             if direct_invoice is not None:
-                self._cache_invoice(direct_invoice)
-                logger.info(
-                    "Invoice %s retrieved via direct Contifico lookup", normalized_target
-                )
-                self._emit_progress(
-                    progress_callback,
-                    "direct_lookup_success",
-                    progress=100,
-                    document_number=normalized_target,
-                )
-                return direct_invoice
+                if normalized_customer_document and not self._invoice_matches_customer(
+                    direct_invoice, normalized_customer_document
+                ):
+                    logger.info(
+                        "Direct lookup invoice %s does not belong to customer %s",
+                        normalized_target,
+                        normalized_customer_document,
+                    )
+                else:
+                    self._cache_invoice(direct_invoice)
+                    logger.info(
+                        "Invoice %s retrieved via direct Contifico lookup", normalized_target
+                    )
+                    emit("direct_lookup_success", progress=100)
+                    return direct_invoice
 
             logger.info(
                 "Direct lookup returned no invoice for %s; switching to paged search",
                 normalized_target,
             )
-            self._emit_progress(
-                progress_callback,
-                "direct_lookup_fallback",
-                progress=35,
-                document_number=normalized_target,
-            )
+            emit("direct_lookup_fallback", progress=35)
 
             search_candidates: list[str] = []
             seen_candidates: set[str] = set()
@@ -583,11 +725,9 @@ class ContificoClient:
                         candidate,
                         normalized_target,
                     )
-                    self._emit_progress(
-                        progress_callback,
+                    emit(
                         "paged_search_candidate",
                         progress=min(60, 40 + candidate_index * 5),
-                        document_number=normalized_target,
                         candidate=candidate,
                     )
                     for page_size in self._invoice_lookup_page_sizes():
@@ -676,11 +816,9 @@ class ContificoClient:
                                 )
                                 break
 
-                            self._emit_progress(
-                                progress_callback,
+                            emit(
                                 "paged_search_page",
                                 progress=min(85, 45 + (page - 1) * 5),
-                                document_number=normalized_target,
                                 candidate=candidate,
                                 page=page,
                                 page_size=page_size,
@@ -692,7 +830,12 @@ class ContificoClient:
                             match = self._match_invoice_by_number(
                                 invoices, normalized_target
                             )
-                            if match is not None:
+                            if match is not None and (
+                                not normalized_customer_document
+                                or self._invoice_matches_customer(
+                                    match, normalized_customer_document
+                                )
+                            ):
                                 self._cache_invoice(match)
                                 logger.info(
                                     "Invoice %s found in paged search candidate=%s page=%d",
@@ -700,11 +843,9 @@ class ContificoClient:
                                     candidate,
                                     page,
                                 )
-                                self._emit_progress(
-                                    progress_callback,
+                                emit(
                                     "paged_search_success",
                                     progress=100,
-                                    document_number=normalized_target,
                                     candidate=candidate,
                                     page=page,
                                 )
@@ -753,13 +894,19 @@ class ContificoClient:
                     logger.info(
                         "Paged search completed; returning cached invoice if available"
                     )
-                    self._emit_progress(
-                        progress_callback,
-                        "paged_search_exhausted",
-                        progress=90,
-                        document_number=normalized_target,
+                    emit("paged_search_exhausted", progress=90)
+                    cached_result = self._get_cached_invoice(
+                        normalized_target, compact_target
                     )
-                    return self._get_cached_invoice(normalized_target, compact_target)
+                    if (
+                        cached_result is not None
+                        and normalized_customer_document
+                        and not self._invoice_matches_customer(
+                            cached_result, normalized_customer_document
+                        )
+                    ):
+                        return None
+                    return cached_result
 
                 if (
                     search_attempt
@@ -778,12 +925,7 @@ class ContificoClient:
 
             if last_server_error is not None or self._invoice_catalog_complete:
                 try:
-                    self._emit_progress(
-                        progress_callback,
-                        "catalog_lookup_start",
-                        progress=92,
-                        document_number=normalized_target,
-                    )
+                    emit("catalog_lookup_start", progress=92)
                     catalog_match = self._lookup_invoice_from_catalog(
                         normalized_target, compact_target
                     )
@@ -791,21 +933,30 @@ class ContificoClient:
                     if last_server_error is not None:
                         raise last_server_error
                 else:
-                    if catalog_match is not None:
+                    if catalog_match is not None and (
+                        not normalized_customer_document
+                        or self._invoice_matches_customer(
+                            catalog_match, normalized_customer_document
+                        )
+                    ):
                         logger.info(
                             "Invoice %s resolved from catalog cache", normalized_target
                         )
-                        self._emit_progress(
-                            progress_callback,
-                            "catalog_lookup_success",
-                            progress=100,
-                            document_number=normalized_target,
-                        )
+                        emit("catalog_lookup_success", progress=100)
                         return catalog_match
                 if last_server_error is not None:
                     raise last_server_error
 
-            return self._get_cached_invoice(normalized_target, compact_target)
+            cached_result = self._get_cached_invoice(normalized_target, compact_target)
+            if (
+                cached_result is not None
+                and normalized_customer_document
+                and not self._invoice_matches_customer(
+                    cached_result, normalized_customer_document
+                )
+            ):
+                return None
+            return cached_result
 
         finally:
             self._flush_persistent_cache()
