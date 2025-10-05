@@ -342,14 +342,35 @@ class ContificoClient:
             normalized_target.replace("-", "") if "-" in normalized_target else None
         )
 
+        logger.info(
+            "Starting invoice lookup document_number=%r normalized=%s compact=%s",
+            document_number,
+            normalized_target,
+            compact_target,
+        )
+
         cached_invoice = self._get_cached_invoice(normalized_target, compact_target)
         if cached_invoice is not None:
+            logger.info(
+                "Invoice %s resolved from local cache", normalized_target
+            )
             return cached_invoice
 
+        logger.info(
+            "Attempting direct Contifico lookup for invoice %s", normalized_target
+        )
         direct_invoice = self._lookup_invoice_direct(normalized_target)
         if direct_invoice is not None:
             self._cache_invoice(direct_invoice)
+            logger.info(
+                "Invoice %s retrieved via direct Contifico lookup", normalized_target
+            )
             return direct_invoice
+
+        logger.info(
+            "Direct lookup returned no invoice for %s; switching to paged search",
+            normalized_target,
+        )
 
         search_candidates: list[str] = []
         seen_candidates: set[str] = set()
@@ -366,10 +387,26 @@ class ContificoClient:
         for search_attempt in range(
             self.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS + 1
         ):
+            logger.info(
+                "Invoice search attempt %d/%d with candidates=%s",
+                search_attempt + 1,
+                self.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS + 1,
+                search_candidates,
+            )
             last_server_error = None
 
             for candidate in search_candidates:
+                logger.info(
+                    "Searching invoice candidate=%s normalized_target=%s",
+                    candidate,
+                    normalized_target,
+                )
                 for page_size in self._invoice_lookup_page_sizes():
+                    logger.info(
+                        "Requesting invoices candidate=%s page_size=%d",
+                        candidate,
+                        page_size,
+                    )
                     seen_numbers: set[str] = set()
                     encountered_server_error = False
 
@@ -397,6 +434,13 @@ class ContificoClient:
                                         retry_attempt
                                         < self.INVOICE_LOOKUP_SERVER_RETRIES
                                     ):
+                                        logger.warning(
+                                            "Server error %s while paging candidate=%s page=%d; retry=%d",
+                                            exc.status_code,
+                                            candidate,
+                                            page,
+                                            retry_attempt + 1,
+                                        )
                                         backoff = (
                                             self.INVOICE_LOOKUP_RETRY_BACKOFF_BASE
                                             * (2**retry_attempt)
@@ -404,14 +448,28 @@ class ContificoClient:
                                         retry_attempt += 1
                                         self._sleep(backoff)
                                         continue
+                                    logger.error(
+                                        "Server error %s while paging candidate=%s page=%d; aborting page size",
+                                        exc.status_code,
+                                        candidate,
+                                        page,
+                                    )
                                     encountered_server_error = True
                                     break
                                 raise
 
                         if encountered_server_error:
+                            logger.info(
+                                "Encountered server error; moving to next candidate"
+                            )
                             break
 
                         if should_stop_paging or not invoices:
+                            logger.info(
+                                "No invoices returned for candidate=%s page=%d; stopping pagination",
+                                candidate,
+                                page,
+                            )
                             break
 
                         for invoice in invoices:
@@ -422,9 +480,18 @@ class ContificoClient:
                         )
                         if match is not None:
                             self._cache_invoice(match)
+                            logger.info(
+                                "Invoice %s found in paged search candidate=%s page=%d",
+                                normalized_target,
+                                candidate,
+                                page,
+                            )
                             return match
 
                         if len(invoices) < page_size:
+                            logger.info(
+                                "Last page reached for candidate=%s page_size=%d", candidate, page_size
+                            )
                             break
 
                         page_numbers = set()
@@ -439,6 +506,10 @@ class ContificoClient:
                                 page_numbers.add(normalized_candidate)
 
                         if page_numbers and page_numbers.issubset(seen_numbers):
+                            logger.info(
+                                "All invoice numbers already seen for candidate=%s; breaking pagination",
+                                candidate,
+                            )
                             break
 
                         seen_numbers.update(page_numbers)
@@ -450,6 +521,9 @@ class ContificoClient:
                     break
 
             if last_server_error is None:
+                logger.info(
+                    "Paged search completed; returning cached invoice if available"
+                )
                 return self._get_cached_invoice(normalized_target, compact_target)
 
             if (
@@ -458,6 +532,10 @@ class ContificoClient:
             ):
                 cooldown = self.INVOICE_LOOKUP_SERVER_COOLDOWN_BASE * (
                     2**search_attempt
+                )
+                logger.info(
+                    "Cooling down for %.2f seconds before retrying invoice search",
+                    cooldown,
                 )
                 self._sleep(cooldown)
                 continue
@@ -473,6 +551,9 @@ class ContificoClient:
                     raise last_server_error
             else:
                 if catalog_match is not None:
+                    logger.info(
+                        "Invoice %s resolved from catalog cache", normalized_target
+                    )
                     return catalog_match
             if last_server_error is not None:
                 raise last_server_error
@@ -493,10 +574,19 @@ class ContificoClient:
             )
         except ContificoClientError as exc:
             if self._should_fallback_from_direct_lookup(exc):
+                logger.warning(
+                    "Direct lookup failed for invoice %s with recoverable error: %s",
+                    normalized_target,
+                    exc,
+                )
                 return None
             raise
 
         if payload is None:
+            logger.info(
+                "Direct lookup returned empty response for invoice %s",
+                normalized_target,
+            )
             return None
 
         if isinstance(payload, dict):
@@ -508,6 +598,9 @@ class ContificoClient:
                 return payload
             if compact_target and normalized_candidate == compact_target:
                 return payload
+            logger.info(
+                "Direct lookup payload did not match invoice %s", normalized_target
+            )
             return None
 
         if isinstance(payload, list):
@@ -548,10 +641,16 @@ class ContificoClient:
         if not normalized_candidate:
             return
         self._invoice_cache[normalized_candidate] = invoice
+        logger.info("Cached invoice %s", normalized_candidate)
         if "-" in normalized_candidate:
             compact_candidate = normalized_candidate.replace("-", "")
             if compact_candidate and compact_candidate not in self._invoice_cache:
                 self._invoice_cache[compact_candidate] = invoice
+                logger.info(
+                    "Cached compact invoice key %s for %s",
+                    compact_candidate,
+                    normalized_candidate,
+                )
 
     def _get_cached_invoice(
         self, normalized_target: str, compact_target: str | None
@@ -561,7 +660,13 @@ class ContificoClient:
                 continue
             cached = self._invoice_cache.get(key)
             if cached is not None:
+                logger.info("Cache hit for invoice key %s", key)
                 return cached
+        logger.info(
+            "Cache miss for invoice normalized=%s compact=%s",
+            normalized_target,
+            compact_target,
+        )
         return None
 
     def _lookup_invoice_from_catalog(
@@ -572,7 +677,9 @@ class ContificoClient:
 
     def _ensure_invoice_catalog(self) -> None:
         if self._invoice_catalog_complete:
+            logger.info("Invoice catalog already cached locally")
             return
+        logger.info("Downloading invoice catalog for local cache")
         self._download_invoice_catalog()
         self._invoice_catalog_complete = True
 
@@ -581,6 +688,11 @@ class ContificoClient:
             retry_attempt = 0
             while True:
                 try:
+                    logger.info(
+                        "Requesting invoice catalog page=%d page_size=%d",
+                        page,
+                        self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE,
+                    )
                     invoices = list(
                         self.list_invoices(
                             page=page,
@@ -593,6 +705,12 @@ class ContificoClient:
                         HTTPStatus.BAD_GATEWAY <= exc.status_code < 600
                         and retry_attempt < self.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES
                     ):
+                        logger.warning(
+                            "Server error %s while downloading catalog page=%d; retry=%d",
+                            exc.status_code,
+                            page,
+                            retry_attempt + 1,
+                        )
                         backoff = self.INVOICE_LOOKUP_CATALOG_BACKOFF_BASE * (
                             2**retry_attempt
                         )
@@ -602,11 +720,13 @@ class ContificoClient:
                     raise
 
             if not invoices:
+                logger.info("Catalog download finished early at page=%d", page)
                 return
 
             for invoice in invoices:
                 self._cache_invoice(invoice)
 
             if len(invoices) < self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE:
+                logger.info("Catalog download completed after page=%d", page)
                 return
 
