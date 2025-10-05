@@ -240,6 +240,65 @@ def test_find_invoice_by_document_number_retries_with_original_value() -> None:
     assert captured[1][1]["numero"] == "001-001-0000001"
 
 
+def test_find_invoice_by_document_number_direct_server_error_falls_back() -> None:
+    requests: list[dict[str, str] | dict[str, bool]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000009/"):
+            requests.append({"direct": True})
+            return httpx.Response(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                json={"mensaje": "Busy"},
+            )
+        params = dict(request.url.params)
+        requests.append(params)
+        assert params.get("result_page") == "1"
+        return httpx.Response(200, json=[{"id": 9, "numero": "001-001-0000009"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000009")
+
+    assert invoice == {"id": 9, "numero": "001-001-0000009"}
+    assert requests[0] == {"direct": True}
+    assert requests[1]["result_page"] == "1"
+
+
+def test_find_invoice_by_document_number_direct_transport_error_falls_back() -> None:
+    requests: list[dict[str, str] | dict[str, bool]] = []
+    direct_attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000011/"):
+            nonlocal direct_attempts
+            direct_attempts += 1
+            raise httpx.ConnectError("boom", request=request)
+        params = dict(request.url.params)
+        requests.append(params)
+        assert params.get("result_page") == "1"
+        return httpx.Response(200, json=[{"id": 11, "numero": "001-001-0000011"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000011")
+
+    assert invoice == {"id": 11, "numero": "001-001-0000011"}
+    assert direct_attempts == 1
+    assert requests[0]["result_page"] == "1"
+
+
 def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     pages: list[int] = []
 
@@ -368,6 +427,42 @@ def test_find_invoice_by_document_number_retries_before_returning(monkeypatch: p
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
     ]
+
+
+def test_find_invoice_by_document_number_tries_compact_candidate_after_failures() -> None:
+    requests: list[dict[str, str] | str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000022/"):
+            requests.append("direct")
+            return httpx.Response(status.HTTP_504_GATEWAY_TIMEOUT, json={"mensaje": "Timeout"})
+
+        params = dict(request.url.params)
+        requests.append(params)
+        if params.get("documento") == "001-001-0000022":
+            return httpx.Response(status.HTTP_504_GATEWAY_TIMEOUT, json={"mensaje": "Timeout"})
+
+        assert params.get("documento") == "0010010000022"
+        return httpx.Response(200, json=[{"id": 22, "numero": "001-001-0000022"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000022")
+
+    assert invoice == {"id": 22, "numero": "001-001-0000022"}
+    assert requests[0] == "direct"
+    fallback_requests = [
+        params for params in requests[1:] if isinstance(params, dict)
+    ]
+    assert fallback_requests
+    assert any(params.get("documento") == "001-001-0000022" for params in fallback_requests)
+    assert fallback_requests[-1].get("documento") == "0010010000022"
 
 
 def test_find_invoice_by_document_number_handles_missing() -> None:
