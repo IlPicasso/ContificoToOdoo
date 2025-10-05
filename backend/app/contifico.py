@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, Optional
 import json
 import logging
 import time
@@ -348,7 +348,10 @@ class ContificoClient:
         )
 
     def find_invoice_by_document_number(
-        self, document_number: str
+        self,
+        document_number: str,
+        *,
+        progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Busca una factura específica por su número de documento."""
 
@@ -372,6 +375,12 @@ class ContificoClient:
             normalized_target,
             compact_target,
         )
+        self._emit_progress(
+            progress_callback,
+            "start",
+            progress=5,
+            document_number=normalized_target,
+        )
 
         try:
             cached_invoice = self._get_cached_invoice(normalized_target, compact_target)
@@ -379,10 +388,28 @@ class ContificoClient:
                 logger.info(
                     "Invoice %s resolved from local cache", normalized_target
                 )
+                self._emit_progress(
+                    progress_callback,
+                    "cache_hit",
+                    progress=100,
+                    document_number=normalized_target,
+                )
                 return cached_invoice
 
+            self._emit_progress(
+                progress_callback,
+                "cache_miss",
+                progress=10,
+                document_number=normalized_target,
+            )
             logger.info(
                 "Attempting direct Contifico lookup for invoice %s", normalized_target
+            )
+            self._emit_progress(
+                progress_callback,
+                "direct_lookup_start",
+                progress=20,
+                document_number=normalized_target,
             )
             direct_invoice = self._lookup_invoice_direct(normalized_target)
             if direct_invoice is not None:
@@ -390,11 +417,23 @@ class ContificoClient:
                 logger.info(
                     "Invoice %s retrieved via direct Contifico lookup", normalized_target
                 )
+                self._emit_progress(
+                    progress_callback,
+                    "direct_lookup_success",
+                    progress=100,
+                    document_number=normalized_target,
+                )
                 return direct_invoice
 
             logger.info(
                 "Direct lookup returned no invoice for %s; switching to paged search",
                 normalized_target,
+            )
+            self._emit_progress(
+                progress_callback,
+                "direct_lookup_fallback",
+                progress=35,
+                document_number=normalized_target,
             )
 
             search_candidates: list[str] = []
@@ -420,11 +459,18 @@ class ContificoClient:
                 )
                 last_server_error = None
 
-                for candidate in search_candidates:
+                for candidate_index, candidate in enumerate(search_candidates):
                     logger.info(
                         "Searching invoice candidate=%s normalized_target=%s",
                         candidate,
                         normalized_target,
+                    )
+                    self._emit_progress(
+                        progress_callback,
+                        "paged_search_candidate",
+                        progress=min(60, 40 + candidate_index * 5),
+                        document_number=normalized_target,
+                        candidate=candidate,
                     )
                     for page_size in self._invoice_lookup_page_sizes():
                         logger.info(
@@ -497,6 +543,16 @@ class ContificoClient:
                                 )
                                 break
 
+                            self._emit_progress(
+                                progress_callback,
+                                "paged_search_page",
+                                progress=min(85, 45 + (page - 1) * 5),
+                                document_number=normalized_target,
+                                candidate=candidate,
+                                page=page,
+                                page_size=page_size,
+                            )
+
                             for invoice in invoices:
                                 self._cache_invoice(invoice)
 
@@ -510,6 +566,14 @@ class ContificoClient:
                                     normalized_target,
                                     candidate,
                                     page,
+                                )
+                                self._emit_progress(
+                                    progress_callback,
+                                    "paged_search_success",
+                                    progress=100,
+                                    document_number=normalized_target,
+                                    candidate=candidate,
+                                    page=page,
                                 )
                                 return match
 
@@ -549,6 +613,12 @@ class ContificoClient:
                     logger.info(
                         "Paged search completed; returning cached invoice if available"
                     )
+                    self._emit_progress(
+                        progress_callback,
+                        "paged_search_exhausted",
+                        progress=90,
+                        document_number=normalized_target,
+                    )
                     return self._get_cached_invoice(normalized_target, compact_target)
 
                 if (
@@ -568,6 +638,12 @@ class ContificoClient:
 
             if last_server_error is not None or self._invoice_catalog_complete:
                 try:
+                    self._emit_progress(
+                        progress_callback,
+                        "catalog_lookup_start",
+                        progress=92,
+                        document_number=normalized_target,
+                    )
                     catalog_match = self._lookup_invoice_from_catalog(
                         normalized_target, compact_target
                     )
@@ -579,6 +655,12 @@ class ContificoClient:
                         logger.info(
                             "Invoice %s resolved from catalog cache", normalized_target
                         )
+                        self._emit_progress(
+                            progress_callback,
+                            "catalog_lookup_success",
+                            progress=100,
+                            document_number=normalized_target,
+                        )
                         return catalog_match
                 if last_server_error is not None:
                     raise last_server_error
@@ -587,6 +669,21 @@ class ContificoClient:
 
         finally:
             self._flush_persistent_cache()
+
+    @staticmethod
+    def _emit_progress(
+        callback: Optional[Callable[[str, Dict[str, Any]], None]],
+        stage: str,
+        **details: Any,
+    ) -> None:
+        if callback is None:
+            return
+        payload: Dict[str, Any] = {"stage": stage}
+        payload.update(details)
+        try:
+            callback(stage, payload)
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("Progress callback failed for stage=%s", stage)
 
     def _lookup_invoice_direct(self, normalized_target: str) -> Optional[Dict[str, Any]]:
         """Try to retrieve an invoice directly using the document number."""

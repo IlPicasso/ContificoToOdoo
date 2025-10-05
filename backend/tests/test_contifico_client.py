@@ -705,6 +705,37 @@ def test_find_invoice_lookup_persists_results(tmp_path: Path) -> None:
     assert "001-001-0000008" in persisted
     assert persisted["001-001-0000008"]["numero"] == "001-001-0000008"
 
+
+def test_find_invoice_by_document_number_emits_progress_events() -> None:
+    events: list[tuple[str, int]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/registro/documento/001-001-0000099/")
+        return httpx.Response(200, json={"id": 99, "numero": "001-001-0000099"})
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number(
+        "001-001-0000099",
+        progress_callback=lambda stage, payload: events.append(
+            (stage, int(payload.get("progress", 0)))
+        ),
+    )
+
+    assert invoice == {"id": 99, "numero": "001-001-0000099"}
+    assert events[0][0] == "start"
+    assert events[-1][0] == "direct_lookup_success"
+    assert events[-1][1] == 100
+    progress_values = [progress for _, progress in events]
+    assert progress_values == sorted(progress_values)
+
+
 def test_find_invoice_by_document_number_handles_missing() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/registro/documento/001-001-0000002/"):
