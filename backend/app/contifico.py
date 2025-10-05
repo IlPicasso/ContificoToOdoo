@@ -576,7 +576,6 @@ class ContificoClient:
                         raise last_server_error
                 else:
                     if catalog_match is not None:
-                        last_server_error = None
                         logger.info(
                             "Invoice %s resolved from catalog cache", normalized_target
                         )
