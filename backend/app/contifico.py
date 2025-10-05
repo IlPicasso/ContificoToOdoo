@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import Any, Dict, Iterable, Optional
+import time
 
 import httpx
 
@@ -37,7 +38,11 @@ class ContificoClient:
     """Cliente HTTP pequeño para la API de Contífico."""
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
-    INVOICE_LOOKUP_PAGE_SIZE = 200
+    INVOICE_LOOKUP_PAGE_SIZE = 100
+    INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = (50, 25, 10, 5, 1)
+    INVOICE_LOOKUP_MAX_PAGES = 50
+    INVOICE_LOOKUP_SERVER_RETRIES = 2
+    INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
 
     def __init__(
         self,
@@ -133,6 +138,12 @@ class ContificoClient:
         normalized = normalized.replace(" ", "")
         return normalized
 
+    @staticmethod
+    def _sleep(seconds: float) -> None:
+        if seconds <= 0:
+            return
+        time.sleep(seconds)
+
     @classmethod
     def _extract_invoice_number(cls, payload: Dict[str, Any]) -> Optional[str]:
         if not isinstance(payload, dict):
@@ -173,6 +184,21 @@ class ContificoClient:
             if normalized_candidate and normalized_candidate == normalized_target:
                 return invoice
         return None
+
+    def _invoice_lookup_page_sizes(self) -> Iterable[int]:
+        """Yield the preferred page sizes to use while looking up invoices."""
+
+        seen: set[int] = set()
+        for size in (self.INVOICE_LOOKUP_PAGE_SIZE, *self.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES):
+            if not isinstance(size, int):
+                try:
+                    size = int(size)
+                except (TypeError, ValueError):  # pragma: no cover - defensive guard
+                    continue
+            if size <= 0 or size in seen:
+                continue
+            seen.add(size)
+            yield size
 
     def list_products(
         self, *, page: int = 1, page_size: int = 100
@@ -271,29 +297,85 @@ class ContificoClient:
             raise ValueError("El número de documento de la factura es obligatorio.")
 
         trimmed_input = document_number.strip()
+        canonical_input = " ".join(trimmed_input.split())
         search_candidates = []
-        if normalized_target:
+        if canonical_input:
+            search_candidates.append(canonical_input)
+        if normalized_target and normalized_target != canonical_input:
             search_candidates.append(normalized_target)
-        if trimmed_input and trimmed_input != normalized_target:
-            search_candidates.append(trimmed_input)
+
+        last_server_error: ContificoAPIError | None = None
 
         for candidate in search_candidates:
-            try:
-                invoices = list(
-                    self.list_invoices(
-                        page=1,
-                        page_size=self.INVOICE_LOOKUP_PAGE_SIZE,
-                        document_number=candidate,
-                    )
-                )
-            except ContificoAPIError as exc:
-                if exc.status_code == HTTPStatus.NOT_FOUND:
-                    continue
-                raise
+            for page_size in self._invoice_lookup_page_sizes():
+                seen_numbers: set[str] = set()
+                encountered_server_error = False
 
-            match = self._match_invoice_by_number(invoices, normalized_target)
-            if match is not None:
-                return match
+                for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
+                    retry_attempt = 0
+                    should_stop_paging = False
+                    while True:
+                        try:
+                            invoices = list(
+                                self.list_invoices(
+                                    page=page,
+                                    page_size=page_size,
+                                    document_number=candidate,
+                                )
+                            )
+                            break
+                        except ContificoAPIError as exc:
+                            if exc.status_code == HTTPStatus.NOT_FOUND:
+                                should_stop_paging = True
+                                invoices = []
+                                break
+                            if HTTPStatus.BAD_GATEWAY <= exc.status_code < 600:
+                                last_server_error = exc
+                                if retry_attempt < self.INVOICE_LOOKUP_SERVER_RETRIES:
+                                    backoff = self.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * (
+                                        2**retry_attempt
+                                    )
+                                    retry_attempt += 1
+                                    self._sleep(backoff)
+                                    continue
+                                encountered_server_error = True
+                                break
+                            raise
+
+                    if encountered_server_error:
+                        break
+
+                    if should_stop_paging or not invoices:
+                        break
+
+                    match = self._match_invoice_by_number(invoices, normalized_target)
+                    if match is not None:
+                        return match
+
+                    if len(invoices) < page_size:
+                        break
+
+                    page_numbers = set()
+                    for invoice in invoices:
+                        candidate_number = self._extract_invoice_number(invoice)
+                        if not candidate_number:
+                            continue
+                        normalized_candidate = self._normalize_invoice_number(candidate_number)
+                        if normalized_candidate:
+                            page_numbers.add(normalized_candidate)
+
+                    if page_numbers and page_numbers.issubset(seen_numbers):
+                        break
+
+                    seen_numbers.update(page_numbers)
+
+                if encountered_server_error:
+                    continue
+
+                break
+
+        if last_server_error is not None:
+            raise last_server_error
 
         return None
 
