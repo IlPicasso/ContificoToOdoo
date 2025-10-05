@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 from pathlib import Path
@@ -11,6 +12,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-value-32-chars!!")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import schemas
+from app import contifico as contifico_module
 from app.contifico import (
     ContificoAPIError,
     ContificoClient,
@@ -31,6 +33,19 @@ def test_client_requires_key_and_token() -> None:
 
     with pytest.raises(ContificoConfigurationError):
         ContificoClient("key", "")
+
+
+def test_contifico_logger_emits_to_console() -> None:
+    stream_handlers = [
+        handler
+        for handler in contifico_module.logger.handlers
+        if isinstance(handler, logging.StreamHandler)
+    ]
+    assert stream_handlers, "contifico logger should stream to console"
+    for handler in stream_handlers:
+        assert handler.level in (logging.NOTSET, logging.INFO)
+    assert contifico_module.logger.level == logging.INFO
+    assert not contifico_module.logger.propagate
 
 
 def test_list_products_success() -> None:
