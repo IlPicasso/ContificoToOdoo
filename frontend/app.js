@@ -8,6 +8,7 @@ const ORDER_TASK_STATUS_PENDING = 'pendiente';
 const ORDER_TASK_STATUS_COMPLETED = 'completado';
 const KANBAN_FETCH_PAGE_SIZE = 100;
 const KANBAN_FALLBACK_STATUS = 'Sin estado';
+const INVOICE_LOOKUP_LOG_PREFIX = '[Contífico][Factura puntual]';
 
 
 const state = {
@@ -75,11 +76,39 @@ const state = {
   contificoPreviewInvoiceLookupError: null,
   contificoPreviewInvoiceLookupFetched: false,
   contificoPreviewInvoiceLookupNumber: '',
+  contificoPreviewInvoiceLookupRequestId: 0,
   contificoCustomerInvoicesModalVisible: false,
   contificoInvoiceLookupModalVisible: false,
 };
 
 const TOKEN_STORAGE_KEY = 'sastreria.authToken';
+
+function logInvoiceLookupEvent(level, message, details) {
+  if (typeof console === 'undefined') {
+    return;
+  }
+  const logger =
+    typeof level === 'string' && typeof console[level] === 'function'
+      ? console[level].bind(console)
+      : console.log.bind(console);
+  const parts = [INVOICE_LOOKUP_LOG_PREFIX, message];
+  if (details !== undefined) {
+    parts.push(details);
+  }
+  logger(...parts);
+}
+
+function logInvoiceLookupInfo(message, details) {
+  logInvoiceLookupEvent('info', message, details);
+}
+
+function logInvoiceLookupWarn(message, details) {
+  logInvoiceLookupEvent('warn', message, details);
+}
+
+function logInvoiceLookupError(message, details) {
+  logInvoiceLookupEvent('error', message, details);
+}
 
 function getTokenStorage() {
   if (typeof window === 'undefined') {
@@ -1857,6 +1886,10 @@ function setContificoInvoiceLookupVisible(visible) {
     updateModalBodyState();
     return;
   }
+  logInvoiceLookupInfo(normalizedVisible ? 'Mostrando modal de factura puntual.' : 'Ocultando modal de factura puntual.', {
+    requestId: state.contificoPreviewInvoiceLookupRequestId || null,
+    visible: normalizedVisible,
+  });
   state.contificoInvoiceLookupModalVisible = normalizedVisible;
   contificoInvoiceLookupModal.classList.toggle('hidden', !normalizedVisible);
   contificoInvoiceLookupModal.setAttribute('aria-hidden', normalizedVisible ? 'false' : 'true');
@@ -3524,6 +3557,9 @@ if (contificoCustomerInvoicesModalButton) {
 
 if (contificoInvoiceLookupModalButton) {
   contificoInvoiceLookupModalButton.addEventListener('click', () => {
+    logInvoiceLookupInfo('Solicitud manual para abrir el modal de factura puntual.', {
+      requestId: state.contificoPreviewInvoiceLookupRequestId || null,
+    });
     setContificoInvoiceLookupVisible(true);
   });
 }
@@ -5898,11 +5934,19 @@ async function handleContificoInvoiceLookup(event) {
   if (event) {
     event.preventDefault();
   }
+  logInvoiceLookupInfo('Formulario de búsqueda enviado.', { timestamp: Date.now() });
   if (!state.token || !state.user || state.user.role !== 'administrador') {
+    logInvoiceLookupWarn('Búsqueda cancelada: el usuario no tiene permisos de administrador.', {
+      hasToken: Boolean(state.token),
+      role: state.user?.role || null,
+    });
     showToast('Solo los administradores pueden consultar Contífico.', 'error');
     return;
   }
   if (state.contificoPreviewInvoiceLookupLoading) {
+    logInvoiceLookupWarn('Se ignoró la búsqueda porque ya existe una consulta en curso.', {
+      activeRequestId: state.contificoPreviewInvoiceLookupRequestId || null,
+    });
     return;
   }
 
@@ -5910,7 +5954,15 @@ async function handleContificoInvoiceLookup(event) {
     contificoInvoiceLookupNumberInput?.value ?? state.contificoPreviewInvoiceLookupNumber ?? '';
   const normalizedNumber = String(rawNumber).trim();
 
+  logInvoiceLookupInfo('Número capturado del formulario.', {
+    raw: rawNumber,
+    normalized: normalizedNumber,
+  });
+
   if (!normalizedNumber) {
+    logInvoiceLookupWarn('Búsqueda cancelada por número de documento vacío.', {
+      raw: rawNumber,
+    });
     state.contificoPreviewInvoiceLookupError = 'Ingresa un número de documento válido.';
     state.contificoPreviewInvoiceLookup = null;
     state.contificoPreviewInvoiceLookupFetched = true;
@@ -5919,21 +5971,52 @@ async function handleContificoInvoiceLookup(event) {
     return;
   }
 
+  const requestId = (state.contificoPreviewInvoiceLookupRequestId || 0) + 1;
+  state.contificoPreviewInvoiceLookupRequestId = requestId;
+
+  logInvoiceLookupInfo('Preparando consulta puntual en Contífico.', {
+    requestId,
+    documentNumber: normalizedNumber,
+  });
+
   state.contificoPreviewInvoiceLookupNumber = normalizedNumber;
   state.contificoPreviewInvoiceLookupLoading = true;
   state.contificoPreviewInvoiceLookupError = null;
   state.contificoPreviewInvoiceLookupFetched = false;
   setContificoInvoiceLookupVisible(true);
+  logInvoiceLookupInfo('Modal de detalle listo para la consulta.', {
+    requestId,
+    modalVisible: true,
+  });
   renderContificoPreviewInvoiceLookup();
+  logInvoiceLookupInfo('Estado de la interfaz actualizado a "cargando".', { requestId });
 
   try {
+    const endpoint = `/temp/contifico/invoices/by-number?document_number=${encodeURIComponent(
+      normalizedNumber
+    )}`;
+    logInvoiceLookupInfo('Solicitando factura al backend.', { requestId, endpoint });
     const response = await apiFetch(
       `/temp/contifico/invoices/by-number?document_number=${encodeURIComponent(normalizedNumber)}`
     );
+    logInvoiceLookupInfo('Respuesta recibida del backend.', {
+      requestId,
+      hasInvoice: Boolean(response),
+      invoiceNumber: response?.numero ?? null,
+      payload: response,
+    });
     state.contificoPreviewInvoiceLookup = response ?? null;
     state.contificoPreviewInvoiceLookupFetched = true;
     renderContificoPreviewInvoiceLookup();
+    logInvoiceLookupInfo('Factura procesada y renderizada.', {
+      requestId,
+      found: Boolean(state.contificoPreviewInvoiceLookup),
+    });
   } catch (error) {
+    logInvoiceLookupError('Error al consultar la factura puntual en Contífico.', {
+      requestId,
+      message: error?.message || null,
+    });
     state.contificoPreviewInvoiceLookupError =
       error.message || 'No se pudo consultar la factura solicitada.';
     state.contificoPreviewInvoiceLookup = null;
@@ -5943,6 +6026,11 @@ async function handleContificoInvoiceLookup(event) {
   } finally {
     state.contificoPreviewInvoiceLookupLoading = false;
     renderContificoPreviewInvoiceLookup();
+    logInvoiceLookupInfo('Consulta puntual finalizada.', {
+      requestId,
+      success: Boolean(state.contificoPreviewInvoiceLookup),
+      error: state.contificoPreviewInvoiceLookupError || null,
+    });
   }
 }
 

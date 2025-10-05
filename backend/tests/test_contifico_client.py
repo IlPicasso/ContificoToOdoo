@@ -1,3 +1,5 @@
+import logging
+import json
 import os
 import sys
 from pathlib import Path
@@ -11,6 +13,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-value-32-chars!!")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app import schemas
+from app import contifico as contifico_module
 from app.contifico import (
     ContificoAPIError,
     ContificoClient,
@@ -31,6 +34,19 @@ def test_client_requires_key_and_token() -> None:
 
     with pytest.raises(ContificoConfigurationError):
         ContificoClient("key", "")
+
+
+def test_contifico_logger_emits_to_console() -> None:
+    stream_handlers = [
+        handler
+        for handler in contifico_module.logger.handlers
+        if isinstance(handler, logging.StreamHandler)
+    ]
+    assert stream_handlers, "contifico logger should stream to console"
+    for handler in stream_handlers:
+        assert handler.level in (logging.NOTSET, logging.INFO)
+    assert contifico_module.logger.level == logging.INFO
+    assert not contifico_module.logger.propagate
 
 
 def test_list_products_success() -> None:
@@ -240,6 +256,65 @@ def test_find_invoice_by_document_number_retries_with_original_value() -> None:
     assert captured[1][1]["numero"] == "001-001-0000001"
 
 
+def test_find_invoice_by_document_number_direct_server_error_falls_back() -> None:
+    requests: list[dict[str, str] | dict[str, bool]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000009/"):
+            requests.append({"direct": True})
+            return httpx.Response(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                json={"mensaje": "Busy"},
+            )
+        params = dict(request.url.params)
+        requests.append(params)
+        assert params.get("result_page") == "1"
+        return httpx.Response(200, json=[{"id": 9, "numero": "001-001-0000009"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000009")
+
+    assert invoice == {"id": 9, "numero": "001-001-0000009"}
+    assert requests[0] == {"direct": True}
+    assert requests[1]["result_page"] == "1"
+
+
+def test_find_invoice_by_document_number_direct_transport_error_falls_back() -> None:
+    requests: list[dict[str, str] | dict[str, bool]] = []
+    direct_attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000011/"):
+            nonlocal direct_attempts
+            direct_attempts += 1
+            raise httpx.ConnectError("boom", request=request)
+        params = dict(request.url.params)
+        requests.append(params)
+        assert params.get("result_page") == "1"
+        return httpx.Response(200, json=[{"id": 11, "numero": "001-001-0000011"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000011")
+
+    assert invoice == {"id": 11, "numero": "001-001-0000011"}
+    assert direct_attempts == 1
+    assert requests[0]["result_page"] == "1"
+
+
 def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     pages: list[int] = []
 
@@ -369,6 +444,266 @@ def test_find_invoice_by_document_number_retries_before_returning(monkeypatch: p
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
     ]
 
+
+def test_find_invoice_by_document_number_tries_compact_candidate_after_failures() -> None:
+    requests: list[dict[str, str] | str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000022/"):
+            requests.append("direct")
+            return httpx.Response(status.HTTP_504_GATEWAY_TIMEOUT, json={"mensaje": "Timeout"})
+
+        params = dict(request.url.params)
+        requests.append(params)
+        if params.get("documento") == "001-001-0000022":
+            return httpx.Response(status.HTTP_504_GATEWAY_TIMEOUT, json={"mensaje": "Timeout"})
+
+        assert params.get("documento") == "0010010000022"
+        return httpx.Response(200, json=[{"id": 22, "numero": "001-001-0000022"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000022")
+
+    assert invoice == {"id": 22, "numero": "001-001-0000022"}
+    assert requests[0] == "direct"
+    fallback_requests = [
+        params for params in requests[1:] if isinstance(params, dict)
+    ]
+    assert fallback_requests
+    assert any(params.get("documento") == "001-001-0000022" for params in fallback_requests)
+    assert fallback_requests[-1].get("documento") == "0010010000022"
+
+
+def test_find_invoice_by_document_number_retries_after_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[dict[str, str] | str] = []
+    sleep_calls: list[float] = []
+    cooldowns = 0
+
+    def fake_sleep(seconds: float) -> None:
+        nonlocal cooldowns
+        sleep_calls.append(seconds)
+        if seconds >= ContificoClient.INVOICE_LOOKUP_SERVER_COOLDOWN_BASE:
+            cooldowns += 1
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000033/"):
+            requests.append("direct")
+            return httpx.Response(status.HTTP_404_NOT_FOUND, json={"mensaje": "No"})
+
+        params = dict(request.url.params)
+        requests.append(params)
+
+        if cooldowns == 0:
+            return httpx.Response(
+                status.HTTP_504_GATEWAY_TIMEOUT,
+                json={"mensaje": "Timeout"},
+            )
+
+        return httpx.Response(
+            200,
+            json=[{"id": 33, "numero": "001-001-0000033"}],
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000033")
+
+    assert invoice == {"id": 33, "numero": "001-001-0000033"}
+    assert requests[0] == "direct"
+    assert cooldowns == 1
+    assert any(
+        call >= ContificoClient.INVOICE_LOOKUP_SERVER_COOLDOWN_BASE
+        for call in sleep_calls
+    )
+    fallback_requests = [params for params in requests[1:] if isinstance(params, dict)]
+    assert fallback_requests
+    assert len(fallback_requests) > 1
+    assert any(
+        params.get("documento") == "0010010000033" for params in fallback_requests
+    )
+    assert fallback_requests[-1].get("documento") == "001-001-0000033"
+
+
+def test_find_invoice_by_document_number_downloads_catalog_after_timeouts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[tuple[str, dict[str, str]]] = []
+    catalog_requests: list[dict[str, str]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if request.url.path.endswith("/registro/documento/001-001-0000044/"):
+            requests.append(("direct", {}))
+            return httpx.Response(
+                status.HTTP_504_GATEWAY_TIMEOUT,
+                json={"mensaje": "Timeout"},
+            )
+        if request.url.path.endswith("/registro/documento/"):
+            if params.get("documento") in {"001-001-0000044", "0010010000044"}:
+                requests.append(("search", params))
+                return httpx.Response(
+                    status.HTTP_504_GATEWAY_TIMEOUT,
+                    json={"mensaje": "Timeout"},
+                )
+            if "documento" not in params:
+                catalog_requests.append(params)
+                assert params.get("result_page") == "1"
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": 44, "numero": "001-001-0000044"},
+                        {"id": 45, "numero": "001-001-0000045"},
+                    ],
+                )
+        raise AssertionError("Unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    client.INVOICE_LOOKUP_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = ()
+    client.INVOICE_LOOKUP_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_SERVER_RETRIES = 0
+    client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
+    client.INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 2
+    client.INVOICE_LOOKUP_CATALOG_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 0
+
+    invoice = client.find_invoice_by_document_number("001-001-0000044")
+
+    assert invoice == {"id": 44, "numero": "001-001-0000044"}
+    assert requests
+    assert requests[0][0] == "direct"
+    assert any(kind == "search" for kind, _ in requests)
+    assert catalog_requests == [{"result_page": "1", "result_size": "2", "tipo_registro": "CLI", "tipo": "FAC"}]
+    assert client._invoice_catalog_complete is True
+    assert "001-001-0000044" in client._invoice_cache
+    assert sleeps == []
+
+
+def test_find_invoice_by_document_number_reuses_catalog_without_http() -> None:
+    catalog_calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal catalog_calls
+        params = dict(request.url.params)
+        if request.url.path.endswith("/registro/documento/001-001-0000045/"):
+            return httpx.Response(
+                status.HTTP_504_GATEWAY_TIMEOUT,
+                json={"mensaje": "Timeout"},
+            )
+        if "documento" not in params:
+            catalog_calls += 1
+            return httpx.Response(
+                200,
+                json=[{"id": 45, "numero": "001-001-0000045"}],
+            )
+        return httpx.Response(
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            json={"mensaje": "Timeout"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    client.INVOICE_LOOKUP_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = ()
+    client.INVOICE_LOOKUP_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_SERVER_RETRIES = 0
+    client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
+    client.INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_CATALOG_MAX_PAGES = 1
+    client.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 0
+
+    invoice = client.find_invoice_by_document_number("001-001-0000045")
+    assert invoice == {"id": 45, "numero": "001-001-0000045"}
+    assert catalog_calls == 1
+
+    def failing_handler(_: httpx.Request) -> httpx.Response:
+        raise AssertionError("HTTP should not be called when catalog is cached")
+
+    client._transport = httpx.MockTransport(failing_handler)
+
+    cached_invoice = client.find_invoice_by_document_number("001-001-0000045")
+    assert cached_invoice == {"id": 45, "numero": "001-001-0000045"}
+
+def test_find_invoice_lookup_uses_persistent_cache(tmp_path: Path) -> None:
+    cache_path = tmp_path / "invoices.json"
+    cache_path.write_text(
+        json.dumps({"001-001-0000007": {"id": 7, "numero": "001-001-0000007"}}),
+        encoding="utf-8",
+    )
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        pytest.fail("HTTP should not be called when the invoice exists in the cache")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+        invoice_cache_path=cache_path,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000007")
+    assert invoice == {"id": 7, "numero": "001-001-0000007"}
+
+
+def test_find_invoice_lookup_persists_results(tmp_path: Path) -> None:
+    cache_path = tmp_path / "persist.json"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000008/"):
+            return httpx.Response(200, json={"id": 8, "numero": "001-001-0000008"})
+        return httpx.Response(200, json=[])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+        invoice_cache_path=cache_path,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000008")
+    assert invoice == {"id": 8, "numero": "001-001-0000008"}
+
+    persisted = json.loads(cache_path.read_text(encoding="utf-8"))
+    assert "001-001-0000008" in persisted
+    assert persisted["001-001-0000008"]["numero"] == "001-001-0000008"
 
 def test_find_invoice_by_document_number_handles_missing() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
