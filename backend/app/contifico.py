@@ -56,7 +56,7 @@ class ContificoClient:
     """Cliente HTTP pequeño para la API de Contífico."""
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
-    INVOICE_LOOKUP_PAGE_SIZE = 100
+    INVOICE_LOOKUP_PAGE_SIZE = 400
     INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = (50, 25, 10, 5, 1)
     INVOICE_LOOKUP_MAX_PAGES: int | None = None
     INVOICE_LOOKUP_SERVER_RETRIES = 2
