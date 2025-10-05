@@ -2,6 +2,7 @@ import logging
 import json
 import os
 import sys
+from http import HTTPStatus
 from pathlib import Path
 
 import httpx
@@ -153,6 +154,144 @@ def test_list_invoices_success() -> None:
     assert params["tipo"] == "FAC"
     assert params["persona_identificacion"] == "0912345678"
     assert params["documento"] == "001-001-0000001"
+
+
+def test_list_invoices_recovers_from_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[dict[str, str]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    attempts_by_size: dict[int, int] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        size = int(params["result_size"])
+        attempts_by_size[size] = attempts_by_size.get(size, 0) + 1
+        if size == 25:
+            return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
+        assert size == 10, f"Unexpected fallback size: {size}"
+        page = int(params["result_page"])
+        return httpx.Response(
+            200,
+            json=[{"id": f"inv-{page}-{idx}", "numero": "001-001-0000001"} for idx in range(10)],
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoices = list(client.list_invoices(page_size=25))
+
+    assert len(invoices) == 25
+    assert invoices[0]["id"] == "inv-1-0"
+    assert invoices[-1]["id"] == "inv-3-4"
+    assert [params["result_size"] for params in requests] == [
+        "25",
+        "25",
+        "25",
+        "10",
+        "10",
+        "10",
+    ]
+    assert attempts_by_size[25] == ContificoClient.INVOICE_LOOKUP_SERVER_RETRIES + 1
+    assert attempts_by_size[10] == 3
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
+
+
+def test_list_invoices_preserves_requested_slice_with_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[tuple[int, int]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append((int(params["result_size"]), int(params["result_page"])))
+        size = int(params["result_size"])
+        page = int(params["result_page"])
+        if size == 25:
+            return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
+        assert size == 10
+        payload = [
+            {
+                "id": f"inv-{size}-{page}-{idx}",
+                "numero": f"001-001-{page:07d}-{idx}",
+            }
+            for idx in range(10)
+        ]
+        return httpx.Response(200, json=payload)
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoices = list(client.list_invoices(page=3, page_size=25))
+
+    assert len(invoices) == 25
+    assert invoices[0]["id"] == "inv-10-6-0"
+    assert invoices[-1]["id"] == "inv-10-8-4"
+    assert requests == [
+        (25, 3),
+        (25, 3),
+        (25, 3),
+        (10, 6),
+        (10, 7),
+        (10, 8),
+    ]
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
+
+
+def test_list_invoices_raises_last_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    with pytest.raises(ContificoAPIError) as exc_info:
+        list(client.list_invoices(page_size=5))
+
+    assert exc_info.value.status_code == HTTPStatus.BAD_GATEWAY
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
 
 
 def test_list_invoices_requires_list_response() -> None:
@@ -353,6 +492,58 @@ def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     assert pages == [1, 2]
 
 
+def test_find_invoice_by_document_number_searches_beyond_default_page_limit() -> None:
+    pages_requested: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if request.url.path.endswith("/registro/documento/001-001-0099999/"):
+            return httpx.Response(
+                status.HTTP_404_NOT_FOUND,
+                json={"mensaje": "No existe"},
+            )
+        if request.url.path.endswith("/registro/documento/"):
+            page = int(params["result_page"])
+            pages_requested.append(page)
+            if page < 55:
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": page, "numero": f"001-001-{page:07d}"},
+                    ],
+                )
+            if page == 55:
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": 9999, "numero": "001-001-0099999"},
+                    ],
+                )
+            return httpx.Response(200, json=[])
+        raise AssertionError("Unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    client.INVOICE_LOOKUP_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = ()
+    client.INVOICE_LOOKUP_SERVER_RETRIES = 0
+    client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
+    client.INVOICE_LOOKUP_MAX_PAGES = None
+
+    invoice = client.find_invoice_by_document_number("001-001-0099999")
+
+    assert invoice == {"id": 9999, "numero": "001-001-0099999"}
+    assert pages_requested[0] == 1
+    assert pages_requested[-1] == 55
+    assert len(pages_requested) == 55
+
+
 def test_find_invoice_by_document_number_falls_back_to_smaller_page_size(monkeypatch: pytest.MonkeyPatch) -> None:
     requests: list[dict[str, str]] = []
     sleeps: list[float] = []
@@ -386,13 +577,9 @@ def test_find_invoice_by_document_number_falls_back_to_smaller_page_size(monkeyp
     assert invoice == {"id": 3, "numero": "001-001-0000001"}
     default_size = str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE)
     fallback_size = str(ContificoClient.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES[0])
-    assert [params.get("result_size") for params in requests] == [
-        None,
-        default_size,
-        default_size,
-        default_size,
-        fallback_size,
-    ]
+    sizes = [params.get("result_size") for params in requests]
+    assert sizes[:4] == [None, default_size, default_size, default_size]
+    assert sizes[4:] and all(size == fallback_size for size in sizes[4:])
     assert sleeps == [
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
