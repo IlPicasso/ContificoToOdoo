@@ -270,6 +270,35 @@ def test_find_invoice_by_document_number_direct_server_error_falls_back() -> Non
     assert requests[1]["result_page"] == "1"
 
 
+def test_find_invoice_by_document_number_direct_transport_error_falls_back() -> None:
+    requests: list[dict[str, str] | dict[str, bool]] = []
+    direct_attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000011/"):
+            nonlocal direct_attempts
+            direct_attempts += 1
+            raise httpx.ConnectError("boom", request=request)
+        params = dict(request.url.params)
+        requests.append(params)
+        assert params.get("result_page") == "1"
+        return httpx.Response(200, json=[{"id": 11, "numero": "001-001-0000011"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000011")
+
+    assert invoice == {"id": 11, "numero": "001-001-0000011"}
+    assert direct_attempts == 1
+    assert requests[0]["result_page"] == "1"
+
+
 def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     pages: list[int] = []
 
