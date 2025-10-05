@@ -58,7 +58,7 @@ class ContificoClient:
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
     INVOICE_LOOKUP_PAGE_SIZE = 100
     INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = (50, 25, 10, 5, 1)
-    INVOICE_LOOKUP_MAX_PAGES = 50
+    INVOICE_LOOKUP_MAX_PAGES: int | None = None
     INVOICE_LOOKUP_SERVER_RETRIES = 2
     INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
     INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 2
@@ -599,9 +599,24 @@ class ContificoClient:
                         seen_numbers: set[str] = set()
                         encountered_server_error = False
 
-                        for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
+                        max_pages = self.INVOICE_LOOKUP_MAX_PAGES
+                        page = 1
+                        reached_page_limit = False
+
+                        while True:
+                            if max_pages is not None and page > max_pages:
+                                logger.info(
+                                    "Reached invoice search page limit candidate=%s page_size=%d max_pages=%d",
+                                    candidate,
+                                    page_size,
+                                    max_pages,
+                                )
+                                reached_page_limit = True
+                                break
+
                             retry_attempt = 0
                             should_stop_paging = False
+
                             while True:
                                 try:
                                     invoices = list(
@@ -720,9 +735,16 @@ class ContificoClient:
                                 break
 
                             seen_numbers.update(page_numbers)
+                            page += 1
 
-                        if encountered_server_error:
-                            continue
+                        if encountered_server_error or reached_page_limit:
+                            if reached_page_limit and max_pages is not None:
+                                logger.info(
+                                    "Invoice search reached configured page limit without a match; trying next candidate"
+                                )
+                            if encountered_server_error:
+                                continue
+                            break
 
                         last_server_error = None
                         break

@@ -492,6 +492,58 @@ def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     assert pages == [1, 2]
 
 
+def test_find_invoice_by_document_number_searches_beyond_default_page_limit() -> None:
+    pages_requested: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        if request.url.path.endswith("/registro/documento/001-001-0099999/"):
+            return httpx.Response(
+                status.HTTP_404_NOT_FOUND,
+                json={"mensaje": "No existe"},
+            )
+        if request.url.path.endswith("/registro/documento/"):
+            page = int(params["result_page"])
+            pages_requested.append(page)
+            if page < 55:
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": page, "numero": f"001-001-{page:07d}"},
+                    ],
+                )
+            if page == 55:
+                return httpx.Response(
+                    200,
+                    json=[
+                        {"id": 9999, "numero": "001-001-0099999"},
+                    ],
+                )
+            return httpx.Response(200, json=[])
+        raise AssertionError("Unexpected request")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    client.INVOICE_LOOKUP_PAGE_SIZE = 1
+    client.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = ()
+    client.INVOICE_LOOKUP_SERVER_RETRIES = 0
+    client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
+    client.INVOICE_LOOKUP_MAX_PAGES = None
+
+    invoice = client.find_invoice_by_document_number("001-001-0099999")
+
+    assert invoice == {"id": 9999, "numero": "001-001-0099999"}
+    assert pages_requested[0] == 1
+    assert pages_requested[-1] == 55
+    assert len(pages_requested) == 55
+
+
 def test_find_invoice_by_document_number_falls_back_to_smaller_page_size(monkeypatch: pytest.MonkeyPatch) -> None:
     requests: list[dict[str, str]] = []
     sleeps: list[float] = []
