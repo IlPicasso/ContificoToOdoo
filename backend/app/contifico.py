@@ -306,7 +306,6 @@ class ContificoClient:
 
         params: Dict[str, Any] = {
             "result_page": page,
-            "result_size": page_size,
             "tipo_registro": "CLI",
             "tipo": "FAC",
         }
@@ -319,7 +318,78 @@ class ContificoClient:
             if normalized_number:
                 params["numero"] = normalized_number
 
-        data = self._request("GET", "registro/documento/", params=params)
+        try:
+            normalized_page_size = int(page_size)
+        except (TypeError, ValueError):  # pragma: no cover - defensive guard
+            normalized_page_size = self.INVOICE_LOOKUP_PAGE_SIZE
+        if normalized_page_size <= 0:
+            normalized_page_size = self.INVOICE_LOOKUP_PAGE_SIZE
+
+        sizes_to_try: list[int] = []
+        seen_sizes: set[int] = set()
+        for candidate in (normalized_page_size, *self._invoice_lookup_page_sizes()):
+            if not isinstance(candidate, int):
+                try:
+                    candidate = int(candidate)
+                except (TypeError, ValueError):  # pragma: no cover - defensive guard
+                    continue
+            if candidate <= 0 or candidate in seen_sizes:
+                continue
+            if candidate > normalized_page_size and candidate != normalized_page_size:
+                continue
+            seen_sizes.add(candidate)
+            sizes_to_try.append(candidate)
+
+        last_server_error: ContificoAPIError | None = None
+        data: Any | None = None
+
+        for candidate_size in sizes_to_try:
+            params["result_size"] = candidate_size
+            retry_attempt = 0
+            while True:
+                try:
+                    data = self._request(
+                        "GET", "registro/documento/", params=dict(params)
+                    )
+                    last_server_error = None
+                    break
+                except ContificoAPIError as exc:
+                    if (
+                        HTTPStatus.BAD_GATEWAY <= exc.status_code < 600
+                        and retry_attempt < self.INVOICE_LOOKUP_SERVER_RETRIES
+                    ):
+                        backoff = self.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * (
+                            2**retry_attempt
+                        )
+                        retry_attempt += 1
+                        logger.warning(
+                            "Server error %s while listing invoices page_size=%d; retry=%d",
+                            exc.status_code,
+                            candidate_size,
+                            retry_attempt,
+                        )
+                        self._sleep(backoff)
+                        continue
+                    last_server_error = exc
+                    break
+
+            if last_server_error is None:
+                if candidate_size != normalized_page_size:
+                    logger.info(
+                        "Recovered invoice list using fallback page_size=%d (requested=%d)",
+                        candidate_size,
+                        normalized_page_size,
+                    )
+                break
+
+            logger.warning(
+                "Falling back to smaller invoice page size after server error (attempted=%d)",
+                candidate_size,
+            )
+
+        if last_server_error is not None:
+            raise last_server_error
+
         if data is None:
             return []
         if isinstance(data, list):

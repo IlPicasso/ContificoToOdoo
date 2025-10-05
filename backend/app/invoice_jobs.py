@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import logging
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -13,6 +14,9 @@ from uuid import uuid4
 
 from .config import get_settings
 from .contifico import ContificoClient, ContificoClientError, ContificoConfigurationError
+
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceLookupJobStatus(str, Enum):
@@ -143,72 +147,37 @@ class InvoiceLookupJobManager:
                 progress_callback,
             )
         )
+        finalize_task = asyncio.create_task(
+            self._finalize_lookup(job_id, lookup_task)
+        )
 
         try:
             if self._max_job_duration is not None and self._max_job_duration > 0:
-                result = await asyncio.wait_for(
-                    lookup_task, timeout=self._max_job_duration
+                await asyncio.wait_for(
+                    asyncio.shield(finalize_task), timeout=self._max_job_duration
                 )
             else:
-                result = await lookup_task
+                await finalize_task
         except asyncio.TimeoutError:
-            if not lookup_task.done():
-                lookup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await lookup_task
             await self._update_job(
                 job_id,
-                status=InvoiceLookupJobStatus.FAILED,
-                stage="timeout",
-                progress=100,
-                error=(
-                    "La búsqueda de la factura superó el tiempo límite. "
-                    "Inténtalo nuevamente más tarde."
-                ),
+                stage="waiting",
+                metadata={
+                    "timeout_exceeded": True,
+                    "message": (
+                        "La búsqueda está tardando más de lo esperado. "
+                        "Seguiremos intentando en segundo plano."
+                    ),
+                },
             )
-            return
         except asyncio.CancelledError:
             if not lookup_task.done():
                 lookup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await lookup_task
+                self._detach_lookup_task(lookup_task)
+            if not finalize_task.done():
+                finalize_task.cancel()
+                self._detach_lookup_task(finalize_task)
             raise
-        except InvoiceNotFoundError as exc:
-            await self._update_job(
-                job_id,
-                status=InvoiceLookupJobStatus.FAILED,
-                stage="not_found",
-                progress=100,
-                error=str(exc),
-            )
-        except ContificoClientError as exc:
-            await self._update_job(
-                job_id,
-                status=InvoiceLookupJobStatus.FAILED,
-                stage="error",
-                progress=100,
-                error=exc.detail,
-            )
-        except Exception as exc:  # pragma: no cover - defensivo
-            if not lookup_task.done():
-                lookup_task.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await lookup_task
-            await self._update_job(
-                job_id,
-                status=InvoiceLookupJobStatus.FAILED,
-                stage="error",
-                progress=100,
-                error=str(exc) or "Error desconocido al consultar Contífico.",
-            )
-        else:
-            await self._update_job(
-                job_id,
-                status=InvoiceLookupJobStatus.COMPLETED,
-                stage="completed",
-                progress=100,
-                result=result,
-            )
 
     def _execute_lookup(
         self,
@@ -254,6 +223,61 @@ class InvoiceLookupJobManager:
             asyncio.run_coroutine_threadsafe(_update(), loop)
 
         return callback
+
+    async def _finalize_lookup(
+        self, job_id: str, lookup_task: asyncio.Task[Any]
+    ) -> None:
+        try:
+            result = await lookup_task
+        except asyncio.CancelledError:
+            raise
+        except InvoiceNotFoundError as exc:
+            await self._update_job(
+                job_id,
+                status=InvoiceLookupJobStatus.FAILED,
+                stage="not_found",
+                progress=100,
+                error=str(exc),
+            )
+        except ContificoClientError as exc:
+            await self._update_job(
+                job_id,
+                status=InvoiceLookupJobStatus.FAILED,
+                stage="error",
+                progress=100,
+                error=exc.detail,
+            )
+        except Exception as exc:  # pragma: no cover - defensivo
+            await self._update_job(
+                job_id,
+                status=InvoiceLookupJobStatus.FAILED,
+                stage="error",
+                progress=100,
+                error=str(exc) or "Error desconocido al consultar Contífico.",
+            )
+            logger.exception(
+                "La tarea de búsqueda de Contífico falló mientras se esperaba su finalización.",
+            )
+        else:
+            await self._update_job(
+                job_id,
+                status=InvoiceLookupJobStatus.COMPLETED,
+                stage="completed",
+                progress=100,
+                result=result,
+            )
+
+    def _detach_lookup_task(self, task: asyncio.Task[Any]) -> None:
+        async def _await_task() -> None:
+            with contextlib.suppress(asyncio.CancelledError):
+                try:
+                    await task
+                except Exception:  # pragma: no cover - defensivo
+                    logger.exception(
+                        "La tarea de búsqueda de Contífico falló tras la cancelación.",
+                    )
+
+        asyncio.create_task(_await_task())
 
     async def _update_job(self, job_id: str, **changes: Any) -> None:
         async with self._lock:
