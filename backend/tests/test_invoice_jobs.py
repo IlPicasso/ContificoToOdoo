@@ -113,12 +113,21 @@ def test_invoice_lookup_job_manager_times_out_long_running_job() -> None:
         max_job_duration=0.01,
     )
 
-    async def scenario() -> object:
+    async def scenario() -> tuple[object, object]:
         job = await manager.start_job("001-001-0000001")
-        return await wait_for_completion(manager, job.id)
+        # Espera suficiente para que se registre el timeout sin bloquear el hilo.
+        await asyncio.sleep(0.02)
+        interim_job = await manager.get_job(job.id)
+        final_job = await wait_for_completion(manager, job.id)
+        return interim_job, final_job
 
-    final_job = asyncio.run(scenario())
+    interim_job, final_job = asyncio.run(scenario())
 
-    assert final_job.status == InvoiceLookupJobStatus.FAILED
-    assert final_job.stage == "timeout"
-    assert "tiempo" in (final_job.error or "").lower()
+    assert interim_job is not None
+    assert interim_job.status == InvoiceLookupJobStatus.RUNNING
+    assert interim_job.stage == "waiting"
+    assert interim_job.metadata.get("timeout_exceeded") is True
+    assert "segundo plano" in (interim_job.metadata.get("message") or "")
+
+    assert final_job.status == InvoiceLookupJobStatus.COMPLETED
+    assert final_job.stage == "completed"
