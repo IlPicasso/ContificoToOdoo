@@ -175,7 +175,11 @@ def test_list_invoices_recovers_from_server_error(monkeypatch: pytest.MonkeyPatc
         if size == 25:
             return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
         assert size == 10, f"Unexpected fallback size: {size}"
-        return httpx.Response(200, json=[{"id": "inv-1", "numero": "001-001-0000001"}])
+        page = int(params["result_page"])
+        return httpx.Response(
+            200,
+            json=[{"id": f"inv-{page}-{idx}", "numero": "001-001-0000001"} for idx in range(10)],
+        )
 
     transport = httpx.MockTransport(handler)
     client = ContificoClient(
@@ -187,10 +191,72 @@ def test_list_invoices_recovers_from_server_error(monkeypatch: pytest.MonkeyPatc
 
     invoices = list(client.list_invoices(page_size=25))
 
-    assert invoices == [{"id": "inv-1", "numero": "001-001-0000001"}]
-    assert [params["result_size"] for params in requests] == ["25", "25", "25", "10"]
+    assert len(invoices) == 25
+    assert invoices[0]["id"] == "inv-1-0"
+    assert invoices[-1]["id"] == "inv-3-4"
+    assert [params["result_size"] for params in requests] == [
+        "25",
+        "25",
+        "25",
+        "10",
+        "10",
+        "10",
+    ]
     assert attempts_by_size[25] == ContificoClient.INVOICE_LOOKUP_SERVER_RETRIES + 1
-    assert attempts_by_size[10] == 1
+    assert attempts_by_size[10] == 3
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
+
+
+def test_list_invoices_preserves_requested_slice_with_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[tuple[int, int]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append((int(params["result_size"]), int(params["result_page"])))
+        size = int(params["result_size"])
+        page = int(params["result_page"])
+        if size == 25:
+            return httpx.Response(HTTPStatus.BAD_GATEWAY, json={"mensaje": "Bad"})
+        assert size == 10
+        payload = [
+            {
+                "id": f"inv-{size}-{page}-{idx}",
+                "numero": f"001-001-{page:07d}-{idx}",
+            }
+            for idx in range(10)
+        ]
+        return httpx.Response(200, json=payload)
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoices = list(client.list_invoices(page=3, page_size=25))
+
+    assert len(invoices) == 25
+    assert invoices[0]["id"] == "inv-10-6-0"
+    assert invoices[-1]["id"] == "inv-10-8-4"
+    assert requests == [
+        (25, 3),
+        (25, 3),
+        (25, 3),
+        (10, 6),
+        (10, 7),
+        (10, 8),
+    ]
     assert sleeps == [
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
@@ -459,13 +525,9 @@ def test_find_invoice_by_document_number_falls_back_to_smaller_page_size(monkeyp
     assert invoice == {"id": 3, "numero": "001-001-0000001"}
     default_size = str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE)
     fallback_size = str(ContificoClient.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES[0])
-    assert [params.get("result_size") for params in requests] == [
-        None,
-        default_size,
-        default_size,
-        default_size,
-        fallback_size,
-    ]
+    sizes = [params.get("result_size") for params in requests]
+    assert sizes[:4] == [None, default_size, default_size, default_size]
+    assert sizes[4:] and all(size == fallback_size for size in sizes[4:])
     assert sleeps == [
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
         ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
