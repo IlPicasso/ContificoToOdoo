@@ -47,6 +47,7 @@ def get_contifico_client() -> ContificoClient:
             settings.contifico_api_token,
             base_url=settings.contifico_api_base_url,
             timeout=settings.contifico_timeout_seconds,
+            invoice_cache_path=settings.contifico_invoice_cache_path,
         )
     except ContificoConfigurationError as exc:  # pragma: no cover - validación defensiva
         raise HTTPException(

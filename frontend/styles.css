@@ -1023,6 +1023,20 @@ button[disabled] {
   background: rgba(17, 17, 17, 0.08);
   border-color: rgba(17, 17, 17, 0.2);
   color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.order-detail-status-message.loading::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  display: inline-block;
+  animation: order-detail-loading-spin 0.75s linear infinite;
 }
 
 .order-detail-status-message.error {
@@ -1035,6 +1049,15 @@ button[disabled] {
   background: rgba(31, 31, 31, 0.12);
   border-color: rgba(31, 31, 31, 0.24);
   color: var(--success);
+}
+
+@keyframes order-detail-loading-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .order-detail-content {

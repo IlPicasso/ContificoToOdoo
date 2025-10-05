@@ -22,6 +22,12 @@ const measurementsElement = document.getElementById('orderDetailMeasurements');
 const tasksContainerElement = document.getElementById('orderDetailTasks');
 const currentYearElement = document.getElementById('currentYear');
 
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+const ORDER_FETCH_MAX_ATTEMPTS = 5;
+const ORDER_FETCH_BASE_DELAY_MS = 2500;
+const TASK_FETCH_MAX_ATTEMPTS = 3;
+const TASK_FETCH_BASE_DELAY_MS = 2000;
+
 function setCurrentYear() {
   if (currentYearElement) {
     currentYearElement.textContent = String(new Date().getFullYear());
@@ -93,6 +99,27 @@ function setStatusMessage(message, type = 'info') {
 
 function clearStatusMessage() {
   setStatusMessage('');
+}
+
+function wait(delayInMs) {
+  const timer = typeof window !== 'undefined' ? window : globalThis;
+  return new Promise((resolve) => {
+    timer.setTimeout(resolve, delayInMs);
+  });
+}
+
+function isRetryableError(error) {
+  if (!error) {
+    return false;
+  }
+  if (error.retryable === true) {
+    return true;
+  }
+  if (typeof error.status === 'number' && RETRYABLE_STATUS_CODES.has(error.status)) {
+    return true;
+  }
+  const message = typeof error.message === 'string' ? error.message.toLowerCase() : '';
+  return message.includes('intenta nuevamente');
 }
 
 function showContent() {
@@ -352,12 +379,13 @@ function sortTasks(tasks) {
   });
 }
 
-function renderTasks(tasks, { loading = false, error = null } = {}) {
+function renderTasks(tasks, { loading = false, loadingMessage = null, error = null } = {}) {
   if (!tasksContainerElement) return;
   tasksContainerElement.innerHTML = '';
   tasksContainerElement.classList.remove('muted', 'order-detail-error');
   if (loading) {
-    tasksContainerElement.textContent = 'Cargando checklist de producción...';
+    tasksContainerElement.textContent =
+      loadingMessage || 'Cargando checklist de producción...';
     tasksContainerElement.classList.add('muted');
     return;
   }
@@ -519,7 +547,9 @@ async function fetchWithAuth(path, token) {
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { headers });
   } catch (networkError) {
-    throw new Error('No se pudo conectar con el servidor. Intenta nuevamente.');
+    const error = new Error('No se pudo conectar con el servidor. Intenta nuevamente.');
+    error.retryable = true;
+    throw error;
   }
   if (response.status === 204) {
     return null;
@@ -543,7 +573,12 @@ async function fetchWithAuth(path, token) {
       throw new Error('No encontramos la orden solicitada.');
     }
     const message = extractErrorMessage(data) || 'Error al cargar la información.';
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    if (RETRYABLE_STATUS_CODES.has(response.status)) {
+      error.retryable = true;
+    }
+    throw error;
   }
   return data;
 }
@@ -559,24 +594,64 @@ async function fetchOrderTasks(orderId, token) {
 
 async function loadOrderDetails(orderId, token) {
   setStatusMessage('Cargando información de la orden...', 'loading');
-  try {
-    const order = await fetchOrder(orderId, token);
-    if (!order) {
-      throw new Error('No se pudo cargar la información de la orden.');
-    }
-    renderOrder(order);
-    showContent();
-    clearStatusMessage();
+  let order = null;
+  let attempt = 0;
+  while (attempt < ORDER_FETCH_MAX_ATTEMPTS) {
+    attempt += 1;
     try {
-      renderTasks([], { loading: true });
+      order = await fetchOrder(orderId, token);
+      break;
+    } catch (error) {
+      if (isRetryableError(error) && attempt < ORDER_FETCH_MAX_ATTEMPTS) {
+        const delayMs = ORDER_FETCH_BASE_DELAY_MS * attempt;
+        setStatusMessage(
+          `Sincronizando la información de la orden... Reintentando (${attempt + 1}/${ORDER_FETCH_MAX_ATTEMPTS}).`,
+          'loading'
+        );
+        // eslint-disable-next-line no-await-in-loop
+        await wait(delayMs);
+        continue;
+      }
+      hideContent();
+      setStatusMessage(error.message || 'No se pudo cargar la información de la orden.', 'error');
+      return;
+    }
+  }
+
+  if (!order) {
+    hideContent();
+    setStatusMessage('No se pudo cargar la información de la orden.', 'error');
+    return;
+  }
+
+  renderOrder(order);
+  showContent();
+  clearStatusMessage();
+
+  let taskAttempt = 0;
+  renderTasks([], { loading: true });
+  while (taskAttempt < TASK_FETCH_MAX_ATTEMPTS) {
+    taskAttempt += 1;
+    try {
       const tasks = await fetchOrderTasks(orderId, token);
       renderTasks(tasks);
+      return;
     } catch (taskError) {
-      renderTasks([], { error: taskError.message || 'No se pudo cargar el checklist.' });
+      if (isRetryableError(taskError) && taskAttempt < TASK_FETCH_MAX_ATTEMPTS) {
+        const delayMs = TASK_FETCH_BASE_DELAY_MS * taskAttempt;
+        renderTasks([], {
+          loading: true,
+          loadingMessage: `Sincronizando el checklist... Reintentando (${taskAttempt + 1}/${TASK_FETCH_MAX_ATTEMPTS}).`,
+        });
+        // eslint-disable-next-line no-await-in-loop
+        await wait(delayMs);
+        continue;
+      }
+      renderTasks([], {
+        error: taskError.message || 'No se pudo cargar el checklist.',
+      });
+      return;
     }
-  } catch (error) {
-    hideContent();
-    setStatusMessage(error.message || 'No se pudo cargar la información de la orden.', 'error');
   }
 }
 
