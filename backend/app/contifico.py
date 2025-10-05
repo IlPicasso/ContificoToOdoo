@@ -347,6 +347,7 @@ class ContificoClient:
                 if encountered_server_error:
                     continue
 
+                last_server_error = None
                 break
 
         if last_server_error is not None:
