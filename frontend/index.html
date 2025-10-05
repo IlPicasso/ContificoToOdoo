@@ -957,6 +957,50 @@
               <article class="contifico-preview-card">
                 <header class="contifico-preview-card-header">
                   <div>
+                    <h4>Factura por cliente y número</h4>
+                    <p class="muted small">
+                      Ingresa la cédula o RUC y el número de documento para obtener el detalle puntual.
+                    </p>
+                  </div>
+                </header>
+                <form id="contificoCustomerInvoiceLookupForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoCustomerInvoiceLookupDocument">Documento del cliente</label>
+                    <input
+                      type="text"
+                      id="contificoCustomerInvoiceLookupDocument"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej. 0912345678"
+                      required
+                    />
+                  </div>
+                  <div class="form-row">
+                    <label for="contificoCustomerInvoiceLookupNumber">Número de documento</label>
+                    <input
+                      type="text"
+                      id="contificoCustomerInvoiceLookupNumber"
+                      autocomplete="off"
+                      placeholder="Ej. 001-001-0000001"
+                      required
+                    />
+                  </div>
+                  <div class="form-row contifico-preview-submit">
+                    <button type="submit" class="primary">Buscar detalle</button>
+                  </div>
+                </form>
+                <p
+                  id="contificoCustomerInvoiceLookupStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div id="contificoCustomerInvoiceLookupResult" class="contifico-invoice-preview-result"></div>
+              </article>
+
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
                     <h4>Buscar factura puntual</h4>
                     <p class="muted small">
                       Introduce el número completo del documento para validar una factura específica.
