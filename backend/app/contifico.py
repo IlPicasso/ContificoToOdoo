@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import Any, Dict, Iterable, Optional
+import logging
 import time
 
 import httpx
+
+
+logger = logging.getLogger(__name__)
 
 
 class ContificoClientError(RuntimeError):
@@ -98,6 +102,13 @@ class ContificoClient:
         client_kwargs: Dict[str, Any] = {"timeout": self.timeout}
         if self._transport is not None:
             client_kwargs["transport"] = self._transport
+        logger.info(
+            "Contifico request %s %s params=%r json=%r",
+            method,
+            url,
+            params,
+            json,
+        )
         try:
             with httpx.Client(**client_kwargs) as client:
                 response = client.request(
@@ -108,9 +119,25 @@ class ContificoClient:
                     json=json,
                 )
         except httpx.RequestError as exc:  # pragma: no cover - error path
+            logger.exception(
+                "Contifico transport error %s %s params=%r json=%r",
+                method,
+                url,
+                params,
+                json,
+            )
             raise ContificoTransportError(
                 f"No se pudo conectar con Contífico: {exc}".rstrip()
             ) from exc
+
+        logger.info(
+            "Contifico response %s %s status=%s headers=%r body=%r",
+            method,
+            url,
+            response.status_code,
+            dict(response.headers),
+            response.text,
+        )
 
         if response.status_code >= 400:
             detail = self._extract_error_message(response)
