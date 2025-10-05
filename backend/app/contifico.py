@@ -402,8 +402,8 @@ class ContificoClient:
             payload = self._request(
                 "GET", f"registro/documento/{normalized_target}/"
             )
-        except ContificoAPIError as exc:
-            if exc.status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES:
+        except ContificoClientError as exc:
+            if self._should_fallback_from_direct_lookup(exc):
                 return None
             raise
 
@@ -435,11 +435,17 @@ class ContificoClient:
                         return invoice
             if len(payload) == 1 and isinstance(payload[0], dict):
                 return payload[0]
-            return None
 
-        raise ContificoAPIError(
-            status_code=200,
-            detail="El formato de respuesta para facturas no es el esperado.",
-            payload=payload,
-        )
+        return None
+
+    def _should_fallback_from_direct_lookup(self, exc: ContificoClientError) -> bool:
+        if isinstance(exc, ContificoTransportError):
+            return True
+        if isinstance(exc, ContificoAPIError):
+            status_code = exc.status_code
+            if status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES:
+                return True
+            if HTTPStatus.INTERNAL_SERVER_ERROR <= status_code < 600:
+                return True
+        return False
 
