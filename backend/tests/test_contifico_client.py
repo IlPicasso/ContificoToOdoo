@@ -240,6 +240,36 @@ def test_find_invoice_by_document_number_retries_with_original_value() -> None:
     assert captured[1][1]["numero"] == "001-001-0000001"
 
 
+def test_find_invoice_by_document_number_direct_server_error_falls_back() -> None:
+    requests: list[dict[str, str] | dict[str, bool]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/registro/documento/001-001-0000009/"):
+            requests.append({"direct": True})
+            return httpx.Response(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                json={"mensaje": "Busy"},
+            )
+        params = dict(request.url.params)
+        requests.append(params)
+        assert params.get("result_page") == "1"
+        return httpx.Response(200, json=[{"id": 9, "numero": "001-001-0000009"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000009")
+
+    assert invoice == {"id": 9, "numero": "001-001-0000009"}
+    assert requests[0] == {"direct": True}
+    assert requests[1]["result_page"] == "1"
+
+
 def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     pages: list[int] = []
 

@@ -403,7 +403,10 @@ class ContificoClient:
                 "GET", f"registro/documento/{normalized_target}/"
             )
         except ContificoAPIError as exc:
-            if exc.status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES:
+            if (
+                exc.status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES
+                or HTTPStatus.INTERNAL_SERVER_ERROR <= exc.status_code < 600
+            ):
                 return None
             raise
 
