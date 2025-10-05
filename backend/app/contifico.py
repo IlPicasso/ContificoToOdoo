@@ -43,6 +43,11 @@ class ContificoClient:
     INVOICE_LOOKUP_MAX_PAGES = 50
     INVOICE_LOOKUP_SERVER_RETRIES = 2
     INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
+    INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES = {
+        HTTPStatus.BAD_REQUEST,
+        HTTPStatus.NOT_FOUND,
+        HTTPStatus.METHOD_NOT_ALLOWED,
+    }
 
     def __init__(
         self,
@@ -298,6 +303,11 @@ class ContificoClient:
 
         trimmed_input = document_number.strip()
         canonical_input = " ".join(trimmed_input.split())
+
+        direct_invoice = self._lookup_invoice_direct(normalized_target)
+        if direct_invoice is not None:
+            return direct_invoice
+
         search_candidates = []
         if canonical_input:
             search_candidates.append(canonical_input)
@@ -379,4 +389,57 @@ class ContificoClient:
             raise last_server_error
 
         return None
+
+    def _lookup_invoice_direct(self, normalized_target: str) -> Optional[Dict[str, Any]]:
+        """Try to retrieve an invoice directly using the document number."""
+
+        if not normalized_target:
+            return None
+
+        compact_target = normalized_target.replace("-", "") if "-" in normalized_target else None
+
+        try:
+            payload = self._request(
+                "GET", f"registro/documento/{normalized_target}/"
+            )
+        except ContificoAPIError as exc:
+            if exc.status_code in self.INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES:
+                return None
+            raise
+
+        if payload is None:
+            return None
+
+        if isinstance(payload, dict):
+            candidate = self._extract_invoice_number(payload)
+            if not candidate:
+                return payload
+            normalized_candidate = self._normalize_invoice_number(candidate)
+            if normalized_candidate == normalized_target:
+                return payload
+            if compact_target and normalized_candidate == compact_target:
+                return payload
+            return None
+
+        if isinstance(payload, list):
+            match = self._match_invoice_by_number(payload, normalized_target)
+            if match is not None:
+                return match
+            if compact_target:
+                for invoice in payload:
+                    candidate = self._extract_invoice_number(invoice)
+                    if not candidate:
+                        continue
+                    normalized_candidate = self._normalize_invoice_number(candidate)
+                    if normalized_candidate == compact_target:
+                        return invoice
+            if len(payload) == 1 and isinstance(payload[0], dict):
+                return payload[0]
+            return None
+
+        raise ContificoAPIError(
+            status_code=200,
+            detail="El formato de respuesta para facturas no es el esperado.",
+            payload=payload,
+        )
 
