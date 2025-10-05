@@ -285,8 +285,14 @@ def test_find_invoice_by_document_number_fetches_multiple_pages() -> None:
     assert pages == [1, 2]
 
 
-def test_find_invoice_by_document_number_falls_back_to_smaller_page_size() -> None:
+def test_find_invoice_by_document_number_falls_back_to_smaller_page_size(monkeypatch: pytest.MonkeyPatch) -> None:
     requests: list[dict[str, str]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
 
     def handler(request: httpx.Request) -> httpx.Response:
         params = dict(request.url.params)
@@ -307,9 +313,56 @@ def test_find_invoice_by_document_number_falls_back_to_smaller_page_size() -> No
     invoice = client.find_invoice_by_document_number("001-001-0000001")
 
     assert invoice == {"id": 3, "numero": "001-001-0000001"}
+    default_size = str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE)
+    fallback_size = str(ContificoClient.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES[0])
     assert [params["result_size"] for params in requests] == [
-        str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE),
-        str(ContificoClient.INVOICE_LOOKUP_FALLBACK_PAGE_SIZES[0]),
+        default_size,
+        default_size,
+        default_size,
+        fallback_size,
+    ]
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
+    ]
+
+
+def test_find_invoice_by_document_number_retries_before_returning(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[dict[str, str]] = []
+    sleeps: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(ContificoClient, "_sleep", staticmethod(fake_sleep))
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        params = dict(request.url.params)
+        requests.append(params)
+        if len(requests) < 3:
+            return httpx.Response(status.HTTP_504_GATEWAY_TIMEOUT, json={"mensaje": "Timeout"})
+        return httpx.Response(200, json=[{"id": 11, "numero": "001-001-0000001"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    invoice = client.find_invoice_by_document_number("001-001-0000001")
+
+    assert invoice == {"id": 11, "numero": "001-001-0000001"}
+    default_size = str(ContificoClient.INVOICE_LOOKUP_PAGE_SIZE)
+    assert [params["result_size"] for params in requests] == [
+        default_size,
+        default_size,
+        default_size,
+    ]
+    assert sleeps == [
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE,
+        ContificoClient.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * 2,
     ]
 
 

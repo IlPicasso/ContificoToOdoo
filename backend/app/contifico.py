@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http import HTTPStatus
 from typing import Any, Dict, Iterable, Optional
+import time
 
 import httpx
 
@@ -38,8 +39,10 @@ class ContificoClient:
 
     DEFAULT_BASE_URL = "https://api.contifico.com/sistema/api/v1"
     INVOICE_LOOKUP_PAGE_SIZE = 100
-    INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = (50, 25, 10, 5)
+    INVOICE_LOOKUP_FALLBACK_PAGE_SIZES = (50, 25, 10, 5, 1)
     INVOICE_LOOKUP_MAX_PAGES = 50
+    INVOICE_LOOKUP_SERVER_RETRIES = 2
+    INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
 
     def __init__(
         self,
@@ -134,6 +137,12 @@ class ContificoClient:
         normalized = normalized.strip().lstrip("-:")
         normalized = normalized.replace(" ", "")
         return normalized
+
+    @staticmethod
+    def _sleep(seconds: float) -> None:
+        if seconds <= 0:
+            return
+        time.sleep(seconds)
 
     @classmethod
     def _extract_invoice_number(cls, payload: Dict[str, Any]) -> Optional[str]:
@@ -303,24 +312,40 @@ class ContificoClient:
                 encountered_server_error = False
 
                 for page in range(1, self.INVOICE_LOOKUP_MAX_PAGES + 1):
-                    try:
-                        invoices = list(
-                            self.list_invoices(
-                                page=page,
-                                page_size=page_size,
-                                document_number=candidate,
+                    retry_attempt = 0
+                    should_stop_paging = False
+                    while True:
+                        try:
+                            invoices = list(
+                                self.list_invoices(
+                                    page=page,
+                                    page_size=page_size,
+                                    document_number=candidate,
+                                )
                             )
-                        )
-                    except ContificoAPIError as exc:
-                        if exc.status_code == HTTPStatus.NOT_FOUND:
                             break
-                        if HTTPStatus.BAD_GATEWAY <= exc.status_code < 600:
-                            last_server_error = exc
-                            encountered_server_error = True
-                            break
-                        raise
+                        except ContificoAPIError as exc:
+                            if exc.status_code == HTTPStatus.NOT_FOUND:
+                                should_stop_paging = True
+                                invoices = []
+                                break
+                            if HTTPStatus.BAD_GATEWAY <= exc.status_code < 600:
+                                last_server_error = exc
+                                if retry_attempt < self.INVOICE_LOOKUP_SERVER_RETRIES:
+                                    backoff = self.INVOICE_LOOKUP_RETRY_BACKOFF_BASE * (
+                                        2**retry_attempt
+                                    )
+                                    retry_attempt += 1
+                                    self._sleep(backoff)
+                                    continue
+                                encountered_server_error = True
+                                break
+                            raise
 
-                    if not invoices:
+                    if encountered_server_error:
+                        break
+
+                    if should_stop_paging or not invoices:
                         break
 
                     match = self._match_invoice_by_number(invoices, normalized_target)
