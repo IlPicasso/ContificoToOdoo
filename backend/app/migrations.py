@@ -111,8 +111,44 @@ def ensure_delivery_date_is_datetime(engine: Engine) -> None:
             return
 
 
+def ensure_customer_contact_columns(engine: Engine) -> None:
+    """Add missing optional contact columns to customers if required."""
+
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+    if "customers" not in table_names:
+        return
+
+    column_names = {column["name"] for column in inspector.get_columns("customers")}
+    statements: list[str] = []
+    dialect = engine.dialect.name
+
+    def _column_statement(column: str, definition: str) -> str:
+        if dialect == "sqlite":
+            return f"ALTER TABLE customers ADD COLUMN {column} {definition}"
+        return f"ALTER TABLE customers ADD COLUMN {column} {definition}"
+
+    if "email" not in column_names:
+        statements.append(_column_statement("email", "VARCHAR(255)"))
+    if "address" not in column_names:
+        statements.append(_column_statement("address", "VARCHAR(255)"))
+
+    if not statements:
+        return
+
+    with engine.begin() as connection:
+        for ddl in statements:
+            try:
+                connection.execute(text(ddl))
+            except DBAPIError as exc:
+                if _is_duplicate_column_error(exc):
+                    continue
+                raise
+
+
 def apply_schema_upgrades(engine: Engine) -> None:
     """Apply idempotent schema upgrades required by the application."""
 
     ensure_assigned_vendor_column(engine)
     ensure_delivery_date_is_datetime(engine)
+    ensure_customer_contact_columns(engine)

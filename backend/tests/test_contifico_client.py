@@ -1347,3 +1347,164 @@ def test_contifico_invoice_from_api_handles_nested_persona_object() -> None:
     invoice = schemas.ContificoInvoice.from_api(payload)
 
     assert invoice.cliente == "Ana Díaz"
+
+
+def test_contifico_customer_from_api_extracts_fields() -> None:
+    payload = {
+        "nombres": "Juan",
+        "apellidos": "Pérez",
+        "identificacion": "0912345678",
+        "telefono": "0999999999",
+        "correo": "juan@example.com",
+        "direccion": "Av. Siempre Viva 123",
+    }
+
+    customer = schemas.ContificoCustomer.from_api(payload)
+
+    assert customer.full_name == "Juan Pérez"
+    assert customer.document_id == "0912345678"
+    assert customer.phone == "0999999999"
+    assert customer.email == "juan@example.com"
+    assert customer.address == "Av. Siempre Viva 123"
+
+
+def test_contifico_customer_from_api_handles_nested_payload() -> None:
+    payload = {
+        "CLIENTE": {
+            "nombre": "Empresa Demo",
+            "identificacion": "1799999999001",
+            "telefono1": "022222222",
+            "email": "facturacion@example.com",
+            "direccion_principal": "Calle Comercio y Central",
+        }
+    }
+
+    customer = schemas.ContificoCustomer.from_api(payload)
+
+    assert customer.full_name == "Empresa Demo"
+    assert customer.document_id == "1799999999001"
+    assert customer.phone == "022222222"
+    assert customer.email == "facturacion@example.com"
+    assert customer.address == "Calle Comercio y Central"
+
+
+def test_fetch_customer_by_document_returns_match(monkeypatch) -> None:
+    payload = {
+        "identificacion": "0912345678",
+        "nombre": "Juan Perez",
+        "telefono": "0999999999",
+    }
+
+    client = ContificoClient("key", "token")
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert method == "GET"
+        assert endpoint == "personas"
+        assert params == {"identificacion": "0912345678"}
+        return [payload]
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0912345678")
+
+    assert result == payload
+
+
+def test_fetch_customer_by_document_handles_nested_payload(monkeypatch) -> None:
+    payload = {
+        "meta": {"count": 1},
+        "results": {
+            "personas": [
+                {
+                    "persona": {
+                        "identificacion": "0912345678",
+                        "nombre": "Juan Perez",
+                    }
+                }
+            ]
+        },
+    }
+
+    client = ContificoClient("key", "token")
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert method == "GET"
+        assert endpoint == "personas"
+        assert params == {"identificacion": "0912345678"}
+        return payload
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0912345678")
+
+    assert result == {
+        "persona": {
+            "identificacion": "0912345678",
+            "nombre": "Juan Perez",
+        }
+    }
+
+
+def test_fetch_customer_by_document_returns_none_when_missing(monkeypatch) -> None:
+    client = ContificoClient("key", "token")
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        return []
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    assert client.fetch_customer_by_document("0912345678") is None
+
+
+def test_fetch_customer_by_document_validates_input() -> None:
+    client = ContificoClient("key", "token")
+
+    with pytest.raises(ValueError):
+        client.fetch_customer_by_document("   ")
+
+
+def test_fetch_customer_by_document_matches_ruc_and_cedula(monkeypatch) -> None:
+    client = ContificoClient("key", "token")
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert params == {"identificacion": "0912345678"}
+        return {
+            "persona": {
+                "identificacion": "0912345678001",
+                "nombre": "Maria Perez",
+            }
+        }
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0912345678")
+
+    assert result == {
+        "persona": {
+            "identificacion": "0912345678001",
+            "nombre": "Maria Perez",
+        }
+    }
+
+
+def test_fetch_customer_by_document_falls_back_between_variants(monkeypatch) -> None:
+    client = ContificoClient("key", "token")
+
+    attempts: list[str] = []
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert method == "GET"
+        assert endpoint == "personas"
+        assert json is None
+        attempts.append(params["identificacion"])
+        if params == {"identificacion": "0919957423"}:
+            raise ContificoAPIError(HTTPStatus.NOT_FOUND, "not found")
+        assert params == {"identificacion": "0919957423001"}
+        return {"identificacion": "0919957423001", "nombre": "Cliente"}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0919957423")
+
+    assert result == {"identificacion": "0919957423001", "nombre": "Cliente"}
+    assert attempts == ["0919957423", "0919957423001"]
