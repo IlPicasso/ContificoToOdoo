@@ -101,6 +101,32 @@ def test_list_products_error_response() -> None:
     assert "No autorizado" in exc_info.value.detail
 
 
+def test_fetch_customer_by_document_treats_html_not_found_as_missing() -> None:
+    attempts: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(request.url.params.get("identificacion", ""))
+        return httpx.Response(
+            HTTPStatus.NOT_FOUND,
+            text="<html><body>El objeto que intenta consultar o modificar no existe.</body></html>",
+            headers={"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    result = client.fetch_customer_by_document("0919957423")
+
+    assert result is None
+    # Se prueban las variantes con y sin sufijo 001.
+    assert attempts == ["0919957423", "0919957423001"]
+
+
 def test_list_warehouses_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/bodega/")

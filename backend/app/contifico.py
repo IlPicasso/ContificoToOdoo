@@ -412,7 +412,15 @@ class ContificoClient:
 
         for candidate in self._customer_document_queries(document_id):
             params = {"identificacion": candidate}
-            payload = self._request("GET", "personas", params=params)
+            try:
+                payload = self._request("GET", "personas", params=params)
+            except ContificoAPIError as exc:
+                if exc.status_code == HTTPStatus.NOT_FOUND:
+                    # Contífico devuelve 404 con una página HTML cuando el
+                    # cliente no existe. Lo tratamos como "no encontrado" y
+                    # seguimos probando con otras variantes del documento.
+                    continue
+                raise
 
             match = self._find_customer_in_payload(payload, normalized_target)
             if match is not None:
