@@ -15,9 +15,11 @@ class FakeClient:
         *,
         invoice: dict | None = None,
         exception_factory: Callable[[], Exception] | None = None,
+        expected_customer_document: str = "0912345678",
     ) -> None:
         self._invoice = invoice
         self._exception_factory = exception_factory
+        self._expected_customer_document = expected_customer_document
 
     def find_invoice_by_document_number(
         self,
@@ -26,6 +28,7 @@ class FakeClient:
         customer_document: str | None = None,
         progress_callback=None,
     ):
+        assert customer_document == self._expected_customer_document
         if progress_callback:
             progress_callback("start", {"progress": 5, "document_number": document_number})
         if self._exception_factory is not None:
@@ -59,7 +62,9 @@ def test_invoice_lookup_job_manager_completes_successfully() -> None:
     )
 
     async def scenario() -> object:
-        job = await manager.start_job("001-001-0000009")
+        job = await manager.start_job(
+            "001-001-0000009", customer_document="0912345678"
+        )
         return await wait_for_completion(manager, job.id)
 
     final_job = asyncio.run(scenario())
@@ -69,13 +74,16 @@ def test_invoice_lookup_job_manager_completes_successfully() -> None:
     assert final_job.stage == "completed"
     assert final_job.result == {"id": 1, "numero": "001-001-0000009"}
     assert final_job.metadata.get("document_number") == "001-001-0000009"
+    assert final_job.customer_document == "0912345678"
 
 
 def test_invoice_lookup_job_manager_marks_not_found() -> None:
     manager = InvoiceLookupJobManager(client_factory=lambda: FakeClient(invoice=None))
 
     async def scenario() -> object:
-        job = await manager.start_job("001-001-0000999")
+        job = await manager.start_job(
+            "001-001-0000999", customer_document="0912345678"
+        )
         return await wait_for_completion(manager, job.id)
 
     final_job = asyncio.run(scenario())
@@ -94,7 +102,9 @@ def test_invoice_lookup_job_manager_reports_transport_error() -> None:
     )
 
     async def scenario() -> object:
-        job = await manager.start_job("001-001-0000123")
+        job = await manager.start_job(
+            "001-001-0000123", customer_document="0912345678"
+        )
         return await wait_for_completion(manager, job.id)
 
     final_job = asyncio.run(scenario())
@@ -126,7 +136,9 @@ def test_invoice_lookup_job_manager_times_out_long_running_job() -> None:
     )
 
     async def scenario() -> tuple[object, object]:
-        job = await manager.start_job("001-001-0000001")
+        job = await manager.start_job(
+            "001-001-0000001", customer_document="0912345678"
+        )
         # Espera suficiente para que se registre el timeout sin bloquear el hilo.
         await asyncio.sleep(0.02)
         interim_job = await manager.get_job(job.id)

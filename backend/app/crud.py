@@ -1,7 +1,7 @@
-from typing import Iterable, List, Optional, Dict, Any, Tuple
+from typing import Iterable, List, Optional, Dict, Any, Tuple, Set
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, load_only
 
 from . import auth, models, schemas
 
@@ -23,6 +23,17 @@ def _normalize_document_column(column):
     normalized = func.lower(column)
     for char in DOCUMENT_SANITIZE_CHARS:
         normalized = func.replace(normalized, char, "")
+    return normalized
+
+
+def _normalize_invoice_number(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    normalized = value.strip()
+    if normalized.upper().startswith("FAC"):
+        normalized = normalized[3:]
+    normalized = normalized.strip().lstrip("-:")
+    normalized = normalized.replace(" ", "")
     return normalized
 
 
@@ -418,6 +429,46 @@ def get_orders(
         items_query = items_query.limit(limit)
     orders = items_query.all()
     return orders, total
+
+
+def get_orders_for_customer_by_invoice_numbers(
+    db: Session, customer_id: int, invoice_numbers: Iterable[str]
+) -> Dict[str, List[models.Order]]:
+    normalized_targets: Set[str] = set()
+    for number in invoice_numbers:
+        if number is None:
+            continue
+        normalized = _normalize_invoice_number(str(number))
+        if normalized:
+            normalized_targets.add(normalized)
+    if not normalized_targets:
+        return {}
+
+    orders = (
+        db.query(models.Order)
+        .options(
+            load_only(
+                models.Order.id,
+                models.Order.order_number,
+                models.Order.status,
+                models.Order.invoice_number,
+                models.Order.created_at,
+                models.Order.delivery_date,
+            )
+        )
+        .filter(
+            models.Order.customer_id == customer_id,
+            models.Order.invoice_number.isnot(None),
+        )
+        .all()
+    )
+
+    mapping: Dict[str, List[models.Order]] = {}
+    for order in orders:
+        normalized = _normalize_invoice_number(order.invoice_number or "")
+        if normalized and normalized in normalized_targets:
+            mapping.setdefault(normalized, []).append(order)
+    return mapping
 
 
 def search_orders(

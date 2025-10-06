@@ -461,6 +461,25 @@ button[disabled] {
   flex: 1;
 }
 
+.field-with-action {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.field-with-action select {
+  flex: 1;
+}
+
+.field-with-action input {
+  flex: 1;
+}
+
+.field-with-action .link-button {
+  margin-left: 0;
+  white-space: nowrap;
+}
+
 .order-result {
   margin-top: 1.6rem;
   padding: 1.6rem;
@@ -782,6 +801,99 @@ button[disabled] {
   margin: 0;
   font-weight: 600;
   color: var(--primary-dark);
+}
+
+.customer-invoices {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.customer-invoices-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.customer-invoices-header h5 {
+  margin: 0;
+}
+
+.customer-invoices-table {
+  width: 100%;
+}
+
+.customer-invoices-table th,
+.customer-invoices-table td {
+  white-space: nowrap;
+}
+
+.customer-invoices-table td:last-child {
+  white-space: normal;
+}
+
+.invoice-orders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.invoice-order-pill {
+  background: rgba(17, 17, 17, 0.08);
+  color: var(--primary-dark);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.status-error {
+  color: var(--danger);
+}
+
+.status-success {
+  color: var(--success);
+}
+
+.invoice-lookup-details {
+  margin-top: 0.45rem;
+  transition: color 0.2s ease;
+}
+
+.invoice-lookup-details .invoice-lookup-summary {
+  font-weight: 600;
+}
+
+.invoice-lookup-details .invoice-lookup-number {
+  font-weight: 700;
+}
+
+.invoice-lookup-details .invoice-lookup-meta {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.invoice-lookup-details .invoice-lookup-meta li {
+  background: rgba(17, 17, 17, 0.08);
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-weight: 600;
+  color: inherit;
+}
+
+.invoice-lookup-details.status-error .invoice-lookup-meta li {
+  background: rgba(210, 54, 105, 0.16);
+}
+
+.invoice-lookup-details.status-success .invoice-lookup-meta li {
+  background: rgba(31, 31, 31, 0.12);
 }
 
 
@@ -1850,6 +1962,10 @@ body.kanban-detail-open {
 
 .table-wrapper {
   overflow-x: auto;
+}
+
+.table-wrapper.compact table {
+  font-size: 0.9rem;
 }
 
 table {

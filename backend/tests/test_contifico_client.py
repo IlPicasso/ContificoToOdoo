@@ -1187,10 +1187,12 @@ def test_fetch_invoice_by_document_number_success() -> None:
             progress_callback=None,
         ):
             assert document_number == "001-001-0000003"
-            assert customer_document is None
+            assert customer_document == "0912345678"
             return {"id": 3, "numero": "001-001-0000003", "cliente": "Lucía"}
 
-    result = fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000003")
+    result = fetch_invoice_by_document_number(
+        StubClient(), document_number="001-001-0000003", customer_document="0912345678"
+    )
 
     assert result.numero == "001-001-0000003"
     assert result.cliente == "Lucía"
@@ -1206,11 +1208,13 @@ def test_fetch_invoice_by_document_number_not_found() -> None:
             progress_callback=None,
         ):
             assert document_number == "001-001-0000004"
-            assert customer_document is None
+            assert customer_document == "0912345678"
             return None
 
     with pytest.raises(HTTPException) as exc_info:
-        fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000004")
+        fetch_invoice_by_document_number(
+            StubClient(), document_number="001-001-0000004", customer_document="0912345678"
+        )
 
     assert exc_info.value.status_code == 404
     assert "No se encontró" in exc_info.value.detail
@@ -1226,11 +1230,13 @@ def test_fetch_invoice_by_document_number_handles_api_404() -> None:
             progress_callback=None,
         ):
             assert document_number == "001-001-0000005"
-            assert customer_document is None
+            assert customer_document == "0912345678"
             raise ContificoAPIError(status.HTTP_404_NOT_FOUND, "Sin resultados")
 
     with pytest.raises(HTTPException) as exc_info:
-        fetch_invoice_by_document_number(StubClient(), document_number="001-001-0000005")
+        fetch_invoice_by_document_number(
+            StubClient(), document_number="001-001-0000005", customer_document="0912345678"
+        )
 
     assert exc_info.value.status_code == 404
     assert "No se encontró" in exc_info.value.detail

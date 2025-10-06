@@ -302,6 +302,31 @@
                       Selecciona un cliente para ver sus órdenes anteriores.
                     </div>
                   </div>
+                  <section class="customer-invoices" id="customerInvoicesSection">
+                    <div class="customer-invoices-header">
+                      <h5>Facturas del cliente</h5>
+                      <button type="button" class="secondary" id="customerInvoicesRefreshButton">
+                        Actualizar
+                      </button>
+                    </div>
+                    <p id="customerInvoicesStatus" class="muted small">
+                      Selecciona un cliente para consultar sus facturas en Contífico.
+                    </p>
+                    <div class="table-wrapper compact">
+                      <table class="customer-invoices-table">
+                        <thead>
+                          <tr>
+                            <th>Número</th>
+                            <th>Fecha</th>
+                            <th>Estado</th>
+                            <th>Total</th>
+                            <th>Órdenes vinculadas</th>
+                          </tr>
+                        </thead>
+                        <tbody id="customerInvoicesTableBody"></tbody>
+                      </table>
+                    </div>
+                  </section>
                   <form id="updateCustomerForm" class="form-grid">
                     <div class="form-row">
                       <label for="updateCustomerName">Nombre completo</label>
@@ -345,14 +370,36 @@
                 <input type="text" id="newOrderNumber" required />
               </div>
               <div class="form-row">
-                <label for="newOrderInvoice">Número de factura</label>
-                <input type="text" id="newOrderInvoice" placeholder="Ej. FAC-2024-00001" />
+                <label for="orderCustomerSelect">Cliente</label>
+                <div class="field-with-action">
+                  <select id="orderCustomerSelect" required>
+                    <option value="">Selecciona un cliente</option>
+                  </select>
+                  <button type="button" class="link-button" id="orderCreateCustomerButton">
+                    Registrar nuevo cliente
+                  </button>
+                </div>
               </div>
               <div class="form-row">
-                <label for="orderCustomerSelect">Cliente</label>
-                <select id="orderCustomerSelect" required>
-                  <option value="">Selecciona un cliente</option>
-                </select>
+                <label for="newOrderInvoice">Número de factura</label>
+                <div class="field-with-action">
+                  <input
+                    type="text"
+                    id="newOrderInvoice"
+                    placeholder="Ej. FAC-2024-00001"
+                    list="orderInvoiceSuggestions"
+                    aria-describedby="orderInvoiceSuggestionsStatus orderInvoiceLookupDetails"
+                    autocomplete="off"
+                  />
+                  <button type="button" class="secondary" id="orderInvoiceLookupButton">
+                    Consultar en Contífico
+                  </button>
+                </div>
+                <p id="orderInvoiceSuggestionsStatus" class="muted small"></p>
+                <div
+                  id="orderInvoiceLookupDetails"
+                  class="muted small invoice-lookup-details hidden"
+                ></div>
               </div>
               <div class="form-row">
                 <label for="newCustomerDocument">Documento</label>
@@ -418,6 +465,7 @@
               </div>
               <button type="submit" class="primary">Guardar orden</button>
             </form>
+            <datalist id="orderInvoiceSuggestions"></datalist>
           </section>
 
           <section class="card dashboard-panel hidden" id="ordersPanel">
@@ -545,7 +593,7 @@
                   </div>
                   <div class="form-row">
                     <label for="orderDetailInvoice">Número de factura</label>
-                    <input type="text" id="orderDetailInvoice" />
+                    <input type="text" id="orderDetailInvoice" list="orderInvoiceSuggestions" />
                   </div>
                   <div class="form-row">
                     <label for="orderDetailStatus">Estado</label>
@@ -1003,11 +1051,23 @@
                   <div>
                     <h4>Buscar factura puntual</h4>
                     <p class="muted small">
-                      Introduce el número completo del documento para validar una factura específica.
+                      Introduce la cédula o RUC del cliente y el número completo del documento para validar una factura específica.
                     </p>
                   </div>
                 </header>
                 <form id="contificoInvoiceLookupForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoInvoiceLookupDocument">Documento del cliente</label>
+                    <input
+                      type="text"
+                      id="contificoInvoiceLookupDocument"
+                      name="customer_document"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej. 0912345678"
+                      required
+                    />
+                  </div>
                   <div class="form-row">
                     <label for="contificoInvoiceLookupNumber">Número de documento</label>
                     <input

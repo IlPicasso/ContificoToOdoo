@@ -465,8 +465,31 @@ class ContificoInvoicePage(BaseModel):
     page_size: int
 
 
+class CustomerInvoiceOrderLink(BaseModel):
+    order_id: int
+    order_number: str
+    status: OrderStatus
+    created_at: datetime
+    delivery_date: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CustomerContificoInvoice(BaseModel):
+    invoice: ContificoInvoice
+    linked_orders: List[CustomerInvoiceOrderLink] = Field(default_factory=list)
+
+
+class CustomerContificoInvoicePage(BaseModel):
+    document_id: str
+    page: int
+    page_size: int
+    items: List[CustomerContificoInvoice] = Field(default_factory=list)
+
+
 class ContificoInvoiceLookupRequest(BaseModel):
     document_number: str = Field(min_length=3, max_length=40)
+    customer_document: str = Field(min_length=3, max_length=30)
 
 
 class ContificoInvoiceLookupJobStatus(str, Enum):
@@ -479,6 +502,7 @@ class ContificoInvoiceLookupJobStatus(str, Enum):
 class ContificoInvoiceLookupJob(BaseModel):
     id: str
     document_number: str
+    customer_document: Optional[str] = None
     status: ContificoInvoiceLookupJobStatus
     progress: int = Field(ge=0, le=100)
     stage: str
