@@ -1461,3 +1461,50 @@ def test_fetch_customer_by_document_validates_input() -> None:
 
     with pytest.raises(ValueError):
         client.fetch_customer_by_document("   ")
+
+
+def test_fetch_customer_by_document_matches_ruc_and_cedula(monkeypatch) -> None:
+    client = ContificoClient("key", "token")
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert params == {"identificacion": "0912345678"}
+        return {
+            "persona": {
+                "identificacion": "0912345678001",
+                "nombre": "Maria Perez",
+            }
+        }
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0912345678")
+
+    assert result == {
+        "persona": {
+            "identificacion": "0912345678001",
+            "nombre": "Maria Perez",
+        }
+    }
+
+
+def test_fetch_customer_by_document_falls_back_between_variants(monkeypatch) -> None:
+    client = ContificoClient("key", "token")
+
+    attempts: list[str] = []
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert method == "GET"
+        assert endpoint == "personas"
+        assert json is None
+        attempts.append(params["identificacion"])
+        if params == {"identificacion": "0919957423"}:
+            raise ContificoAPIError(HTTPStatus.NOT_FOUND, "not found")
+        assert params == {"identificacion": "0919957423001"}
+        return {"identificacion": "0919957423001", "nombre": "Cliente"}
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0919957423")
+
+    assert result == {"identificacion": "0919957423001", "nombre": "Cliente"}
+    assert attempts == ["0919957423", "0919957423001"]
