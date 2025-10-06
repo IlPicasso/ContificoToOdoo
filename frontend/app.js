@@ -3178,6 +3178,8 @@ function handleLogout(auto = false) {
   state.customerOptions = [];
   state.customerOrdersCache = {};
   state.customerDisplayCache = {};
+  state.customerInvoicesCache = {};
+  state.customerInvoicesRequestId = 0;
   state.customerSearchTerm = '';
   state.orderSearchTerm = '';
   state.customerPage = 1;
@@ -3205,11 +3207,29 @@ function handleLogout(auto = false) {
   state.customerRequestId = 0;
   state.orderRequestId = 0;
   state.customerOptionsRequestId = 0;
+  state.orderInvoiceSuggestions = [];
+  state.orderInvoiceSuggestionsCustomerId = null;
+  state.orderInvoiceSuggestionRequestId = 0;
+  state.orderInvoiceSuggestionsLoading = false;
+  state.orderInvoiceSuggestionsError = null;
+  state.orderInvoiceLookup = null;
+  state.orderInvoiceLookupLoading = false;
+  state.orderInvoiceLookupError = null;
+  state.orderInvoiceLookupCustomerId = null;
+  state.orderInvoiceLookupNumber = '';
+  state.orderInvoiceLookupRequestId = 0;
   state.users = [];
   state.usersLoaded = false;
   state.usersLoadError = null;
   state.editingUserId = null;
   resetContificoPreviewState();
+  setCustomerInvoicesStatus('');
+  if (customerInvoicesTableBody) {
+    customerInvoicesTableBody.innerHTML = '';
+  }
+  setOrderInvoiceSuggestionsStatus('');
+  renderOrderInvoiceSuggestions();
+  renderOrderInvoiceLookupDetails();
   if (currentUserNameElement) {
     currentUserNameElement.textContent = '';
   }
