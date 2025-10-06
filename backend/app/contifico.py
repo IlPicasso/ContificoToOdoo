@@ -410,15 +410,8 @@ class ContificoClient:
         if not normalized_target:
             raise ValueError("El número de documento del cliente es obligatorio.")
 
-        for query in self._customer_document_queries(document_id):
-            try:
-                payload = self._request(
-                    "GET", "personas", params={"identificacion": query}
-                )
-            except ContificoAPIError as exc:
-                if exc.status_code == HTTPStatus.NOT_FOUND:
-                    continue
-                raise
+        params = {"identificacion": normalized_target}
+        payload = self._request("GET", "personas", params=params)
 
             match = self._find_customer_in_payload(payload, normalized_target)
             if match is not None:
