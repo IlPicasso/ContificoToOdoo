@@ -10,8 +10,6 @@ const headingStatusElement = document.getElementById('orderHeadingStatus');
 const statusMessageElement = document.getElementById('orderDetailStatusMessage');
 const contentElement = document.getElementById('orderDetailContent');
 const summaryCustomerElement = document.getElementById('orderSummaryCustomer');
-const summaryDocumentElement = document.getElementById('orderSummaryDocument');
-const summaryContactElement = document.getElementById('orderSummaryContact');
 const summaryInvoiceElement = document.getElementById('orderSummaryInvoice');
 const summaryOriginElement = document.getElementById('orderSummaryOrigin');
 const summaryDeliveryElement = document.getElementById('orderSummaryDelivery');
@@ -21,6 +19,14 @@ const notesElement = document.getElementById('orderDetailNotes');
 const measurementsElement = document.getElementById('orderDetailMeasurements');
 const tasksContainerElement = document.getElementById('orderDetailTasks');
 const currentYearElement = document.getElementById('currentYear');
+
+const customerDetailModalElement = document.getElementById('customerDetailModal');
+const customerDetailDialogElement = document.getElementById('customerDetailDialog');
+const customerDetailNameElement = document.getElementById('customerDetailName');
+const customerDetailDocumentElement = document.getElementById('customerDetailDocument');
+const customerDetailContactElement = document.getElementById('customerDetailContact');
+const customerDetailDescriptionElement = document.getElementById('customerDetailDescription');
+const customerDetailCloseElements = document.querySelectorAll('[data-close-customer-modal]');
 
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const ORDER_FETCH_MAX_ATTEMPTS = 5;
@@ -306,6 +312,182 @@ function setSummaryField(element, value, fallback = '—') {
   }
 }
 
+function syncBodyModalState() {
+  if (typeof document === 'undefined') {
+    return;
+  }
+  const hasVisibleModal = Boolean(document.querySelector('.modal-overlay:not(.hidden)'));
+  document.body.classList.toggle('modal-open', hasVisibleModal);
+}
+
+function normalizeTextContent(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  try {
+    return value.toString().trim();
+  } catch (error) {
+    return '';
+  }
+}
+
+const customerDetailState = {
+  name: '',
+  document: '',
+  contact: '',
+  hasAnyDetail: false,
+};
+
+let lastFocusedElementBeforeCustomerModal = null;
+let isCustomerModalOpen = false;
+
+function updateCustomerModalContent() {
+  if (customerDetailNameElement) {
+    setSummaryField(customerDetailNameElement, customerDetailState.name, 'Sin registrar');
+  }
+  if (customerDetailDocumentElement) {
+    setSummaryField(customerDetailDocumentElement, customerDetailState.document, 'Sin registrar');
+  }
+  if (customerDetailContactElement) {
+    setSummaryField(customerDetailContactElement, customerDetailState.contact, 'Sin registrar');
+  }
+  if (customerDetailDescriptionElement) {
+    if (customerDetailState.hasAnyDetail) {
+      customerDetailDescriptionElement.textContent =
+        'Consulta los datos registrados para el cliente asociado a esta orden.';
+      customerDetailDescriptionElement.classList.remove('is-empty');
+    } else {
+      customerDetailDescriptionElement.textContent =
+        'No se registraron datos adicionales del cliente.';
+      customerDetailDescriptionElement.classList.add('is-empty');
+    }
+  }
+}
+
+function applyCustomerSummaryAvailability() {
+  if (!summaryCustomerElement) {
+    return;
+  }
+  const interactive = customerDetailState.hasAnyDetail;
+  summaryCustomerElement.disabled = !interactive;
+  summaryCustomerElement.classList.toggle('is-interactive', interactive);
+  if (interactive) {
+    summaryCustomerElement.setAttribute('aria-label', 'Ver datos del cliente');
+    summaryCustomerElement.setAttribute('aria-haspopup', 'dialog');
+    summaryCustomerElement.setAttribute('title', 'Ver datos del cliente');
+  } else {
+    summaryCustomerElement.removeAttribute('aria-label');
+    summaryCustomerElement.removeAttribute('aria-haspopup');
+    summaryCustomerElement.removeAttribute('title');
+  }
+}
+
+function resetCustomerDetailState(fallback = 'Sin registrar') {
+  customerDetailState.name = '';
+  customerDetailState.document = '';
+  customerDetailState.contact = '';
+  customerDetailState.hasAnyDetail = false;
+  if (summaryCustomerElement) {
+    setSummaryField(summaryCustomerElement, '', fallback);
+  }
+  updateCustomerModalContent();
+  applyCustomerSummaryAvailability();
+}
+
+function updateCustomerDetailState(order) {
+  if (!order) {
+    resetCustomerDetailState();
+    return;
+  }
+
+  customerDetailState.name = normalizeTextContent(order.customer_name);
+  customerDetailState.document = normalizeTextContent(order.customer_document);
+  customerDetailState.contact = normalizeTextContent(order.customer_contact);
+  customerDetailState.hasAnyDetail = Boolean(
+    customerDetailState.name || customerDetailState.document || customerDetailState.contact
+  );
+
+  if (summaryCustomerElement) {
+    setSummaryField(summaryCustomerElement, customerDetailState.name, 'Sin registrar');
+  }
+  updateCustomerModalContent();
+  applyCustomerSummaryAvailability();
+}
+
+function openCustomerDetailModal() {
+  if (!customerDetailModalElement || !customerDetailState.hasAnyDetail) {
+    return;
+  }
+  if (!customerDetailModalElement.classList.contains('hidden')) {
+    return;
+  }
+  lastFocusedElementBeforeCustomerModal =
+    document.activeElement && typeof document.activeElement.focus === 'function'
+      ? document.activeElement
+      : null;
+  customerDetailModalElement.classList.remove('hidden');
+  customerDetailModalElement.setAttribute('aria-hidden', 'false');
+  syncBodyModalState();
+  if (customerDetailDialogElement) {
+    customerDetailDialogElement.focus();
+  }
+  isCustomerModalOpen = true;
+}
+
+function closeCustomerDetailModal() {
+  if (!customerDetailModalElement || customerDetailModalElement.classList.contains('hidden')) {
+    return;
+  }
+  customerDetailModalElement.classList.add('hidden');
+  customerDetailModalElement.setAttribute('aria-hidden', 'true');
+  syncBodyModalState();
+  isCustomerModalOpen = false;
+  if (lastFocusedElementBeforeCustomerModal && typeof lastFocusedElementBeforeCustomerModal.focus === 'function') {
+    lastFocusedElementBeforeCustomerModal.focus();
+  } else if (summaryCustomerElement) {
+    summaryCustomerElement.focus();
+  }
+  lastFocusedElementBeforeCustomerModal = null;
+}
+
+function setupCustomerDetailModal() {
+  if (summaryCustomerElement) {
+    summaryCustomerElement.addEventListener('click', () => {
+      if (summaryCustomerElement.disabled) {
+        return;
+      }
+      openCustomerDetailModal();
+    });
+  }
+
+  customerDetailCloseElements.forEach((element) => {
+    element.addEventListener('click', () => {
+      closeCustomerDetailModal();
+    });
+  });
+
+  if (customerDetailModalElement) {
+    customerDetailModalElement.addEventListener('click', (event) => {
+      if (event?.target?.dataset?.closeCustomerModal === 'true') {
+        closeCustomerDetailModal();
+      }
+    });
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (!isCustomerModalOpen) {
+      return;
+    }
+    if (event.key === 'Escape' || event.key === 'Esc') {
+      event.preventDefault();
+      closeCustomerDetailModal();
+    }
+  });
+}
+
 function renderNotes(notes) {
   if (!notesElement) return;
   const normalized = typeof notes === 'string' ? notes.trim() : '';
@@ -478,9 +660,7 @@ function renderOrder(order) {
     headingStatusElement.appendChild(createStatusBadgeElement(order.status));
   }
 
-  setSummaryField(summaryCustomerElement, order.customer_name || '', 'Sin registrar');
-  setSummaryField(summaryDocumentElement, order.customer_document || '', 'Sin registrar');
-  setSummaryField(summaryContactElement, order.customer_contact || '', 'Sin registrar');
+  updateCustomerDetailState(order);
   setSummaryField(summaryInvoiceElement, order.invoice_number || '', 'Sin número registrado');
   setSummaryField(summaryOriginElement, order.origin_branch || '', 'Sin definir');
   const deliveryLabel = formatDeliveryDateLabel(order);
@@ -674,4 +854,6 @@ function initialise() {
   loadOrderDetails(orderId, token);
 }
 
+setupCustomerDetailModal();
+resetCustomerDetailState('—');
 initialise();
