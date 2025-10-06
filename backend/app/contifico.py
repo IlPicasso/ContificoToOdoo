@@ -410,7 +410,7 @@ class ContificoClient:
         if not normalized_target:
             raise ValueError("El número de documento del cliente es obligatorio.")
 
-        params = {"identificacion": document_id.strip()}
+        params = {"identificacion": normalized_target}
         payload = self._request("GET", "personas", params=params)
 
         candidates: list[Dict[str, Any]] = []
