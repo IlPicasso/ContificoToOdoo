@@ -415,13 +415,20 @@ class ContificoClient:
 
         candidates: list[Dict[str, Any]] = []
 
+        seen: set[int] = set()
+
         def _collect(value: Any) -> None:
             if isinstance(value, dict):
+                obj_id = id(value)
+                if obj_id in seen:
+                    return
+                seen.add(obj_id)
                 candidates.append(value)
+                for nested in value.values():
+                    _collect(nested)
             elif isinstance(value, list):
                 for item in value:
-                    if isinstance(item, dict):
-                        candidates.append(item)
+                    _collect(item)
 
         if payload is None:
             return None

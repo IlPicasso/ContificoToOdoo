@@ -1410,6 +1410,41 @@ def test_fetch_customer_by_document_returns_match(monkeypatch) -> None:
     assert result == payload
 
 
+def test_fetch_customer_by_document_handles_nested_payload(monkeypatch) -> None:
+    payload = {
+        "meta": {"count": 1},
+        "results": {
+            "personas": [
+                {
+                    "persona": {
+                        "identificacion": "0912345678",
+                        "nombre": "Juan Perez",
+                    }
+                }
+            ]
+        },
+    }
+
+    client = ContificoClient("key", "token")
+
+    def fake_request(method, endpoint, *, params=None, json=None):
+        assert method == "GET"
+        assert endpoint == "personas"
+        assert params == {"identificacion": "0912345678"}
+        return payload
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    result = client.fetch_customer_by_document("0912345678")
+
+    assert result == {
+        "persona": {
+            "identificacion": "0912345678",
+            "nombre": "Juan Perez",
+        }
+    }
+
+
 def test_fetch_customer_by_document_returns_none_when_missing(monkeypatch) -> None:
     client = ContificoClient("key", "token")
 
