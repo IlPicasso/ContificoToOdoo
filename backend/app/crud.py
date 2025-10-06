@@ -58,6 +58,8 @@ def serialize_customer(customer: Optional[models.Customer]) -> Optional[Dict[str
         "full_name": customer.full_name,
         "document_id": customer.document_id,
         "phone": customer.phone,
+        "email": customer.email,
+        "address": customer.address,
         "created_at": customer.created_at.isoformat() if customer.created_at else None,
         "updated_at": customer.updated_at.isoformat() if customer.updated_at else None,
         "measurements": [
@@ -252,6 +254,8 @@ def get_customers(
             or_(
                 models.Customer.full_name.ilike(pattern),
                 models.Customer.document_id.ilike(pattern),
+                models.Customer.phone.ilike(pattern),
+                models.Customer.email.ilike(pattern),
             )
         )
     total = query.count()
@@ -281,6 +285,8 @@ def create_customer(db: Session, customer_in: schemas.CustomerCreate) -> models.
         full_name=customer_in.full_name,
         document_id=customer_in.document_id,
         phone=customer_in.phone,
+        email=customer_in.email,
+        address=customer_in.address,
     )
     db.add(db_customer)
     db.flush()
