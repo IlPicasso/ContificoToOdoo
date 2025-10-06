@@ -203,6 +203,13 @@ class ContificoClient:
         return normalized
 
     @staticmethod
+    def _normalize_document(value: str) -> str:
+        cleaned = (value or "").strip().lower()
+        for char in ("-", " ", ".", "/", "_"):
+            cleaned = cleaned.replace(char, "")
+        return cleaned
+
+    @staticmethod
     def _sleep(seconds: float) -> None:
         if seconds <= 0:
             return
@@ -270,6 +277,47 @@ class ContificoClient:
                 nested_value = nested.get("identificacion") or nested.get("IDENTIFICACION")
                 if isinstance(nested_value, str) and nested_value.strip():
                     return nested_value.strip()
+        return None
+
+    @classmethod
+    def _extract_customer_document(cls, payload: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(payload, dict):
+            return None
+        keys = (
+            "identificacion",
+            "persona_identificacion",
+            "identification",
+            "personaIdentificacion",
+            "IDENTIFICACION",
+            "PERSONA_IDENTIFICACION",
+            "IDENTIFICATION",
+            "documento",
+            "DOCUMENTO",
+            "numero_documento",
+            "NUMERO_DOCUMENTO",
+            "ruc",
+            "RUC",
+            "cedula",
+            "CEDULA",
+        )
+        for key in keys:
+            value = payload.get(key)
+            if value is None:
+                continue
+            if isinstance(value, (int, float)):
+                candidate = str(value)
+            elif isinstance(value, str):
+                candidate = value.strip()
+            else:
+                continue
+            if candidate:
+                return candidate
+        for nested_key in ("persona", "cliente", "CLIENTE", "PERSONA"):
+            nested = payload.get(nested_key)
+            if isinstance(nested, dict):
+                nested_value = cls._extract_customer_document(nested)
+                if nested_value:
+                    return nested_value
         return None
 
     @classmethod
@@ -354,6 +402,43 @@ class ContificoClient:
                 continue
             seen.add(size)
             yield size
+
+    def fetch_customer_by_document(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Obtiene la ficha del cliente en Contífico usando su identificación."""
+
+        normalized_target = self._normalize_document(document_id)
+        if not normalized_target:
+            raise ValueError("El número de documento del cliente es obligatorio.")
+
+        params = {"identificacion": document_id.strip()}
+        payload = self._request("GET", "personas", params=params)
+
+        candidates: list[Dict[str, Any]] = []
+
+        def _collect(value: Any) -> None:
+            if isinstance(value, dict):
+                candidates.append(value)
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict):
+                        candidates.append(item)
+
+        if payload is None:
+            return None
+
+        _collect(payload)
+        if isinstance(payload, dict):
+            for key in ("results", "data", "datos", "items", "personas", "records", "rows"):
+                _collect(payload.get(key))
+
+        for candidate in candidates:
+            document_value = self._extract_customer_document(candidate)
+            if not document_value:
+                continue
+            if self._normalize_document(document_value) == normalized_target:
+                return candidate
+
+        return None
 
     def list_products(
         self, *, page: int = 1, page_size: int = 100

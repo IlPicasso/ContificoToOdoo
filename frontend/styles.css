@@ -282,6 +282,36 @@ h3 {
   gap: 0.35rem;
 }
 
+.field-with-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.field-with-action > input,
+.field-with-action > textarea,
+.field-with-action > select {
+  flex: 1 1 12rem;
+}
+
+.contifico-lookup-status {
+  min-height: 1rem;
+  margin: 0;
+}
+
+.contifico-lookup-status.info {
+  color: var(--muted);
+}
+
+.contifico-lookup-status.success {
+  color: var(--success);
+}
+
+.contifico-lookup-status.error {
+  color: var(--danger);
+}
+
 label {
   font-weight: 600;
   color: var(--muted);

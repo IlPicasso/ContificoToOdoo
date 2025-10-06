@@ -120,6 +120,8 @@ class Customer(Base):
     full_name = Column(String(100), nullable=False)
     document_id = Column(String(50), unique=True, nullable=False, index=True)
     phone = Column(String(50), nullable=True)
+    email = Column(String(255), nullable=True)
+    address = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), default=now, nullable=False)
     updated_at = Column(
         DateTime(timezone=True),
