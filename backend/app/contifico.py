@@ -410,11 +410,57 @@ class ContificoClient:
         if not normalized_target:
             raise ValueError("El número de documento del cliente es obligatorio.")
 
-        params = {"identificacion": document_id.strip()}
-        payload = self._request("GET", "personas", params=params)
+        for query in self._customer_document_queries(document_id):
+            try:
+                payload = self._request(
+                    "GET", "personas", params={"identificacion": query}
+                )
+            except ContificoAPIError as exc:
+                if exc.status_code == HTTPStatus.NOT_FOUND:
+                    continue
+                raise
+
+            match = self._find_customer_in_payload(payload, normalized_target)
+            if match is not None:
+                return match
+
+        return None
+
+    @classmethod
+    def _customer_document_queries(cls, document_id: str) -> Iterable[str]:
+        candidates: list[str] = []
+        seen: set[str] = set()
+
+        def add_candidate(value: str | None) -> None:
+            candidate = (value or "").strip()
+            if not candidate or candidate in seen:
+                return
+            seen.add(candidate)
+            candidates.append(candidate)
+
+        raw = (document_id or "").strip()
+        normalized = cls._normalize_document(document_id)
+
+        add_candidate(raw)
+        if normalized and normalized != raw:
+            add_candidate(normalized)
+
+        if normalized:
+            if len(normalized) == 10:
+                add_candidate(f"{normalized}001")
+            if len(normalized) == 13 and normalized.endswith("001"):
+                add_candidate(normalized[:10])
+
+        return candidates
+
+    @classmethod
+    def _find_customer_in_payload(
+        cls, payload: Any, normalized_target: str
+    ) -> Optional[Dict[str, Any]]:
+        if payload is None:
+            return None
 
         candidates: list[Dict[str, Any]] = []
-
         seen: set[int] = set()
 
         def _collect(value: Any) -> None:
@@ -430,22 +476,32 @@ class ContificoClient:
                 for item in value:
                     _collect(item)
 
-        if payload is None:
-            return None
-
         _collect(payload)
         if isinstance(payload, dict):
             for key in ("results", "data", "datos", "items", "personas", "records", "rows"):
                 _collect(payload.get(key))
 
         for candidate in candidates:
-            document_value = self._extract_customer_document(candidate)
+            document_value = cls._extract_customer_document(candidate)
             if not document_value:
                 continue
-            if self._normalize_document(document_value) == normalized_target:
+            normalized_candidate = cls._normalize_document(document_value)
+            if cls._documents_match(normalized_candidate, normalized_target):
                 return candidate
 
         return None
+
+    @staticmethod
+    def _documents_match(candidate: str, target: str) -> bool:
+        if not candidate or not target:
+            return False
+        if candidate == target:
+            return True
+        if len(target) == 10 and len(candidate) == 13:
+            return candidate.startswith(target) and candidate.endswith("001")
+        if len(target) == 13 and target.endswith("001") and len(candidate) == 10:
+            return target.startswith(candidate)
+        return False
 
     def list_products(
         self, *, page: int = 1, page_size: int = 100
