@@ -3956,9 +3956,9 @@ async function populateCustomerDetail(customer) {
   }
 
   renderCustomerOrderHistory(customer);
-  await loadCustomerInvoicesForDetail(customer);
   setCustomerDetailVisible(true);
   renderCustomers();
+  void loadCustomerInvoicesForDetail(customer);
 }
 
 function clearCustomerDetail(options = {}) {
