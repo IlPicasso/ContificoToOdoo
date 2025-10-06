@@ -412,7 +412,12 @@ class ContificoClient:
 
         for candidate in self._customer_document_queries(document_id):
             params = {"identificacion": candidate}
-            payload = self._request("GET", "personas", params=params)
+            try:
+                payload = self._request("GET", "persona/", params=params)
+            except ContificoAPIError as exc:
+                if exc.status_code == HTTPStatus.NOT_FOUND:
+                    continue
+                raise
 
             match = self._find_customer_in_payload(payload, normalized_target)
             if match is not None:

@@ -1399,7 +1399,7 @@ def test_fetch_customer_by_document_returns_match(monkeypatch) -> None:
 
     def fake_request(method, endpoint, *, params=None, json=None):
         assert method == "GET"
-        assert endpoint == "personas"
+        assert endpoint == "persona/"
         assert params == {"identificacion": "0912345678"}
         return [payload]
 
@@ -1429,7 +1429,7 @@ def test_fetch_customer_by_document_handles_nested_payload(monkeypatch) -> None:
 
     def fake_request(method, endpoint, *, params=None, json=None):
         assert method == "GET"
-        assert endpoint == "personas"
+        assert endpoint == "persona/"
         assert params == {"identificacion": "0912345678"}
         return payload
 
@@ -1494,7 +1494,7 @@ def test_fetch_customer_by_document_falls_back_between_variants(monkeypatch) -> 
 
     def fake_request(method, endpoint, *, params=None, json=None):
         assert method == "GET"
-        assert endpoint == "personas"
+        assert endpoint == "persona/"
         assert json is None
         attempts.append(params["identificacion"])
         if params == {"identificacion": "0919957423"}:
