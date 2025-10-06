@@ -287,4 +287,5 @@ __all__ = [
     "build_warehouse_list",
     "build_invoice_page",
     "fetch_invoice_by_document_number",
+    "fetch_invoice_by_customer_and_document",
 ]

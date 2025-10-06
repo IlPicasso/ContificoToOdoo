@@ -9,6 +9,7 @@ const ORDER_TASK_STATUS_COMPLETED = 'completado';
 const KANBAN_FETCH_PAGE_SIZE = 100;
 const KANBAN_FALLBACK_STATUS = 'Sin estado';
 const INVOICE_LOOKUP_LOG_PREFIX = '[Contífico][Factura puntual]';
+const CUSTOMER_INVOICE_PAGE_SIZE = 50;
 
 
 const state = {
@@ -54,6 +55,20 @@ const state = {
   customerRequestId: 0,
   orderRequestId: 0,
   customerOptionsRequestId: 0,
+  customerInvoicesCache: {},
+  customerInvoicesRequestId: 0,
+  orderInvoiceSuggestions: [],
+  orderInvoiceSuggestionsCustomerId: null,
+  orderInvoiceSuggestionRequestId: 0,
+  orderInvoiceSuggestionsLoading: false,
+  orderInvoiceSuggestionsError: null,
+  orderInvoiceLookup: null,
+  orderInvoiceLookupLoading: false,
+  orderInvoiceLookupError: null,
+  orderInvoiceLookupCustomerId: null,
+  orderInvoiceLookupNumber: '',
+  orderInvoiceLookupRequestId: 0,
+  pendingOrderCustomerSelection: null,
   contificoPreviewProducts: [],
   contificoPreviewProductsPage: 1,
   contificoPreviewProductsPageSize: CONTIFICO_DEFAULT_PAGE_SIZE,
@@ -286,6 +301,10 @@ const customerDetailDialog = document.getElementById('customerDetailDialog');
 const customerDetailTitle = document.getElementById('customerDetailTitle');
 const customerDetailSummaryElement = document.getElementById('customerDetailSummary');
 const customerOrderHistoryContainer = document.getElementById('customerOrderHistory');
+const customerInvoicesSection = document.getElementById('customerInvoicesSection');
+const customerInvoicesStatus = document.getElementById('customerInvoicesStatus');
+const customerInvoicesTableBody = document.getElementById('customerInvoicesTableBody');
+const customerInvoicesRefreshButton = document.getElementById('customerInvoicesRefreshButton');
 const customerMeasurementsContainer = document.getElementById('customerMeasurementsContainer');
 const updateCustomerMeasurementsContainer = document.getElementById('updateCustomerMeasurementsContainer');
 const updateCustomerNameInput = document.getElementById('updateCustomerName');
@@ -295,6 +314,7 @@ const addCustomerMeasurementSetButton = document.getElementById('addCustomerMeas
 const addUpdateCustomerMeasurementSetButton = document.getElementById('addUpdateCustomerMeasurementSet');
 const deleteCustomerButton = document.getElementById('deleteCustomerButton');
 const orderCustomerSelect = document.getElementById('orderCustomerSelect');
+const orderCreateCustomerButton = document.getElementById('orderCreateCustomerButton');
 const customerMeasurementOptions = document.getElementById('customerMeasurementOptions');
 const ordersTableBody = document.getElementById('ordersTableBody');
 const orderPageSizeSelect = document.getElementById('orderPageSize');
@@ -310,6 +330,10 @@ const statusSelect = document.getElementById('newOrderStatus');
 const assignTailorSelect = document.getElementById('assignTailor');
 const assignVendorSelect = document.getElementById('assignVendor');
 const newOrderInvoiceInput = document.getElementById('newOrderInvoice');
+const orderInvoiceSuggestionsStatus = document.getElementById('orderInvoiceSuggestionsStatus');
+const orderInvoiceSuggestionsList = document.getElementById('orderInvoiceSuggestions');
+const orderInvoiceLookupButton = document.getElementById('orderInvoiceLookupButton');
+const orderInvoiceLookupDetails = document.getElementById('orderInvoiceLookupDetails');
 const newOrderOriginSelect = document.getElementById('newOrderOrigin');
 const newOrderDeliveryDateInput = document.getElementById('newOrderDeliveryDate');
 const orderDetail = document.getElementById('orderDetail');
@@ -438,6 +462,7 @@ let currentOrderDetailHost = null;
 let lastKanbanFocusedElement = null;
 let lastKanbanFocusedOrderId = null;
 let lastCustomerDetailTrigger = null;
+let lastCreateCustomerTrigger = null;
 let lastContificoCustomerInvoicesTrigger = null;
 let lastContificoInvoiceLookupTrigger = null;
 
@@ -1870,6 +1895,7 @@ function resetCreateOrderForm() {
     addNewOrderTaskRow();
   }
   renderCustomerMeasurementOptions(null);
+  clearOrderInvoiceSuggestions();
 }
 
 function resetCreateCustomerForm() {
@@ -1898,6 +1924,7 @@ function setCreateCustomerVisible(visible) {
     showCreateCustomerButton.classList.toggle('hidden', visible);
   }
   if (visible) {
+    lastCreateCustomerTrigger = document.activeElement;
     if (customerMeasurementsContainer && !customerMeasurementsContainer.children.length) {
       createMeasurementSetBlock(customerMeasurementsContainer);
     }
@@ -1909,8 +1936,18 @@ function setCreateCustomerVisible(visible) {
       firstField?.focus();
     });
   } else {
+    if (
+      state.pendingOrderCustomerSelection?.source === 'order' &&
+      !state.pendingOrderCustomerSelection?.customerId
+    ) {
+      state.pendingOrderCustomerSelection = null;
+    }
     resetCreateCustomerForm();
-    if (showCreateCustomerButton?.isConnected) {
+    const trigger = lastCreateCustomerTrigger;
+    lastCreateCustomerTrigger = null;
+    if (trigger?.isConnected) {
+      trigger.focus();
+    } else if (showCreateCustomerButton?.isConnected) {
       showCreateCustomerButton.focus();
     }
   }
@@ -2141,6 +2178,7 @@ function updateNavigationForAuth() {
     }
   }
   updateDashboardShortcutVisibility();
+  updateOrderInvoiceLookupButtonState();
 }
 
 async function bootstrapAuthenticatedSession({ showWelcomeToast = false } = {}) {
@@ -2512,8 +2550,24 @@ async function refreshCustomerOptions() {
     }
     state.customerOptions = collected;
     if (orderCustomerSelect) {
-      populateCustomerSelect(orderCustomerSelect, orderCustomerSelect.value || '');
+      let desiredValue = orderCustomerSelect.value || '';
+      if (
+        state.pendingOrderCustomerSelection?.source === 'order' &&
+        state.pendingOrderCustomerSelection?.customerId
+      ) {
+        desiredValue = String(state.pendingOrderCustomerSelection.customerId);
+      }
+      populateCustomerSelect(orderCustomerSelect, desiredValue);
+      if (desiredValue) {
+        orderCustomerSelect.value = desiredValue;
+      }
       handleOrderCustomerChange();
+      if (
+        state.pendingOrderCustomerSelection?.source === 'order' &&
+        state.pendingOrderCustomerSelection?.customerId
+      ) {
+        state.pendingOrderCustomerSelection = null;
+      }
     }
   } catch (error) {
     if (state.customerOptionsRequestId === requestId) {
@@ -2572,6 +2626,516 @@ async function loadAuditLogs() {
     renderAuditLogs();
   } catch (error) {
     showToast(error.message, 'error');
+  }
+}
+
+function getCachedCustomerInvoices(customerId) {
+  const numericId = Number(customerId);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    return null;
+  }
+  const cacheKey = String(numericId);
+  const cached = state.customerInvoicesCache[cacheKey];
+  if (!cached || !Array.isArray(cached.items)) {
+    return null;
+  }
+  return cached;
+}
+
+function updateOrderInvoiceLookupButtonState() {
+  if (!orderInvoiceLookupButton) return;
+  const hasToken = Boolean(state.token);
+  const hasCustomer = Number(orderCustomerSelect?.value) > 0;
+  const invoiceValue = newOrderInvoiceInput?.value?.trim() || '';
+  orderInvoiceLookupButton.disabled =
+    !hasToken || state.orderInvoiceLookupLoading || !hasCustomer || !invoiceValue;
+}
+
+function renderOrderInvoiceLookupDetails() {
+  if (!orderInvoiceLookupDetails) {
+    updateOrderInvoiceLookupButtonState();
+    return;
+  }
+  orderInvoiceLookupDetails.innerHTML = '';
+  orderInvoiceLookupDetails.classList.remove('status-error', 'status-success');
+  const { orderInvoiceLookupLoading, orderInvoiceLookupError, orderInvoiceLookup } = state;
+  if (orderInvoiceLookupLoading) {
+    orderInvoiceLookupDetails.textContent = 'Consultando factura en Contífico...';
+    orderInvoiceLookupDetails.classList.remove('hidden');
+  } else if (orderInvoiceLookupError) {
+    orderInvoiceLookupDetails.textContent = orderInvoiceLookupError;
+    orderInvoiceLookupDetails.classList.remove('hidden');
+    orderInvoiceLookupDetails.classList.add('status-error');
+  } else if (orderInvoiceLookup) {
+    const summary = document.createElement('div');
+    summary.className = 'invoice-lookup-summary';
+    const number = document.createElement('span');
+    number.className = 'invoice-lookup-number';
+    number.textContent =
+      orderInvoiceLookup.numero || state.orderInvoiceLookupNumber || 'Factura confirmada';
+    summary.append('Factura confirmada: ', number);
+    orderInvoiceLookupDetails.appendChild(summary);
+
+    const metaValues = [];
+    if (orderInvoiceLookup.cliente) {
+      metaValues.push(`Cliente: ${orderInvoiceLookup.cliente}`);
+    }
+    if (orderInvoiceLookup.fecha_emision) {
+      metaValues.push(`Emisión: ${formatDate(orderInvoiceLookup.fecha_emision)}`);
+    }
+    if (orderInvoiceLookup.estado) {
+      metaValues.push(`Estado: ${orderInvoiceLookup.estado}`);
+    }
+    if (
+      typeof orderInvoiceLookup.total === 'number' &&
+      Number.isFinite(orderInvoiceLookup.total)
+    ) {
+      metaValues.push(`Total: ${formatCurrencyUSD(orderInvoiceLookup.total)}`);
+    }
+    if (metaValues.length) {
+      const metaList = document.createElement('ul');
+      metaList.className = 'invoice-lookup-meta';
+      metaValues.forEach((value) => {
+        const item = document.createElement('li');
+        item.textContent = value;
+        metaList.appendChild(item);
+      });
+      orderInvoiceLookupDetails.appendChild(metaList);
+    }
+    orderInvoiceLookupDetails.classList.remove('hidden');
+    orderInvoiceLookupDetails.classList.add('status-success');
+  } else {
+    orderInvoiceLookupDetails.classList.add('hidden');
+  }
+  updateOrderInvoiceLookupButtonState();
+}
+
+function clearOrderInvoiceLookup() {
+  state.orderInvoiceLookup = null;
+  state.orderInvoiceLookupError = null;
+  state.orderInvoiceLookupLoading = false;
+  state.orderInvoiceLookupCustomerId = null;
+  state.orderInvoiceLookupNumber = '';
+  state.orderInvoiceLookupRequestId = 0;
+  renderOrderInvoiceLookupDetails();
+}
+
+function setOrderInvoiceSuggestionsStatus(message, { isError = false } = {}) {
+  if (!orderInvoiceSuggestionsStatus) return;
+  orderInvoiceSuggestionsStatus.textContent = message || '';
+  orderInvoiceSuggestionsStatus.classList.toggle('status-error', Boolean(isError));
+}
+
+function renderOrderInvoiceSuggestions() {
+  updateOrderInvoiceLookupButtonState();
+  if (orderInvoiceSuggestionsList) {
+    orderInvoiceSuggestionsList.innerHTML = '';
+    const suggestions = Array.isArray(state.orderInvoiceSuggestions)
+      ? state.orderInvoiceSuggestions
+      : [];
+    const seenNumbers = new Set();
+    suggestions.forEach((entry) => {
+      const invoiceData = entry?.invoice || entry || {};
+      const rawNumber = invoiceData?.numero;
+      const invoiceNumber = typeof rawNumber === 'string' ? rawNumber.trim() : '';
+      if (!invoiceNumber || seenNumbers.has(invoiceNumber)) {
+        return;
+      }
+      seenNumbers.add(invoiceNumber);
+      const option = document.createElement('option');
+      option.value = invoiceNumber;
+      const parts = [invoiceNumber];
+      if (invoiceData?.fecha_emision) {
+        parts.push(invoiceData.fecha_emision);
+      }
+      if (typeof invoiceData?.total === 'number' && Number.isFinite(invoiceData.total)) {
+        parts.push(formatCurrencyUSD(invoiceData.total));
+      }
+      option.label = parts.join(' • ');
+      orderInvoiceSuggestionsList.appendChild(option);
+    });
+  }
+
+  if (!state.orderInvoiceSuggestionsCustomerId) {
+    setOrderInvoiceSuggestionsStatus(
+      'Selecciona un cliente para ver las facturas sugeridas.'
+    );
+    return;
+  }
+  if (state.orderInvoiceSuggestionsLoading) {
+    setOrderInvoiceSuggestionsStatus('Consultando facturas del cliente...');
+    return;
+  }
+  if (state.orderInvoiceSuggestionsError) {
+    setOrderInvoiceSuggestionsStatus(state.orderInvoiceSuggestionsError, { isError: true });
+    return;
+  }
+  if (!state.orderInvoiceSuggestions || !state.orderInvoiceSuggestions.length) {
+    setOrderInvoiceSuggestionsStatus('No se encontraron facturas recientes para el cliente.');
+    return;
+  }
+  setOrderInvoiceSuggestionsStatus(
+    'Selecciona un número de la lista o ingrésalo manualmente.'
+  );
+  updateOrderInvoiceLookupButtonState();
+}
+
+function clearOrderInvoiceSuggestions() {
+  state.orderInvoiceSuggestions = [];
+  state.orderInvoiceSuggestionsCustomerId = null;
+  state.orderInvoiceSuggestionsError = null;
+  state.orderInvoiceSuggestionsLoading = false;
+  if (orderInvoiceSuggestionsList) {
+    orderInvoiceSuggestionsList.innerHTML = '';
+  }
+  setOrderInvoiceSuggestionsStatus('Selecciona un cliente para ver las facturas sugeridas.');
+  clearOrderInvoiceLookup();
+}
+
+async function fetchCustomerInvoicesData(customerId, { force = false } = {}) {
+  if (!state.token) {
+    throw new Error('Inicia sesión para consultar las facturas del cliente.');
+  }
+  const numericId = Number(customerId);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    throw new Error('El cliente seleccionado no es válido.');
+  }
+  const cacheKey = String(numericId);
+  if (!force) {
+    const cached = getCachedCustomerInvoices(numericId);
+    if (cached) {
+      return cached;
+    }
+  }
+  const params = new URLSearchParams({
+    page: '1',
+    page_size: String(CUSTOMER_INVOICE_PAGE_SIZE),
+  });
+  const response = await apiFetch(
+    `/customers/${numericId}/contifico/invoices?${params.toString()}`
+  );
+  const items = Array.isArray(response?.items) ? response.items : [];
+  const cacheEntry = {
+    customerId: numericId,
+    documentId: typeof response?.document_id === 'string' ? response.document_id : '',
+    page: typeof response?.page === 'number' ? response.page : 1,
+    pageSize:
+      typeof response?.page_size === 'number' ? response.page_size : CUSTOMER_INVOICE_PAGE_SIZE,
+    items,
+    fetchedAt: Date.now(),
+  };
+  state.customerInvoicesCache[cacheKey] = cacheEntry;
+  return cacheEntry;
+}
+
+async function loadOrderInvoiceSuggestions(customer, options = {}) {
+  const { force = false } = options;
+  if (!orderInvoiceSuggestionsStatus) return;
+  if (!customer || !customer.id || !customer.document_id) {
+    clearOrderInvoiceSuggestions();
+    return;
+  }
+  const numericId = Number(customer.id);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    clearOrderInvoiceSuggestions();
+    return;
+  }
+  state.orderInvoiceSuggestionsCustomerId = numericId;
+  state.orderInvoiceSuggestionsLoading = true;
+  state.orderInvoiceSuggestionsError = null;
+
+  const cached = !force ? getCachedCustomerInvoices(numericId) : null;
+  if (cached) {
+    state.orderInvoiceSuggestions = cached.items || [];
+    state.orderInvoiceSuggestionsLoading = false;
+    renderOrderInvoiceSuggestions();
+    return;
+  }
+
+  renderOrderInvoiceSuggestions();
+  const requestId = Date.now();
+  state.orderInvoiceSuggestionRequestId = requestId;
+  try {
+    const data = await fetchCustomerInvoicesData(numericId, { force });
+    if (state.orderInvoiceSuggestionRequestId !== requestId) {
+      return;
+    }
+    state.orderInvoiceSuggestions = Array.isArray(data?.items) ? data.items : [];
+    state.orderInvoiceSuggestionsLoading = false;
+    renderOrderInvoiceSuggestions();
+  } catch (error) {
+    if (state.orderInvoiceSuggestionRequestId !== requestId) {
+      return;
+    }
+    state.orderInvoiceSuggestions = [];
+    state.orderInvoiceSuggestionsLoading = false;
+    state.orderInvoiceSuggestionsError = error?.message || 'No se pudo consultar Contífico.';
+    renderOrderInvoiceSuggestions();
+  }
+}
+
+async function handleOrderInvoiceLookup() {
+  if (!orderInvoiceLookupButton) return;
+  if (!state.token) {
+    showToast('Inicia sesión para consultar Contífico.', 'error');
+    return;
+  }
+  const selectedCustomerId = Number(orderCustomerSelect?.value);
+  if (!Number.isFinite(selectedCustomerId) || selectedCustomerId <= 0) {
+    showToast('Selecciona un cliente antes de consultar la factura.', 'error');
+    return;
+  }
+  const invoiceNumber = newOrderInvoiceInput?.value?.trim() || '';
+  if (!invoiceNumber) {
+    showToast('Ingresa un número de factura para consultarlo.', 'error');
+    newOrderInvoiceInput?.focus();
+    return;
+  }
+
+  const customer =
+    (state.customerOptions || []).find((item) => item.id === selectedCustomerId) ||
+    (state.customers || []).find((item) => item.id === selectedCustomerId) ||
+    null;
+  const documentInput = document.getElementById('newCustomerDocument');
+  const fallbackDocument = documentInput?.value?.trim() || '';
+  const documentId = customer?.document_id?.trim?.() || fallbackDocument;
+  if (!documentId) {
+    showToast(
+      'El cliente seleccionado no tiene un número de documento registrado.',
+      'error'
+    );
+    return;
+  }
+
+  const requestId = Date.now();
+  state.orderInvoiceLookupRequestId = requestId;
+  state.orderInvoiceLookupLoading = true;
+  state.orderInvoiceLookupError = null;
+  state.orderInvoiceLookup = null;
+  state.orderInvoiceLookupCustomerId = selectedCustomerId;
+  state.orderInvoiceLookupNumber = invoiceNumber;
+  renderOrderInvoiceLookupDetails();
+
+  try {
+    const params = new URLSearchParams({
+      customer_document: documentId,
+      document_number: invoiceNumber,
+    });
+    const response = await apiFetch(
+      `/integrations/contifico/invoices/by-customer-and-number?${params.toString()}`
+    );
+    if (state.orderInvoiceLookupRequestId !== requestId) {
+      return;
+    }
+    state.orderInvoiceLookupLoading = false;
+    state.orderInvoiceLookupError = null;
+    state.orderInvoiceLookup = response || null;
+    const normalizedNumber =
+      typeof response?.numero === 'string' && response.numero.trim()
+        ? response.numero.trim()
+        : invoiceNumber;
+    state.orderInvoiceLookupNumber = normalizedNumber;
+    if (newOrderInvoiceInput && normalizedNumber) {
+      newOrderInvoiceInput.value = normalizedNumber;
+    }
+
+    const numericId = selectedCustomerId;
+    const cacheKey = String(numericId);
+    const cacheEntry = getCachedCustomerInvoices(numericId);
+    const newInvoiceEntry = { invoice: response, linked_orders: [] };
+    if (cacheEntry) {
+      const items = Array.isArray(cacheEntry.items) ? cacheEntry.items : [];
+      const existingIndex = items.findIndex(
+        (entry) => (entry?.invoice?.numero || '').trim() === normalizedNumber
+      );
+      if (existingIndex >= 0) {
+        items[existingIndex] = { ...items[existingIndex], invoice: response };
+      } else {
+        items.unshift(newInvoiceEntry);
+      }
+      cacheEntry.items = items;
+      cacheEntry.documentId = cacheEntry.documentId || documentId;
+      cacheEntry.fetchedAt = Date.now();
+    } else {
+      state.customerInvoicesCache[cacheKey] = {
+        customerId: numericId,
+        documentId,
+        page: 1,
+        pageSize: CUSTOMER_INVOICE_PAGE_SIZE,
+        items: [newInvoiceEntry],
+        fetchedAt: Date.now(),
+      };
+    }
+    if (state.selectedCustomerId === numericId) {
+      renderCustomerInvoices(numericId);
+    }
+
+    if (state.orderInvoiceSuggestionsCustomerId === numericId) {
+      const suggestions = Array.isArray(state.orderInvoiceSuggestions)
+        ? [...state.orderInvoiceSuggestions]
+        : [];
+      const existingSuggestionIndex = suggestions.findIndex((entry) => {
+        const invoiceData = entry?.invoice || entry || {};
+        return (invoiceData.numero || '').trim() === normalizedNumber;
+      });
+      if (existingSuggestionIndex >= 0) {
+        suggestions[existingSuggestionIndex] = {
+          ...suggestions[existingSuggestionIndex],
+          invoice: response,
+        };
+      } else {
+        suggestions.unshift(newInvoiceEntry);
+      }
+      state.orderInvoiceSuggestions = suggestions;
+      state.orderInvoiceSuggestionsError = null;
+      renderOrderInvoiceSuggestions();
+    }
+
+    renderOrderInvoiceLookupDetails();
+    showToast('Factura confirmada en Contífico.', 'success');
+  } catch (error) {
+    if (state.orderInvoiceLookupRequestId !== requestId) {
+      return;
+    }
+    state.orderInvoiceLookupLoading = false;
+    state.orderInvoiceLookup = null;
+    state.orderInvoiceLookupError =
+      error?.message || 'No se pudo consultar la factura en Contífico.';
+    renderOrderInvoiceLookupDetails();
+    showToast(state.orderInvoiceLookupError, 'error');
+  }
+}
+
+function setCustomerInvoicesStatus(message, { isError = false } = {}) {
+  if (!customerInvoicesStatus) return;
+  customerInvoicesStatus.textContent = message || '';
+  customerInvoicesStatus.classList.toggle('status-error', Boolean(isError));
+}
+
+function clearCustomerInvoices() {
+  if (customerInvoicesTableBody) {
+    customerInvoicesTableBody.innerHTML = '';
+  }
+  setCustomerInvoicesStatus('Selecciona un cliente para consultar sus facturas en Contífico.');
+}
+
+function renderCustomerInvoices(customerId) {
+  if (!customerInvoicesTableBody) return;
+  const cacheEntry = getCachedCustomerInvoices(customerId);
+  const invoices = Array.isArray(cacheEntry?.items) ? cacheEntry.items : [];
+  customerInvoicesTableBody.innerHTML = '';
+  if (!invoices.length) {
+    setCustomerInvoicesStatus('No se encontraron facturas registradas para el cliente.');
+    return;
+  }
+  const summaryMessage =
+    invoices.length === 1
+      ? 'Se encontró 1 factura para el cliente.'
+      : `Se encontraron ${invoices.length} facturas para el cliente.`;
+  setCustomerInvoicesStatus(summaryMessage);
+
+  invoices.forEach((entry) => {
+    const invoiceData = entry?.invoice || {};
+    const row = document.createElement('tr');
+
+    const numberCell = document.createElement('td');
+    numberCell.textContent = invoiceData?.numero || '—';
+    row.appendChild(numberCell);
+
+    const dateCell = document.createElement('td');
+    dateCell.textContent = invoiceData?.fecha_emision ? formatDate(invoiceData.fecha_emision) : '—';
+    row.appendChild(dateCell);
+
+    const statusCell = document.createElement('td');
+    statusCell.textContent = invoiceData?.estado || '—';
+    row.appendChild(statusCell);
+
+    const totalCell = document.createElement('td');
+    totalCell.textContent =
+      typeof invoiceData?.total === 'number' && Number.isFinite(invoiceData.total)
+        ? formatCurrencyUSD(invoiceData.total)
+        : '—';
+    row.appendChild(totalCell);
+
+    const ordersCell = document.createElement('td');
+    const linkedOrders = Array.isArray(entry?.linked_orders) ? entry.linked_orders : [];
+    if (!linkedOrders.length) {
+      const emptyLabel = document.createElement('span');
+      emptyLabel.className = 'muted';
+      emptyLabel.textContent = 'Sin órdenes vinculadas';
+      ordersCell.appendChild(emptyLabel);
+    } else {
+      const container = document.createElement('div');
+      container.className = 'invoice-orders';
+      linkedOrders.forEach((linkedOrder) => {
+        const pill = document.createElement('span');
+        pill.className = 'invoice-order-pill';
+        const orderNumber = linkedOrder?.order_number || `Orden #${linkedOrder?.order_id || ''}`;
+        const statusLabel = linkedOrder?.status || '';
+        const parts = [orderNumber];
+        if (statusLabel) {
+          parts.push(statusLabel);
+        }
+        pill.textContent = parts.join(' • ');
+        container.appendChild(pill);
+      });
+      ordersCell.appendChild(container);
+    }
+    row.appendChild(ordersCell);
+
+    customerInvoicesTableBody.appendChild(row);
+  });
+}
+
+async function loadCustomerInvoicesForDetail(customer, options = {}) {
+  const { force = false } = options;
+  if (!customer) {
+    clearCustomerInvoices();
+    return;
+  }
+  const numericId = Number(customer.id);
+  if (!Number.isFinite(numericId) || numericId <= 0) {
+    clearCustomerInvoices();
+    return;
+  }
+  const cached = !force ? getCachedCustomerInvoices(numericId) : null;
+  if (cached && !force) {
+    renderCustomerInvoices(numericId);
+    return;
+  }
+
+  setCustomerInvoicesStatus('Consultando facturas del cliente...');
+  const requestId = Date.now();
+  state.customerInvoicesRequestId = requestId;
+  try {
+    const data = await fetchCustomerInvoicesData(numericId, { force });
+    if (state.customerInvoicesRequestId !== requestId) {
+      return;
+    }
+    renderCustomerInvoices(numericId);
+    if (state.orderInvoiceSuggestionsCustomerId === numericId) {
+      state.orderInvoiceSuggestions = Array.isArray(data?.items) ? data.items : [];
+      state.orderInvoiceSuggestionsLoading = false;
+      state.orderInvoiceSuggestionsError = null;
+      renderOrderInvoiceSuggestions();
+    }
+  } catch (error) {
+    if (state.customerInvoicesRequestId !== requestId) {
+      return;
+    }
+    customerInvoicesTableBody.innerHTML = '';
+    const message = error?.message || 'No se pudieron obtener las facturas del cliente.';
+    setCustomerInvoicesStatus(message, { isError: true });
+    if (state.orderInvoiceSuggestionsCustomerId === numericId) {
+      state.orderInvoiceSuggestions = [];
+      state.orderInvoiceSuggestionsLoading = false;
+      state.orderInvoiceSuggestionsError = message;
+      renderOrderInvoiceSuggestions();
+    }
+  } finally {
+    if (state.customerInvoicesRequestId === requestId) {
+      state.customerInvoicesRequestId = 0;
+    }
   }
 }
 
@@ -3230,6 +3794,7 @@ async function populateCustomerDetail(customer) {
   }
 
   renderCustomerOrderHistory(customer);
+  await loadCustomerInvoicesForDetail(customer);
   setCustomerDetailVisible(true);
   renderCustomers();
 }
@@ -3247,6 +3812,7 @@ function clearCustomerDetail(options = {}) {
     customerDetailSummaryElement.textContent = CUSTOMER_DETAIL_DEFAULT_SUMMARY;
   }
   renderCustomerOrderHistory(null);
+  clearCustomerInvoices();
 
   updateCustomerForm?.reset();
   if (updateCustomerMeasurementsContainer) {
@@ -3351,6 +3917,19 @@ function populateOrderDetail(order, options = {}) {
     } else {
       orderDetailMeasurementsContainer.classList.add('muted');
       orderDetailMeasurementsContainer.textContent = 'Sin medidas registradas.';
+    }
+  }
+
+  if (order.customer_id) {
+    const targetId = Number(order.customer_id);
+    const candidate =
+      state.customerOptions.find((item) => item.id === targetId) ||
+      state.customers.find((item) => item.id === targetId) ||
+      (order.customer_document
+        ? { id: targetId, document_id: order.customer_document }
+        : null);
+    if (candidate) {
+      void loadOrderInvoiceSuggestions(candidate);
     }
   }
 
@@ -3616,7 +4195,36 @@ if (orderNextPageButton) {
 
 if (showCreateCustomerButton) {
   showCreateCustomerButton.addEventListener('click', () => {
+    state.pendingOrderCustomerSelection = null;
     setCreateCustomerVisible(true);
+  });
+}
+
+if (orderCreateCustomerButton) {
+  orderCreateCustomerButton.addEventListener('click', () => {
+    state.pendingOrderCustomerSelection = { source: 'order', customerId: null };
+    setCreateCustomerVisible(true);
+  });
+}
+
+if (customerInvoicesRefreshButton) {
+  customerInvoicesRefreshButton.addEventListener('click', async () => {
+    if (!state.selectedCustomerId) {
+      showToast('Selecciona un cliente para actualizar sus facturas.', 'error');
+      return;
+    }
+    const targetId = Number(state.selectedCustomerId);
+    const candidate =
+      state.customers.find((item) => item.id === targetId) ||
+      state.customerOptions.find((item) => item.id === targetId);
+    if (!candidate) {
+      await loadCustomerInvoicesForDetail({ id: targetId }, { force: true });
+      return;
+    }
+    await loadCustomerInvoicesForDetail(candidate, { force: true });
+    if (orderCustomerSelect && Number(orderCustomerSelect.value) === targetId) {
+      await loadOrderInvoiceSuggestions(candidate, { force: true });
+    }
   });
 }
 
@@ -3756,7 +4364,7 @@ if (createCustomerForm) {
     const submitButton = createCustomerForm.querySelector('button[type="submit"]');
     submitButton.disabled = true;
     try {
-      await apiFetch('/customers', {
+      const createdCustomer = await apiFetch('/customers', {
         method: 'POST',
         body: {
           full_name: fullName,
@@ -3765,6 +4373,12 @@ if (createCustomerForm) {
           measurements,
         },
       });
+      if (
+        state.pendingOrderCustomerSelection?.source === 'order' &&
+        createdCustomer?.id
+      ) {
+        state.pendingOrderCustomerSelection.customerId = Number(createdCustomer.id);
+      }
       await loadCustomers();
       await refreshCustomerOptions();
       setCreateCustomerVisible(false);
@@ -3971,26 +4585,42 @@ function handleOrderCustomerChange() {
   const documentInput = document.getElementById('newCustomerDocument');
   const nameInput = document.getElementById('newCustomerName');
   const contactInput = document.getElementById('newCustomerContact');
+  clearOrderInvoiceLookup();
   if (!customer) {
     if (documentInput) documentInput.value = '';
     if (nameInput) nameInput.value = '';
     if (contactInput) contactInput.value = '';
     renderCustomerMeasurementOptions(null);
+    clearOrderInvoiceSuggestions();
+    updateOrderInvoiceLookupButtonState();
     return;
   }
   if (documentInput) documentInput.value = customer.document_id || '';
   if (nameInput) nameInput.value = customer.full_name || '';
   if (contactInput) contactInput.value = customer.phone || '';
   renderCustomerMeasurementOptions(customer);
+  void loadOrderInvoiceSuggestions(customer);
+  updateOrderInvoiceLookupButtonState();
 }
 
 if (orderCustomerSelect) {
   orderCustomerSelect.addEventListener('change', handleOrderCustomerChange);
 }
 
+if (newOrderInvoiceInput) {
+  newOrderInvoiceInput.addEventListener('input', updateOrderInvoiceLookupButtonState);
+}
+
+if (orderInvoiceLookupButton) {
+  orderInvoiceLookupButton.addEventListener('click', () => {
+    void handleOrderInvoiceLookup();
+  });
+}
+
 populateEstablishmentSelect(newOrderOriginSelect);
 populateEstablishmentSelect(orderDetailOriginSelect);
 ensureNewOrderTaskRow();
+clearOrderInvoiceSuggestions();
 
 function parseDateValue(value) {
   if (!value) {
