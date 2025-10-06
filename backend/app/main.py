@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import List, Optional, Tuple
 
 from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -18,8 +19,11 @@ from .dependencies import (
     vendor_or_admin_required,
 )
 from .temp_contifico import (
+    build_invoice_page,
     build_product_page,
     build_warehouse_list,
+    fetch_invoice_by_customer_and_document,
+    fetch_invoice_by_document_number,
     router as contifico_preview_router,
 )
 from .migrations import apply_schema_upgrades
@@ -162,6 +166,66 @@ def list_contifico_warehouses(
 
     _ = current_user
     return build_warehouse_list(contifico_client)
+
+
+@app.get(
+    "/integrations/contifico/invoices/by-customer",
+    response_model=schemas.ContificoInvoicePage,
+)
+def list_contifico_invoices_by_customer(
+    document_id: str = Query(..., min_length=3, max_length=30),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(staff_required()),
+):
+    _ = current_user
+    normalized_document = document_id.strip()
+    return build_invoice_page(
+        contifico_client,
+        page=page,
+        page_size=page_size,
+        document_id=normalized_document,
+    )
+
+
+@app.get(
+    "/integrations/contifico/invoices/by-number",
+    response_model=schemas.ContificoInvoice,
+)
+async def get_contifico_invoice_by_number(
+    document_number: str = Query(..., min_length=3, max_length=40),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(staff_required()),
+):
+    _ = current_user
+    normalized_number = document_number.strip()
+    return await run_in_threadpool(
+        fetch_invoice_by_document_number,
+        contifico_client,
+        document_number=normalized_number,
+    )
+
+
+@app.get(
+    "/integrations/contifico/invoices/by-customer-and-number",
+    response_model=schemas.ContificoInvoice,
+)
+async def get_contifico_invoice_by_customer_and_number(
+    customer_document: str = Query(..., min_length=3, max_length=30),
+    document_number: str = Query(..., min_length=3, max_length=40),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(staff_required()),
+):
+    _ = current_user
+    normalized_customer = customer_document.strip()
+    normalized_number = document_number.strip()
+    return await run_in_threadpool(
+        fetch_invoice_by_customer_and_document,
+        contifico_client,
+        customer_document=normalized_customer,
+        document_number=normalized_number,
+    )
 
 
 @app.post(
@@ -332,6 +396,71 @@ def get_customer_endpoint(
     if not customer:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
     return customer
+
+
+@app.get(
+    "/customers/{customer_id}/contifico/invoices",
+    response_model=schemas.CustomerContificoInvoicePage,
+)
+def get_customer_contifico_invoices(
+    customer_id: int,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    db: Session = Depends(get_db),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(staff_required()),
+):
+    _ = current_user
+    customer = crud.get_customer(db, customer_id)
+    if not customer:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente no encontrado")
+
+    document_id = (customer.document_id or "").strip()
+    if not document_id:
+        return schemas.CustomerContificoInvoicePage(
+            document_id="",
+            page=page,
+            page_size=page_size,
+            items=[],
+        )
+
+    invoice_page = build_invoice_page(
+        contifico_client,
+        page=page,
+        page_size=page_size,
+        document_id=document_id,
+    )
+
+    mapping = crud.get_orders_for_customer_by_invoice_numbers(
+        db,
+        customer.id,
+        [invoice.numero for invoice in invoice_page.items],
+    )
+
+    enriched_items: list[schemas.CustomerContificoInvoice] = []
+    for invoice in invoice_page.items:
+        normalized_number = ContificoClient._normalize_invoice_number(invoice.numero or "")
+        linked_orders = mapping.get(normalized_number, [])
+        linked_summaries = [
+            schemas.CustomerInvoiceOrderLink(
+                order_id=order.id,
+                order_number=order.order_number,
+                status=order.status,
+                created_at=order.created_at,
+                delivery_date=order.delivery_date,
+            )
+            for order in linked_orders
+        ]
+        enriched_items.append(
+            schemas.CustomerContificoInvoice(invoice=invoice, linked_orders=linked_summaries)
+        )
+
+    return schemas.CustomerContificoInvoicePage(
+        document_id=document_id,
+        page=invoice_page.page,
+        page_size=invoice_page.page_size,
+        items=enriched_items,
+    )
 
 
 @app.patch("/customers/{customer_id}", response_model=schemas.CustomerRead)
