@@ -1388,6 +1388,24 @@ def test_contifico_customer_from_api_handles_nested_payload() -> None:
     assert customer.address == "Calle Comercio y Central"
 
 
+def test_contifico_customer_from_api_extracts_phone_from_lists() -> None:
+    payload = {
+        "persona": {
+            "nombres": "Laura",
+            "apellidos": "Gómez",
+            "identificacion": "0911223344",
+            "telefonos": [
+                {"tipo": "convencional", "numero": "022223344"},
+                {"tipo": "movil", "numero": "0999988877"},
+            ],
+        }
+    }
+
+    customer = schemas.ContificoCustomer.from_api(payload)
+
+    assert customer.phone == "022223344"
+
+
 def test_fetch_customer_by_document_returns_match(monkeypatch) -> None:
     payload = {
         "identificacion": "0912345678",
@@ -1399,7 +1417,7 @@ def test_fetch_customer_by_document_returns_match(monkeypatch) -> None:
 
     def fake_request(method, endpoint, *, params=None, json=None):
         assert method == "GET"
-        assert endpoint == "personas"
+        assert endpoint == "persona/"
         assert params == {"identificacion": "0912345678"}
         return [payload]
 
@@ -1429,7 +1447,7 @@ def test_fetch_customer_by_document_handles_nested_payload(monkeypatch) -> None:
 
     def fake_request(method, endpoint, *, params=None, json=None):
         assert method == "GET"
-        assert endpoint == "personas"
+        assert endpoint == "persona/"
         assert params == {"identificacion": "0912345678"}
         return payload
 
@@ -1494,7 +1512,7 @@ def test_fetch_customer_by_document_falls_back_between_variants(monkeypatch) -> 
 
     def fake_request(method, endpoint, *, params=None, json=None):
         assert method == "GET"
-        assert endpoint == "personas"
+        assert endpoint == "persona/"
         assert json is None
         attempts.append(params["identificacion"])
         if params == {"identificacion": "0919957423"}:
