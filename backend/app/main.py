@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from . import auth, crud, models, schemas
 from .config import get_settings
 from .database import Base, engine, get_db
-from .contifico import ContificoClient
+from .contifico import ContificoAPIError, ContificoClient, ContificoClientError
 from .dependencies import (
     admin_required,
     get_contifico_client,
@@ -165,6 +165,47 @@ def list_contifico_warehouses(
 
     _ = current_user
     return build_warehouse_list(contifico_client)
+
+
+@app.get(
+    "/integrations/contifico/customers/{document_id}",
+    response_model=schemas.ContificoCustomer,
+)
+def get_contifico_customer_from_document(
+    document_id: str,
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user: models.User = Depends(staff_required()),
+):
+    _ = current_user
+    normalized_document = document_id.strip()
+    if not normalized_document:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Debe proporcionar un número de identificación válido.",
+        )
+    try:
+        payload = contifico_client.fetch_customer_by_document(normalized_document)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    except ContificoClientError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=str(exc),
+        ) from exc
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cliente no encontrado en Contífico",
+        )
+    customer = schemas.ContificoCustomer.from_api(payload)
+    if not customer.document_id:
+        customer.document_id = normalized_document
+    return customer
 
 
 @app.get(

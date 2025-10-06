@@ -49,6 +49,8 @@ class CustomerBase(BaseModel):
     full_name: str
     document_id: str
     phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
 
 
 class CustomerCreate(CustomerBase):
@@ -59,6 +61,8 @@ class CustomerUpdate(BaseModel):
     full_name: Optional[str] = None
     document_id: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
     measurements: Optional[List[CustomerMeasurementCreate]] = None
 
 
@@ -293,6 +297,155 @@ class ContificoWarehouse(BaseModel):
             nombre=payload.get("nombre") or payload.get("descripcion"),
             direccion=payload.get("direccion"),
             raw=payload,
+        )
+
+
+class ContificoCustomer(BaseModel):
+    full_name: Optional[str] = None
+    document_id: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "ContificoCustomer":
+        if not isinstance(payload, dict):
+            raise TypeError("El cliente devuelto por Contífico debe ser un diccionario")
+
+        def _normalize_string(value: Any) -> Optional[str]:
+            if isinstance(value, str):
+                candidate = value.strip()
+                return candidate or None
+            if isinstance(value, (int, float)) and not (isinstance(value, float) and math.isnan(value)):
+                return str(value)
+            return None
+
+        def _extract_name(data: Dict[str, Any]) -> Optional[str]:
+            nombres = _normalize_string(
+                data.get("nombres")
+                or data.get("NOMBRES")
+                or data.get("nombre")
+                or data.get("NOMBRE")
+            )
+            apellidos = _normalize_string(
+                data.get("apellidos")
+                or data.get("APELLIDOS")
+                or data.get("apellido")
+                or data.get("APELLIDO")
+            )
+            if nombres and apellidos:
+                return f"{nombres} {apellidos}".strip()
+            if nombres:
+                return nombres
+            if apellidos:
+                return apellidos
+            return None
+
+        def _extract_value(data: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+            for key in keys:
+                if key not in data:
+                    continue
+                value = data.get(key)
+                if isinstance(value, dict):
+                    nested = _extract_value(value, keys)
+                    if nested:
+                        return nested
+                normalized = _normalize_string(value)
+                if normalized:
+                    return normalized
+            return None
+
+        merged_sources: list[Dict[str, Any]] = [payload]
+        for candidate_key in ("persona", "CLIENTE", "cliente"):
+            nested = payload.get(candidate_key)
+            if isinstance(nested, dict):
+                merged_sources.append(nested)
+
+        full_name = None
+        document_id = None
+        phone = None
+        email = None
+        address = None
+
+        for source in merged_sources:
+            if full_name is None:
+                full_name = (
+                    _extract_name(source)
+                    or _extract_value(
+                        source,
+                        (
+                            "razon_social",
+                            "RAZON_SOCIAL",
+                            "nombre_comercial",
+                            "NOMBRE_COMERCIAL",
+                            "display_name",
+                            "DISPLAY_NAME",
+                        ),
+                    )
+                )
+            if document_id is None:
+                document_id = _extract_value(
+                    source,
+                    (
+                        "identificacion",
+                        "IDENTIFICACION",
+                        "documento",
+                        "DOCUMENTO",
+                        "numero_documento",
+                        "NUMERO_DOCUMENTO",
+                        "ruc",
+                        "RUC",
+                        "cedula",
+                        "CEDULA",
+                    ),
+                )
+            if phone is None:
+                phone = _extract_value(
+                    source,
+                    (
+                        "telefono",
+                        "TELEFONO",
+                        "telefono1",
+                        "TELEFONO1",
+                        "telefono2",
+                        "TELEFONO2",
+                        "celular",
+                        "CELULAR",
+                        "mobile",
+                        "PHONE",
+                    ),
+                )
+            if email is None:
+                email = _extract_value(
+                    source,
+                    (
+                        "correo",
+                        "CORREO",
+                        "email",
+                        "EMAIL",
+                    ),
+                )
+            if address is None:
+                address = _extract_value(
+                    source,
+                    (
+                        "direccion",
+                        "DIRECCION",
+                        "direccion_principal",
+                        "DIRECCION_PRINCIPAL",
+                        "direccion_domicilio",
+                        "DIRECCION_DOMICILIO",
+                        "address",
+                        "ADDRESS",
+                    ),
+                )
+
+        return cls(
+            full_name=full_name,
+            document_id=document_id,
+            phone=phone,
+            email=email,
+            address=address,
         )
 
 
