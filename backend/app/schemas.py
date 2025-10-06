@@ -342,17 +342,40 @@ class ContificoCustomer(BaseModel):
             return None
 
         def _extract_value(data: Dict[str, Any], keys: tuple[str, ...]) -> Optional[str]:
+            def _search(value: Any) -> Optional[str]:
+                if isinstance(value, dict):
+                    for preferred_key in (
+                        "numero",
+                        "number",
+                        "phone",
+                        "telefono",
+                        "valor",
+                        "value",
+                    ):
+                        if preferred_key in value:
+                            found = _search(value[preferred_key])
+                            if found:
+                                return found
+                    for nested in value.values():
+                        found = _search(nested)
+                        if found:
+                            return found
+                    return None
+                if isinstance(value, list):
+                    for item in value:
+                        found = _search(item)
+                        if found:
+                            return found
+                    return None
+                return _normalize_string(value)
+
             for key in keys:
                 if key not in data:
                     continue
                 value = data.get(key)
-                if isinstance(value, dict):
-                    nested = _extract_value(value, keys)
-                    if nested:
-                        return nested
-                normalized = _normalize_string(value)
-                if normalized:
-                    return normalized
+                result = _search(value)
+                if result:
+                    return result
             return None
 
         merged_sources: list[Dict[str, Any]] = [payload]
@@ -405,12 +428,24 @@ class ContificoCustomer(BaseModel):
                     (
                         "telefono",
                         "TELEFONO",
+                        "telefonos",
+                        "TELEFONOS",
                         "telefono1",
                         "TELEFONO1",
                         "telefono2",
                         "TELEFONO2",
                         "celular",
                         "CELULAR",
+                        "celular_cliente",
+                        "celularCliente",
+                        "telefono_convencional",
+                        "telefonoConvencional",
+                        "TELEFONO_CONVENCIONAL",
+                        "telefono_contacto",
+                        "telefonoContacto",
+                        "TELEFONO_CONTACTO",
+                        "numero_telefono",
+                        "numeroTelefono",
                         "mobile",
                         "PHONE",
                     ),
