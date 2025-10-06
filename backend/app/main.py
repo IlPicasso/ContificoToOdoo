@@ -23,7 +23,6 @@ from .temp_contifico import (
     build_product_page,
     build_warehouse_list,
     fetch_invoice_by_customer_and_document,
-    fetch_invoice_by_document_number,
     router as contifico_preview_router,
 )
 from .migrations import apply_schema_upgrades
@@ -186,24 +185,6 @@ def list_contifico_invoices_by_customer(
         page=page,
         page_size=page_size,
         document_id=normalized_document,
-    )
-
-
-@app.get(
-    "/integrations/contifico/invoices/by-number",
-    response_model=schemas.ContificoInvoice,
-)
-async def get_contifico_invoice_by_number(
-    document_number: str = Query(..., min_length=3, max_length=40),
-    contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user: models.User = Depends(staff_required()),
-):
-    _ = current_user
-    normalized_number = document_number.strip()
-    return await run_in_threadpool(
-        fetch_invoice_by_document_number,
-        contifico_client,
-        document_number=normalized_number,
     )
 
 

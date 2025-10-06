@@ -79,11 +79,23 @@ def build_invoice_page(
 
 
 def fetch_invoice_by_document_number(
-    contifico_client: ContificoClient, *, document_number: str
+    contifico_client: ContificoClient,
+    *,
+    document_number: str,
+    customer_document: str,
 ) -> schemas.ContificoInvoice:
     invoice = None
+    normalized_customer = customer_document.strip()
+    if not normalized_customer:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="El número de documento del cliente es obligatorio.",
+        )
     try:
-        invoice = contifico_client.find_invoice_by_document_number(document_number)
+        invoice = contifico_client.find_invoice_by_document_number(
+            document_number,
+            customer_document=normalized_customer,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except ContificoTransportError as exc:
@@ -148,6 +160,7 @@ def serialize_invoice_lookup_job(job) -> schemas.ContificoInvoiceLookupJob:
     return schemas.ContificoInvoiceLookupJob(
         id=job.id,
         document_number=job.document_number,
+        customer_document=job.customer_document,
         status=schemas.ContificoInvoiceLookupJobStatus(job.status.value),
         progress=job.progress,
         stage=job.stage,
@@ -206,17 +219,20 @@ def preview_contifico_invoices_by_customer(
 @router.get("/invoices/by-number", response_model=schemas.ContificoInvoice)
 async def preview_contifico_invoice_by_number(
     document_number: str = Query(..., min_length=3, max_length=40),
+    customer_document: str = Query(..., min_length=3, max_length=30),
     contifico_client: ContificoClient = Depends(get_contifico_client),
     current_user=Depends(admin_required()),
 ):
-    """Busca una factura por su número de documento."""
+    """Busca una factura por su número de documento validando el cliente."""
 
     _ = current_user
     normalized_number = document_number.strip()
+    normalized_customer = customer_document.strip()
     return await run_in_threadpool(
         fetch_invoice_by_document_number,
         contifico_client,
         document_number=normalized_number,
+        customer_document=normalized_customer,
     )
 
 
@@ -256,7 +272,15 @@ async def start_contifico_invoice_lookup_job(
     """Inicia una búsqueda asíncrona de factura en Contífico."""
 
     _ = current_user
-    job = await job_manager.start_job(payload.document_number)
+    try:
+        job = await job_manager.start_job(
+            payload.document_number, customer_document=payload.customer_document
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     return serialize_invoice_lookup_job(job)
 
 

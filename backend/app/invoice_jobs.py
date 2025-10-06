@@ -34,6 +34,7 @@ class InvoiceLookupJob:
 
     id: str
     document_number: str
+    customer_document: Optional[str] = None
     status: InvoiceLookupJobStatus = InvoiceLookupJobStatus.PENDING
     progress: int = 0
     stage: str = "pending"
@@ -109,16 +110,25 @@ class InvoiceLookupJobManager:
             else:
                 self._max_job_duration = float(default_timeout)
 
-    async def start_job(self, document_number: str) -> InvoiceLookupJob:
+    async def start_job(
+        self, document_number: str, *, customer_document: str
+    ) -> InvoiceLookupJob:
         """Inicia un trabajo en segundo plano para buscar la factura."""
 
         normalized_number = document_number.strip()
-        job = InvoiceLookupJob(id=uuid4().hex, document_number=normalized_number)
+        normalized_customer = customer_document.strip()
+        if not normalized_customer:
+            raise ValueError("El documento del cliente es obligatorio para la búsqueda.")
+        job = InvoiceLookupJob(
+            id=uuid4().hex,
+            document_number=normalized_number,
+            customer_document=normalized_customer,
+        )
         async with self._lock:
             self._jobs[job.id] = job
         loop = asyncio.get_running_loop()
         self._loop = loop
-        loop.create_task(self._run_job(job.id, normalized_number))
+        loop.create_task(self._run_job(job.id, normalized_number, normalized_customer))
         return dataclasses.replace(job)
 
     async def get_job(self, job_id: str) -> Optional[InvoiceLookupJob]:
@@ -130,7 +140,9 @@ class InvoiceLookupJobManager:
                 return None
             return dataclasses.replace(job)
 
-    async def _run_job(self, job_id: str, document_number: str) -> None:
+    async def _run_job(
+        self, job_id: str, document_number: str, customer_document: str
+    ) -> None:
         await self._update_job(
             job_id,
             status=InvoiceLookupJobStatus.RUNNING,
@@ -144,6 +156,7 @@ class InvoiceLookupJobManager:
             asyncio.to_thread(
                 self._execute_lookup,
                 document_number,
+                customer_document,
                 progress_callback,
             )
         )
@@ -182,11 +195,13 @@ class InvoiceLookupJobManager:
     def _execute_lookup(
         self,
         document_number: str,
+        customer_document: str,
         progress_callback: Callable[[str, Dict[str, Any]], None],
     ) -> Dict[str, Any]:
         client = self._client_factory()
         invoice = client.find_invoice_by_document_number(
             document_number,
+            customer_document=customer_document,
             progress_callback=progress_callback,
         )
         if invoice is None:

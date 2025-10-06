@@ -97,6 +97,7 @@ const state = {
   contificoPreviewInvoiceLookupError: null,
   contificoPreviewInvoiceLookupFetched: false,
   contificoPreviewInvoiceLookupNumber: '',
+  contificoPreviewInvoiceLookupCustomerDocument: '',
   contificoPreviewInvoiceLookupRequestId: 0,
   contificoPreviewInvoiceLookupProgress: 0,
   contificoPreviewInvoiceLookupStage: '',
@@ -395,6 +396,9 @@ const contificoCustomerInvoiceLookupResult = document.getElementById(
   'contificoCustomerInvoiceLookupResult'
 );
 const contificoInvoiceLookupForm = document.getElementById('contificoInvoiceLookupForm');
+const contificoInvoiceLookupDocumentInput = document.getElementById(
+  'contificoInvoiceLookupDocument'
+);
 const contificoInvoiceLookupNumberInput = document.getElementById('contificoInvoiceLookupNumber');
 const contificoInvoiceLookupStatus = document.getElementById('contificoInvoiceLookupStatus');
 const contificoCustomerInvoicesModalButton = document.getElementById('contificoCustomerInvoicesModalButton');
@@ -5893,6 +5897,7 @@ function resetContificoPreviewState() {
   state.contificoPreviewInvoiceLookupError = null;
   state.contificoPreviewInvoiceLookupFetched = false;
   state.contificoPreviewInvoiceLookupNumber = '';
+  state.contificoPreviewInvoiceLookupCustomerDocument = '';
   state.contificoPreviewInvoiceLookupProgress = 0;
   state.contificoPreviewInvoiceLookupStage = '';
   state.contificoPreviewInvoiceLookupMetadata = {};
@@ -6475,6 +6480,9 @@ function renderContificoPreviewInvoiceLookup() {
         element.disabled = true;
       });
     }
+    if (contificoInvoiceLookupDocumentInput) {
+      contificoInvoiceLookupDocumentInput.value = '';
+    }
     if (contificoInvoiceLookupNumberInput) {
       contificoInvoiceLookupNumberInput.value = '';
     }
@@ -6515,6 +6523,10 @@ function renderContificoPreviewInvoiceLookup() {
     });
   }
 
+  if (contificoInvoiceLookupDocumentInput) {
+    contificoInvoiceLookupDocumentInput.value =
+      state.contificoPreviewInvoiceLookupCustomerDocument || '';
+  }
   if (contificoInvoiceLookupNumberInput) {
     contificoInvoiceLookupNumberInput.value = state.contificoPreviewInvoiceLookupNumber || '';
   }
@@ -6603,7 +6615,8 @@ function renderContificoPreviewInvoiceLookup() {
     } else {
       const promptParagraph = document.createElement('p');
       promptParagraph.className = 'muted';
-      promptParagraph.textContent = 'Completa el formulario para ver el detalle de la factura en esta ventana.';
+      promptParagraph.textContent =
+        'Completa el formulario con el documento del cliente y el número de factura para ver el detalle en esta ventana.';
       contificoInvoiceLookupModalDetails.appendChild(promptParagraph);
     }
   }
@@ -6641,7 +6654,8 @@ function renderContificoPreviewInvoiceLookup() {
       statusMessage = 'No se encontraron facturas con el número consultado.';
     }
   } else {
-    statusMessage = 'Ingresa el número exacto de documento para buscar una factura específica.';
+    statusMessage =
+      'Ingresa el documento del cliente y el número exacto de la factura para iniciar la búsqueda.';
   }
   updateContificoStatus(contificoInvoiceLookupStatus, { text: statusMessage, tone });
 
@@ -6950,6 +6964,9 @@ function applyContificoInvoiceLookupJobUpdate(job, requestId) {
   if (job.document_number) {
     state.contificoPreviewInvoiceLookupNumber = job.document_number;
   }
+  if (job.customer_document) {
+    state.contificoPreviewInvoiceLookupCustomerDocument = job.customer_document;
+  }
 
   const progressValue = Number(job.progress);
   if (Number.isFinite(progressValue)) {
@@ -7062,6 +7079,29 @@ async function handleContificoInvoiceLookup(event) {
     return;
   }
 
+  const rawDocument =
+    contificoInvoiceLookupDocumentInput?.value ??
+    state.contificoPreviewInvoiceLookupCustomerDocument ??
+    '';
+  const normalizedDocument = String(rawDocument).trim();
+
+  logInvoiceLookupInfo('Documento del cliente capturado del formulario.', {
+    raw: rawDocument,
+    normalized: normalizedDocument,
+  });
+
+  if (!normalizedDocument) {
+    logInvoiceLookupWarn('Búsqueda cancelada por documento de cliente vacío.', {
+      raw: rawDocument,
+    });
+    state.contificoPreviewInvoiceLookupError = 'Ingresa un documento de cliente válido.';
+    state.contificoPreviewInvoiceLookup = null;
+    state.contificoPreviewInvoiceLookupFetched = true;
+    renderContificoPreviewInvoiceLookup();
+    showToast(state.contificoPreviewInvoiceLookupError, 'error');
+    return;
+  }
+
   const rawNumber =
     contificoInvoiceLookupNumberInput?.value ?? state.contificoPreviewInvoiceLookupNumber ?? '';
   const normalizedNumber = String(rawNumber).trim();
@@ -7089,9 +7129,11 @@ async function handleContificoInvoiceLookup(event) {
   logInvoiceLookupInfo('Preparando consulta puntual en Contífico.', {
     requestId,
     documentNumber: normalizedNumber,
+    customerDocument: normalizedDocument,
   });
 
   state.contificoPreviewInvoiceLookupNumber = normalizedNumber;
+  state.contificoPreviewInvoiceLookupCustomerDocument = normalizedDocument;
   state.contificoPreviewInvoiceLookupLoading = true;
   state.contificoPreviewInvoiceLookupError = null;
   state.contificoPreviewInvoiceLookupFetched = false;
@@ -7113,10 +7155,14 @@ async function handleContificoInvoiceLookup(event) {
     logInvoiceLookupInfo('Solicitando creación de trabajo de búsqueda asíncrona.', {
       requestId,
       documentNumber: normalizedNumber,
+      customerDocument: normalizedDocument,
     });
     const job = await apiFetch('/temp/contifico/invoices/by-number/jobs', {
       method: 'POST',
-      body: { document_number: normalizedNumber },
+      body: {
+        document_number: normalizedNumber,
+        customer_document: normalizedDocument,
+      },
     });
     logInvoiceLookupInfo('Trabajo de búsqueda creado.', {
       requestId,
@@ -7166,6 +7212,7 @@ async function handleContificoInvoiceLookup(event) {
       loading: state.contificoPreviewInvoiceLookupLoading,
       progress: state.contificoPreviewInvoiceLookupProgress,
       error: state.contificoPreviewInvoiceLookupError || null,
+      customerDocument: state.contificoPreviewInvoiceLookupCustomerDocument || null,
     });
   }
 }

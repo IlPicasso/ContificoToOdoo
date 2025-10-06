@@ -489,6 +489,7 @@ class CustomerContificoInvoicePage(BaseModel):
 
 class ContificoInvoiceLookupRequest(BaseModel):
     document_number: str = Field(min_length=3, max_length=40)
+    customer_document: str = Field(min_length=3, max_length=30)
 
 
 class ContificoInvoiceLookupJobStatus(str, Enum):
@@ -501,6 +502,7 @@ class ContificoInvoiceLookupJobStatus(str, Enum):
 class ContificoInvoiceLookupJob(BaseModel):
     id: str
     document_number: str
+    customer_document: Optional[str] = None
     status: ContificoInvoiceLookupJobStatus
     progress: int = Field(ge=0, le=100)
     stage: str

@@ -1051,11 +1051,23 @@
                   <div>
                     <h4>Buscar factura puntual</h4>
                     <p class="muted small">
-                      Introduce el número completo del documento para validar una factura específica.
+                      Introduce la cédula o RUC del cliente y el número completo del documento para validar una factura específica.
                     </p>
                   </div>
                 </header>
                 <form id="contificoInvoiceLookupForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoInvoiceLookupDocument">Documento del cliente</label>
+                    <input
+                      type="text"
+                      id="contificoInvoiceLookupDocument"
+                      name="customer_document"
+                      inputmode="numeric"
+                      autocomplete="off"
+                      placeholder="Ej. 0912345678"
+                      required
+                    />
+                  </div>
                   <div class="form-row">
                     <label for="contificoInvoiceLookupNumber">Número de documento</label>
                     <input
