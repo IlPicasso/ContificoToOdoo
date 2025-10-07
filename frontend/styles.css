@@ -1610,6 +1610,21 @@ button[disabled] {
   word-break: break-word;
 }
 
+.customer-modal-info-item input[type='text'] {
+  width: 100%;
+  font-weight: 400;
+  color: var(--text);
+}
+
+.customer-modal-note {
+  display: block;
+  margin-top: 0.35rem;
+}
+
+#orderDetailCustomerHint {
+  margin: 0;
+}
+
 .contifico-modal {
   gap: 1rem;
 }

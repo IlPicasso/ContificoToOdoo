@@ -10,6 +10,14 @@ const KANBAN_FETCH_PAGE_SIZE = 100;
 const KANBAN_FALLBACK_STATUS = 'Sin estado';
 const INVOICE_LOOKUP_LOG_PREFIX = '[Contífico][Factura puntual]';
 const CUSTOMER_INVOICE_PAGE_SIZE = 50;
+const ORDER_CUSTOMER_NAME_PLACEHOLDER = 'Sin registrar';
+const ORDER_CUSTOMER_HINT_DEFAULT =
+  'Haz clic en el nombre para consultar o actualizar los datos del cliente.';
+const ORDER_CUSTOMER_HINT_EMPTY = 'No hay datos adicionales del cliente registrados.';
+const ORDER_CUSTOMER_DESCRIPTION_DEFAULT =
+  'Consulta o actualiza los datos registrados para el cliente de esta orden.';
+const ORDER_CUSTOMER_DESCRIPTION_EMPTY =
+  'No se registraron datos adicionales del cliente para esta orden.';
 
 
 const state = {
@@ -109,6 +117,15 @@ const state = {
 };
 
 const TOKEN_STORAGE_KEY = 'sastreria.authToken';
+
+const orderCustomerDetailState = {
+  name: '',
+  document: '',
+  contact: '',
+  hasAnyDetail: false,
+};
+
+let lastOrderCustomerModalTrigger = null;
 
 function logInvoiceLookupEvent(level, message, details) {
   if (typeof console === 'undefined') {
@@ -353,8 +370,8 @@ const updateOrderForm = document.getElementById('updateOrderForm');
 const orderDetailNumberElement = document.getElementById('orderDetailNumber');
 const orderDetailCreatedAtElement = document.getElementById('orderDetailCreatedAt');
 const orderDetailUpdatedAtElement = document.getElementById('orderDetailUpdatedAt');
-const orderDetailCustomerInput = document.getElementById('orderDetailCustomer');
-const orderDetailDocumentInput = document.getElementById('orderDetailDocument');
+const orderDetailCustomerButton = document.getElementById('orderDetailCustomerButton');
+const orderDetailCustomerHint = document.getElementById('orderDetailCustomerHint');
 const orderDetailContactInput = document.getElementById('orderDetailContact');
 const orderDetailStatusSelect = document.getElementById('orderDetailStatus');
 const orderDetailTailorSelect = document.getElementById('orderDetailTailor');
@@ -365,6 +382,14 @@ const orderDetailDeliveryDateInput = document.getElementById('orderDetailDeliver
 const orderDetailNotesTextarea = document.getElementById('orderDetailNotes');
 const deleteOrderButton = document.getElementById('deleteOrderButton');
 const orderDetailMeasurementsContainer = document.getElementById('orderDetailMeasurements');
+const orderCustomerDetailModal = document.getElementById('orderCustomerDetailModal');
+const orderCustomerDetailDialog = document.getElementById('orderCustomerDetailDialog');
+const orderCustomerDetailNameElement = document.getElementById('orderCustomerDetailName');
+const orderCustomerDetailDocumentElement = document.getElementById('orderCustomerDetailDocument');
+const orderCustomerDetailDescription = document.getElementById('orderCustomerDetailDescription');
+const orderCustomerDetailCloseButtons = document.querySelectorAll(
+  '[data-close-order-customer-modal]'
+);
 const orderTasksList = document.getElementById('orderTasksList');
 const orderTaskForm = document.getElementById('orderTaskForm');
 const orderTaskAddButton = document.getElementById('orderTaskAddButton');
@@ -2019,6 +2044,150 @@ function updateModalBodyState() {
   if (typeof document === 'undefined' || !document.body) return;
   const hasOpenModal = Boolean(document.querySelector('.modal-overlay:not(.hidden)'));
   document.body.classList.toggle('modal-open', hasOpenModal);
+}
+
+function normalizeOrderCustomerValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  try {
+    return String(value).trim();
+  } catch (error) {
+    return '';
+  }
+}
+
+function updateOrderCustomerDescription() {
+  if (!orderCustomerDetailDescription) {
+    return;
+  }
+  orderCustomerDetailDescription.textContent = orderCustomerDetailState.hasAnyDetail
+    ? ORDER_CUSTOMER_DESCRIPTION_DEFAULT
+    : ORDER_CUSTOMER_DESCRIPTION_EMPTY;
+}
+
+function updateOrderCustomerModalContent({ syncContactField = true } = {}) {
+  if (orderCustomerDetailNameElement) {
+    const hasName = Boolean(orderCustomerDetailState.name);
+    orderCustomerDetailNameElement.textContent = hasName
+      ? orderCustomerDetailState.name
+      : ORDER_CUSTOMER_NAME_PLACEHOLDER;
+    orderCustomerDetailNameElement.classList.toggle('muted', !hasName);
+  }
+  if (orderCustomerDetailDocumentElement) {
+    const hasDocument = Boolean(orderCustomerDetailState.document);
+    orderCustomerDetailDocumentElement.textContent = hasDocument
+      ? orderCustomerDetailState.document
+      : ORDER_CUSTOMER_NAME_PLACEHOLDER;
+    orderCustomerDetailDocumentElement.classList.toggle('muted', !hasDocument);
+  }
+  if (syncContactField && orderDetailContactInput) {
+    orderDetailContactInput.value = orderCustomerDetailState.contact || '';
+  }
+  updateOrderCustomerDescription();
+}
+
+function updateOrderCustomerTriggerState() {
+  if (!orderDetailCustomerButton) {
+    return;
+  }
+  const displayName = orderCustomerDetailState.name || ORDER_CUSTOMER_NAME_PLACEHOLDER;
+  orderDetailCustomerButton.textContent = displayName;
+  const interactive = orderCustomerDetailState.hasAnyDetail;
+  orderDetailCustomerButton.disabled = !interactive;
+  orderDetailCustomerButton.classList.toggle('is-interactive', interactive);
+  if (interactive) {
+    const ariaLabel = orderCustomerDetailState.name
+      ? `Ver datos del cliente ${orderCustomerDetailState.name}`
+      : 'Ver datos del cliente';
+    orderDetailCustomerButton.setAttribute('aria-label', ariaLabel);
+    orderDetailCustomerButton.setAttribute('aria-haspopup', 'dialog');
+    orderDetailCustomerButton.setAttribute('title', 'Ver datos del cliente');
+  } else {
+    orderDetailCustomerButton.removeAttribute('aria-label');
+    orderDetailCustomerButton.removeAttribute('aria-haspopup');
+    orderDetailCustomerButton.removeAttribute('title');
+  }
+  if (orderDetailCustomerHint) {
+    orderDetailCustomerHint.textContent = interactive
+      ? ORDER_CUSTOMER_HINT_DEFAULT
+      : ORDER_CUSTOMER_HINT_EMPTY;
+  }
+}
+
+function resetOrderCustomerDetailState() {
+  orderCustomerDetailState.name = '';
+  orderCustomerDetailState.document = '';
+  orderCustomerDetailState.contact = '';
+  orderCustomerDetailState.hasAnyDetail = false;
+  updateOrderCustomerModalContent();
+  updateOrderCustomerTriggerState();
+}
+
+function openOrderCustomerDetailModal() {
+  if (!orderCustomerDetailModal || !orderCustomerDetailState.hasAnyDetail) {
+    return;
+  }
+  if (!orderCustomerDetailModal.classList.contains('hidden')) {
+    return;
+  }
+  lastOrderCustomerModalTrigger =
+    document.activeElement && typeof document.activeElement.focus === 'function'
+      ? document.activeElement
+      : null;
+  orderCustomerDetailModal.classList.remove('hidden');
+  orderCustomerDetailModal.setAttribute('aria-hidden', 'false');
+  updateOrderCustomerModalContent();
+  updateModalBodyState();
+  requestAnimationFrame(() => {
+    if (orderCustomerDetailDialog?.isConnected) {
+      orderCustomerDetailDialog.focus();
+    }
+  });
+}
+
+function closeOrderCustomerDetailModal() {
+  if (!orderCustomerDetailModal || orderCustomerDetailModal.classList.contains('hidden')) {
+    return;
+  }
+  orderCustomerDetailModal.classList.add('hidden');
+  orderCustomerDetailModal.setAttribute('aria-hidden', 'true');
+  updateModalBodyState();
+  const trigger = lastOrderCustomerModalTrigger;
+  lastOrderCustomerModalTrigger = null;
+  if (trigger?.isConnected && typeof trigger.focus === 'function') {
+    trigger.focus();
+  } else if (orderDetailCustomerButton?.isConnected) {
+    orderDetailCustomerButton.focus();
+  }
+}
+
+function setupOrderCustomerDetailModal() {
+  if (orderDetailCustomerButton) {
+    orderDetailCustomerButton.addEventListener('click', () => {
+      if (orderDetailCustomerButton.disabled) {
+        return;
+      }
+      openOrderCustomerDetailModal();
+    });
+  }
+
+  orderCustomerDetailCloseButtons.forEach((element) => {
+    element.addEventListener('click', () => {
+      closeOrderCustomerDetailModal();
+    });
+  });
+
+  if (orderCustomerDetailModal) {
+    orderCustomerDetailModal.addEventListener('click', (event) => {
+      if (event?.target?.dataset?.orderCustomerModalClose === 'true') {
+        closeOrderCustomerDetailModal();
+      }
+    });
+  }
 }
 
 function setCreateCustomerVisible(visible) {
@@ -4005,6 +4174,13 @@ document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' || event.defaultPrevented) {
     return;
   }
+  const customerModalOpen =
+    orderCustomerDetailModal && !orderCustomerDetailModal.classList.contains('hidden');
+  if (customerModalOpen) {
+    event.preventDefault();
+    closeOrderCustomerDetailModal();
+    return;
+  }
   const detailOpen = customerDetailOverlay && !customerDetailOverlay.classList.contains('hidden');
   if (detailOpen) {
     event.preventDefault();
@@ -4036,15 +4212,16 @@ function populateOrderDetail(order, options = {}) {
   if (orderDetailUpdatedAtElement) {
     orderDetailUpdatedAtElement.textContent = formatDate(order.updated_at);
   }
-  if (orderDetailCustomerInput) {
-    orderDetailCustomerInput.value = order.customer_name || '';
-  }
-  if (orderDetailDocumentInput) {
-    orderDetailDocumentInput.value = order.customer_document || '';
-  }
-  if (orderDetailContactInput) {
-    orderDetailContactInput.value = order.customer_contact || '';
-  }
+  orderCustomerDetailState.name = normalizeOrderCustomerValue(order.customer_name);
+  orderCustomerDetailState.document = normalizeOrderCustomerValue(order.customer_document);
+  orderCustomerDetailState.contact = normalizeOrderCustomerValue(order.customer_contact);
+  orderCustomerDetailState.hasAnyDetail = Boolean(
+    orderCustomerDetailState.name ||
+      orderCustomerDetailState.document ||
+      orderCustomerDetailState.contact
+  );
+  updateOrderCustomerModalContent();
+  updateOrderCustomerTriggerState();
   if (orderDetailStatusSelect) {
     populateStatusSelect(orderDetailStatusSelect, order.status);
   }
@@ -4128,8 +4305,6 @@ function clearOrderDetail(options = {}) {
   if (orderDetailNumberElement) orderDetailNumberElement.textContent = '';
   if (orderDetailCreatedAtElement) orderDetailCreatedAtElement.textContent = '';
   if (orderDetailUpdatedAtElement) orderDetailUpdatedAtElement.textContent = '';
-  if (orderDetailCustomerInput) orderDetailCustomerInput.value = '';
-  if (orderDetailDocumentInput) orderDetailDocumentInput.value = '';
   if (orderDetailContactInput) orderDetailContactInput.value = '';
   if (orderDetailStatusSelect) populateStatusSelect(orderDetailStatusSelect);
   if (orderDetailTailorSelect) populateTailorSelect(orderDetailTailorSelect);
@@ -4142,6 +4317,9 @@ function clearOrderDetail(options = {}) {
     orderDetailMeasurementsContainer.innerHTML = '';
     orderDetailMeasurementsContainer.classList.add('muted');
   }
+
+  resetOrderCustomerDetailState();
+  closeOrderCustomerDetailModal();
 
   resetOrderTasksState();
 
@@ -7489,6 +7667,21 @@ async function restoreSessionFromStorage() {
     updateNavigationForAuth();
   }
 }
+
+if (orderDetailContactInput) {
+  orderDetailContactInput.addEventListener('input', () => {
+    orderCustomerDetailState.contact = normalizeOrderCustomerValue(orderDetailContactInput.value);
+    const contactHasValue = Boolean(orderDetailContactInput.value && orderDetailContactInput.value.trim());
+    orderCustomerDetailState.hasAnyDetail = Boolean(
+      orderCustomerDetailState.name || orderCustomerDetailState.document || contactHasValue
+    );
+    updateOrderCustomerDescription();
+    updateOrderCustomerTriggerState();
+  });
+}
+
+resetOrderCustomerDetailState();
+setupOrderCustomerDetailModal();
 
 function initialise() {
   ensureMeasurementRow();
