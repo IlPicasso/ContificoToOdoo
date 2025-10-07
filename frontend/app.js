@@ -18,6 +18,7 @@ const ORDER_CUSTOMER_DESCRIPTION_DEFAULT =
   'Consulta o actualiza los datos registrados para el cliente de esta orden.';
 const ORDER_CUSTOMER_DESCRIPTION_EMPTY =
   'No se registraron datos adicionales del cliente para esta orden.';
+const CONTIFICO_SEWING_TASK_CATEGORY_ID = 'xGge0zg6H2Q4bADR';
 
 
 const state = {
@@ -60,6 +61,10 @@ const state = {
   orderTasksOrderId: null,
   orderTasksLoading: false,
   orderTasksRequestId: 0,
+  orderTaskSuggestions: [],
+  orderTaskSuggestionsLoading: false,
+  orderTaskSuggestionsLoaded: false,
+  orderTaskSuggestionsError: null,
   customerRequestId: 0,
   orderRequestId: 0,
   customerOptionsRequestId: 0,
@@ -365,6 +370,9 @@ const measurementsList = document.getElementById('measurementsList');
 const addMeasurementButton = document.getElementById('addMeasurementButton');
 const newOrderTasksList = document.getElementById('newOrderTasksList');
 const addOrderTaskButton = document.getElementById('addOrderTaskButton');
+const orderTaskSuggestionsStatus = document.getElementById('orderTaskSuggestionsStatus');
+const orderTaskSuggestionsDatalist = document.getElementById('orderTaskSuggestions');
+const refreshOrderTaskSuggestionsButton = document.getElementById('refreshOrderTaskSuggestionsButton');
 const statusSelect = document.getElementById('newOrderStatus');
 const assignTailorSelect = document.getElementById('assignTailor');
 const assignVendorSelect = document.getElementById('assignVendor');
@@ -771,6 +779,7 @@ function setActiveDashboardTab(tabId = 'ordersPanel') {
     renderOrderKanban();
     if (targetTab === 'orderCreatePanel') {
       focusFirstCreateOrderField();
+      ensureOrderTaskSuggestionsLoaded();
     }
   }
 
@@ -1768,6 +1777,7 @@ function createOrderTaskRowElement(data = { description: '' }) {
   descriptionInput.type = 'text';
   descriptionInput.id = descriptionId;
   descriptionInput.dataset.field = 'description';
+  descriptionInput.setAttribute('list', 'orderTaskSuggestions');
   descriptionInput.placeholder = 'Describe el trabajo a realizar';
   descriptionInput.maxLength = 255;
   descriptionInput.value =
@@ -1847,9 +1857,128 @@ function updateNewOrderTaskLabels() {
 
 }
 
+function renderOrderTaskSuggestions() {
+  if (refreshOrderTaskSuggestionsButton) {
+    refreshOrderTaskSuggestionsButton.disabled = state.orderTaskSuggestionsLoading;
+  }
+
+  if (orderTaskSuggestionsStatus) {
+    let message = '';
+    if (state.orderTaskSuggestionsLoading) {
+      message = 'Cargando trabajos desde Contífico...';
+    } else if (state.orderTaskSuggestionsError) {
+      message = state.orderTaskSuggestionsError;
+    } else if (state.orderTaskSuggestionsLoaded) {
+      if (state.orderTaskSuggestions.length) {
+        message =
+          'Sugerencias disponibles desde Contífico. Empieza a escribir para seleccionarlas.';
+      } else {
+        message = 'No se encontraron trabajos en la categoría configurada de Contífico.';
+      }
+    } else {
+      message = 'Puedes cargar los trabajos registrados en Contífico para usarlos como sugerencias.';
+    }
+    orderTaskSuggestionsStatus.textContent = message;
+  }
+
+  if (orderTaskSuggestionsDatalist) {
+    orderTaskSuggestionsDatalist.innerHTML = '';
+    const suggestions = Array.isArray(state.orderTaskSuggestions)
+      ? state.orderTaskSuggestions
+      : [];
+    suggestions.forEach((item) => {
+      const name = typeof item.nombre === 'string' ? item.nombre.trim() : '';
+      const description = typeof item.descripcion === 'string' ? item.descripcion.trim() : '';
+      const code = typeof item.codigo === 'string' ? item.codigo.trim() : '';
+      const value = name || description || code;
+      if (!value) {
+        return;
+      }
+      const option = document.createElement('option');
+      option.value = value;
+      const labelParts = [];
+      if (code) {
+        labelParts.push(code);
+      }
+      if (name) {
+        labelParts.push(name);
+      } else if (description && description !== value) {
+        labelParts.push(description);
+      }
+      if (labelParts.length) {
+        option.label = labelParts.join(' – ');
+      }
+      orderTaskSuggestionsDatalist.appendChild(option);
+    });
+  }
+
+  if (newOrderTasksList) {
+    const inputs = Array.from(
+      newOrderTasksList.querySelectorAll('input[data-field="description"]')
+    );
+    inputs.forEach((input) => {
+      input.setAttribute('list', 'orderTaskSuggestions');
+    });
+  }
+}
+
+async function loadOrderTaskSuggestions(force = false) {
+  if (state.orderTaskSuggestionsLoading) {
+    return;
+  }
+  if (!force && state.orderTaskSuggestionsLoaded) {
+    renderOrderTaskSuggestions();
+    return;
+  }
+  state.orderTaskSuggestionsLoading = true;
+  renderOrderTaskSuggestions();
+  try {
+    const url =
+      `/integrations/contifico/products?page=1&page_size=${CONTIFICO_MAX_PAGE_SIZE}` +
+      `&category_id=${encodeURIComponent(CONTIFICO_SEWING_TASK_CATEGORY_ID)}`;
+    const response = await apiFetch(url);
+    const items = Array.isArray(response?.items) ? response.items : [];
+    state.orderTaskSuggestions = items
+      .map((item) => ({
+        id: item?.id ?? null,
+        codigo: typeof item?.codigo === 'string' ? item.codigo : '',
+        nombre: typeof item?.nombre === 'string' ? item.nombre : '',
+        descripcion: typeof item?.descripcion === 'string' ? item.descripcion : '',
+      }))
+      .filter((item) => item.nombre || item.descripcion || item.codigo);
+    state.orderTaskSuggestionsError = null;
+    state.orderTaskSuggestionsLoaded = true;
+  } catch (error) {
+    state.orderTaskSuggestions = [];
+    state.orderTaskSuggestionsError =
+      error?.message || 'No se pudieron obtener los trabajos desde Contífico.';
+    state.orderTaskSuggestionsLoaded = false;
+    showToast(state.orderTaskSuggestionsError, 'error');
+  } finally {
+    state.orderTaskSuggestionsLoading = false;
+    renderOrderTaskSuggestions();
+  }
+}
+
+function ensureOrderTaskSuggestionsLoaded() {
+  if (state.orderTaskSuggestionsLoaded || state.orderTaskSuggestionsLoading) {
+    renderOrderTaskSuggestions();
+    return;
+  }
+  void loadOrderTaskSuggestions();
+}
+
 if (addOrderTaskButton) {
   addOrderTaskButton.addEventListener('click', () => addNewOrderTaskRow());
 }
+
+if (refreshOrderTaskSuggestionsButton) {
+  refreshOrderTaskSuggestionsButton.addEventListener('click', () => {
+    void loadOrderTaskSuggestions(true);
+  });
+}
+
+renderOrderTaskSuggestions();
 
 function addMeasurementRowToList(listElement, data = { nombre: '', valor: '' }) {
   if (!listElement) return;
@@ -1962,6 +2091,7 @@ function resetCreateOrderForm() {
     newOrderTasksList.innerHTML = '';
     addNewOrderTaskRow();
   }
+  renderOrderTaskSuggestions();
   renderCustomerMeasurementOptions(null);
   clearOrderInvoiceSuggestions();
 }

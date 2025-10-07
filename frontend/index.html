@@ -494,6 +494,17 @@
                 </p>
                 <div id="newOrderTasksList" class="measurement-list"></div>
                 <button type="button" id="addOrderTaskButton" class="secondary">Agregar trabajo</button>
+                <div class="order-task-suggestions">
+                  <button
+                    type="button"
+                    id="refreshOrderTaskSuggestionsButton"
+                    class="link-button"
+                  >
+                    Actualizar trabajos desde Contífico
+                  </button>
+                  <p id="orderTaskSuggestionsStatus" class="muted small"></p>
+                </div>
+                <datalist id="orderTaskSuggestions"></datalist>
               </div>
               <div class="form-row">
                 <label for="assignTailor">Asignar a sastre</label>
