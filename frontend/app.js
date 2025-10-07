@@ -5823,7 +5823,7 @@ function renderUsers() {
   const appendMessageRow = (message) => {
     const row = document.createElement('tr');
     const cell = document.createElement('td');
-    cell.colSpan = 4;
+        cell.colSpan = 5;
     cell.className = 'muted';
     cell.textContent = message;
     row.appendChild(cell);
@@ -6405,6 +6405,14 @@ function renderContificoPreviewProducts() {
             : String(productName);
         nameCell.dataset.label = 'Nombre';
 
+        const categoryCell = document.createElement('td');
+        const productCategory = product?.categoria_id;
+        categoryCell.textContent =
+          productCategory === null || productCategory === undefined || productCategory === ''
+            ? '—'
+            : String(productCategory);
+        categoryCell.dataset.label = 'Categoría';
+
         const priceCell = document.createElement('td');
         priceCell.textContent = formatCurrencyUSD(product?.pvp1);
         priceCell.dataset.label = 'Precio base';
@@ -6412,6 +6420,7 @@ function renderContificoPreviewProducts() {
         row.appendChild(idCell);
         row.appendChild(codeCell);
         row.appendChild(nameCell);
+        row.appendChild(categoryCell);
         row.appendChild(priceCell);
         contificoPreviewProductsTableBody.appendChild(row);
       });
@@ -6422,7 +6431,7 @@ function renderContificoPreviewProducts() {
     ) {
       const row = document.createElement('tr');
       const cell = document.createElement('td');
-      cell.colSpan = 4;
+      cell.colSpan = 5;
       cell.className = 'muted';
       cell.textContent = 'No se recibieron productos para la página consultada.';
       row.appendChild(cell);
@@ -6648,6 +6657,7 @@ function renderContificoPreviewProductDetail() {
         ['Código', detail.codigo],
         ['Nombre', detail.nombre || detail.descripcion],
         ['Descripción', detail.descripcion],
+        ['Categoría', detail.categoria_id],
         ['Precio base', formatCurrencyUSD(detail.pvp1)],
         ['Precio alterno 2', formatCurrencyUSD(detail.pvp2)],
         ['Precio alterno 3', formatCurrencyUSD(detail.pvp3)],

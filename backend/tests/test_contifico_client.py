@@ -79,6 +79,9 @@ def test_list_products_success() -> None:
     assert client.api_token == "pos-token-abc"
     params = captured["params"]
     assert isinstance(params, dict)
+    assert params["page"] == "2"
+    assert params["page_size"] == "50"
+    # Se mantienen los parámetros históricos para compatibilidad.
     assert params["result_page"] == "2"
     assert params["result_size"] == "50"
     assert str(captured["url"]).startswith("https://api.example.com/v1/producto/")
@@ -104,7 +107,7 @@ def test_list_products_with_category_filter() -> None:
     assert products == [{"id": 1, "codigo": "SKU-2"}]
     params = captured["params"]
     assert isinstance(params, dict)
-    assert params["categoria"] == "CAT-1"
+    assert params["categoria_id"] == "CAT-1"
 
 
 def test_list_products_rejects_blank_category() -> None:
@@ -157,7 +160,7 @@ def test_get_product_success() -> None:
     product = client.get_product(42)
 
     assert product["id"] == 42
-    assert str(captured["url"]).endswith("/producto/42/")
+    assert str(captured["url"]).endswith("/producto/42")
 
 
 def test_get_product_rejects_blank_identifier() -> None:
@@ -175,7 +178,7 @@ def test_get_product_rejects_blank_identifier() -> None:
 
 def test_list_product_categories_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/producto/categoria/")
+        assert request.url.path.endswith("/categoria/")
         return httpx.Response(200, json=[{"id": "CAT-1", "nombre": "Camisas"}])
 
     transport = httpx.MockTransport(handler)

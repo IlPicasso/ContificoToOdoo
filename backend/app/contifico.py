@@ -511,12 +511,18 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Devuelve un lote de productos desde Contífico."""
 
-        params: Dict[str, Any] = {"result_page": page, "result_size": page_size}
+        params: Dict[str, Any] = {
+            "page": page,
+            "page_size": page_size,
+            # Algunos entornos aún utilizan los parámetros históricos de paginación.
+            "result_page": page,
+            "result_size": page_size,
+        }
         if category_id is not None:
             category_value = str(category_id).strip()
             if not category_value:
                 raise ValueError("El identificador de la categoría no puede estar vacío.")
-            params["categoria"] = category_value
+            params["categoria_id"] = category_value
         data = self._request("GET", "producto/", params=params)
         if data is None:
             return []
@@ -538,7 +544,7 @@ class ContificoClient:
         if not normalized_id:
             raise ValueError("El identificador del producto es obligatorio.")
 
-        data = self._request("GET", f"producto/{normalized_id}/")
+        data = self._request("GET", f"producto/{normalized_id}")
         if isinstance(data, dict):
             return data
         if data is None:
@@ -556,7 +562,7 @@ class ContificoClient:
     def list_product_categories(self) -> Iterable[Dict[str, Any]]:
         """Lista las categorías de productos configuradas en Contífico."""
 
-        data = self._request("GET", "producto/categoria/")
+        data = self._request("GET", "categoria/")
         if data is None:
             return []
         if isinstance(data, list):

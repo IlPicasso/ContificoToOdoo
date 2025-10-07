@@ -253,6 +253,7 @@ class ContificoProduct(BaseModel):
     codigo: Optional[str] = None
     nombre: Optional[str] = None
     descripcion: Optional[str] = None
+    categoria_id: Optional[Union[int, str]] = None
     pvp1: Optional[float] = None
     pvp2: Optional[float] = None
     pvp3: Optional[float] = None
@@ -267,6 +268,7 @@ class ContificoProduct(BaseModel):
             codigo=payload.get("codigo"),
             nombre=payload.get("nombre") or payload.get("descripcion"),
             descripcion=payload.get("descripcion"),
+            categoria_id=payload.get("categoria_id") or payload.get("categoria"),
             pvp1=payload.get("pvp1"),
             pvp2=payload.get("pvp2"),
             pvp3=payload.get("pvp3"),
