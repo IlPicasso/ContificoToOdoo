@@ -83,6 +83,16 @@ const state = {
   contificoPreviewProductsLoading: false,
   contificoPreviewProductsError: null,
   contificoPreviewProductsFetched: false,
+  contificoPreviewProductsCategoryId: '',
+  contificoPreviewProductCategories: [],
+  contificoPreviewProductCategoriesLoading: false,
+  contificoPreviewProductCategoriesError: null,
+  contificoPreviewProductCategoriesFetched: false,
+  contificoPreviewProductDetailId: '',
+  contificoPreviewProductDetail: null,
+  contificoPreviewProductDetailLoading: false,
+  contificoPreviewProductDetailError: null,
+  contificoPreviewProductDetailFetched: false,
   contificoPreviewWarehouses: [],
   contificoPreviewWarehousesLoading: false,
   contificoPreviewWarehousesError: null,
@@ -410,6 +420,15 @@ const contificoPreviewPageInput = document.getElementById('contificoPreviewPage'
 const contificoPreviewPageSizeInput = document.getElementById('contificoPreviewPageSize');
 const contificoPreviewProductsStatus = document.getElementById('contificoPreviewProductsStatus');
 const contificoPreviewProductsTableBody = document.getElementById('contificoPreviewProductsTableBody');
+const contificoPreviewCategoryInput = document.getElementById('contificoPreviewCategoryId');
+const contificoPreviewClearCategoryButton = document.getElementById('contificoPreviewClearCategoryButton');
+const contificoPreviewCategoriesButton = document.getElementById('contificoPreviewCategoriesButton');
+const contificoPreviewCategoriesStatus = document.getElementById('contificoPreviewCategoriesStatus');
+const contificoPreviewCategoriesTableBody = document.getElementById('contificoPreviewCategoriesTableBody');
+const contificoPreviewProductDetailForm = document.getElementById('contificoPreviewProductDetailForm');
+const contificoPreviewProductIdInput = document.getElementById('contificoPreviewProductId');
+const contificoPreviewProductDetailStatus = document.getElementById('contificoPreviewProductDetailStatus');
+const contificoPreviewProductDetailResult = document.getElementById('contificoPreviewProductDetailResult');
 const contificoPreviewWarehousesButton = document.getElementById('contificoPreviewWarehousesButton');
 const contificoPreviewWarehousesStatus = document.getElementById('contificoPreviewWarehousesStatus');
 const contificoPreviewWarehousesTableBody = document.getElementById('contificoPreviewWarehousesTableBody');
@@ -3628,6 +3647,24 @@ if (contificoPreviewProductsForm) {
   contificoPreviewProductsForm.addEventListener('submit', handleContificoPreviewProductsFetch);
 }
 
+if (contificoPreviewClearCategoryButton) {
+  contificoPreviewClearCategoryButton.addEventListener('click', handleContificoPreviewClearCategory);
+}
+
+if (contificoPreviewCategoriesButton) {
+  contificoPreviewCategoriesButton.addEventListener(
+    'click',
+    handleContificoPreviewProductCategoriesFetch
+  );
+}
+
+if (contificoPreviewProductDetailForm) {
+  contificoPreviewProductDetailForm.addEventListener(
+    'submit',
+    handleContificoPreviewProductDetailFetch
+  );
+}
+
 if (contificoPreviewWarehousesButton) {
   contificoPreviewWarehousesButton.addEventListener('click', handleContificoPreviewWarehousesFetch);
 }
@@ -6239,6 +6276,16 @@ function resetContificoPreviewState() {
   state.contificoPreviewProductsLoading = false;
   state.contificoPreviewProductsError = null;
   state.contificoPreviewProductsFetched = false;
+  state.contificoPreviewProductsCategoryId = '';
+  state.contificoPreviewProductCategories = [];
+  state.contificoPreviewProductCategoriesLoading = false;
+  state.contificoPreviewProductCategoriesError = null;
+  state.contificoPreviewProductCategoriesFetched = false;
+  state.contificoPreviewProductDetailId = '';
+  state.contificoPreviewProductDetail = null;
+  state.contificoPreviewProductDetailLoading = false;
+  state.contificoPreviewProductDetailError = null;
+  state.contificoPreviewProductDetailFetched = false;
   state.contificoPreviewWarehouses = [];
   state.contificoPreviewWarehousesLoading = false;
   state.contificoPreviewWarehousesError = null;
@@ -6284,6 +6331,12 @@ function renderContificoPreviewProducts() {
         element.disabled = true;
       });
     }
+    if (contificoPreviewCategoryInput) {
+      contificoPreviewCategoryInput.value = '';
+    }
+    if (contificoPreviewClearCategoryButton) {
+      contificoPreviewClearCategoryButton.disabled = true;
+    }
     if (contificoPreviewProductsTableBody) {
       contificoPreviewProductsTableBody.innerHTML = '';
     }
@@ -6308,6 +6361,14 @@ function renderContificoPreviewProducts() {
     contificoPreviewPageSizeInput.value = String(
       state.contificoPreviewProductsPageSize || CONTIFICO_DEFAULT_PAGE_SIZE
     );
+  }
+  if (contificoPreviewCategoryInput) {
+    contificoPreviewCategoryInput.value = state.contificoPreviewProductsCategoryId || '';
+    contificoPreviewCategoryInput.disabled = state.contificoPreviewProductsLoading;
+  }
+  if (contificoPreviewClearCategoryButton) {
+    contificoPreviewClearCategoryButton.disabled =
+      state.contificoPreviewProductsLoading || !state.contificoPreviewProductsCategoryId;
   }
 
   if (contificoPreviewProductsTableBody) {
@@ -6379,15 +6440,276 @@ function renderContificoPreviewProducts() {
     tone = 'error';
   } else if (state.contificoPreviewProductsFetched) {
     if (state.contificoPreviewProducts.length) {
-      statusMessage = `Se muestran ${state.contificoPreviewProducts.length} productos (página ${state.contificoPreviewProductsPage}).`;
+      const categorySuffix = state.contificoPreviewProductsCategoryId
+        ? `, categoría ${state.contificoPreviewProductsCategoryId}`
+        : '';
+      statusMessage = `Se muestran ${state.contificoPreviewProducts.length} productos (página ${state.contificoPreviewProductsPage}${categorySuffix}).`;
       tone = 'success';
     } else {
       statusMessage = 'No se recibieron productos para la página consultada.';
     }
   } else {
-    statusMessage = 'Define la página y presiona “Consultar productos” para obtener datos desde Contífico.';
+    statusMessage =
+      'Define la página, el tamaño o una categoría y presiona “Consultar productos” para obtener datos desde Contífico.';
   }
   updateContificoStatus(contificoPreviewProductsStatus, { text: statusMessage, tone });
+}
+
+function renderContificoPreviewProductCategories() {
+  const isAdmin = state.token && state.user?.role === 'administrador';
+  if (!isAdmin) {
+    if (contificoPreviewCategoriesButton) {
+      contificoPreviewCategoriesButton.disabled = true;
+      contificoPreviewCategoriesButton.removeAttribute('aria-busy');
+      contificoPreviewCategoriesButton.textContent = 'Cargar categorías';
+    }
+    if (contificoPreviewCategoriesTableBody) {
+      contificoPreviewCategoriesTableBody.innerHTML = '';
+    }
+    updateContificoStatus(contificoPreviewCategoriesStatus, {
+      text: 'Inicia sesión como administrador para consultar categorías en Contífico.',
+      tone: 'info',
+    });
+    return;
+  }
+
+  if (contificoPreviewCategoriesButton) {
+    contificoPreviewCategoriesButton.disabled =
+      state.contificoPreviewProductCategoriesLoading;
+    if (state.contificoPreviewProductCategoriesLoading) {
+      contificoPreviewCategoriesButton.setAttribute('aria-busy', 'true');
+      contificoPreviewCategoriesButton.textContent = 'Consultando…';
+    } else {
+      contificoPreviewCategoriesButton.removeAttribute('aria-busy');
+      contificoPreviewCategoriesButton.textContent = 'Cargar categorías';
+    }
+  }
+
+  if (contificoPreviewCategoriesTableBody) {
+    contificoPreviewCategoriesTableBody.innerHTML = '';
+    const categories = Array.isArray(state.contificoPreviewProductCategories)
+      ? state.contificoPreviewProductCategories
+      : [];
+
+    if (categories.length) {
+      categories.forEach((category) => {
+        const row = document.createElement('tr');
+
+        const idCell = document.createElement('td');
+        const categoryId = category?.id;
+        idCell.textContent =
+          categoryId === null || categoryId === undefined || categoryId === ''
+            ? '—'
+            : String(categoryId);
+        idCell.dataset.label = 'ID';
+
+        const codeCell = document.createElement('td');
+        const categoryCode = category?.codigo;
+        codeCell.textContent =
+          categoryCode === null || categoryCode === undefined || categoryCode === ''
+            ? '—'
+            : String(categoryCode);
+        codeCell.dataset.label = 'Código';
+
+        const nameCell = document.createElement('td');
+        const categoryName = category?.nombre || category?.descripcion;
+        nameCell.textContent =
+          categoryName === null || categoryName === undefined || categoryName === ''
+            ? '—'
+            : String(categoryName);
+        nameCell.dataset.label = 'Nombre';
+
+        const descriptionCell = document.createElement('td');
+        const categoryDescription = category?.descripcion;
+        descriptionCell.textContent =
+          categoryDescription === null || categoryDescription === undefined || categoryDescription === ''
+            ? '—'
+            : String(categoryDescription);
+        descriptionCell.dataset.label = 'Descripción';
+
+        const actionCell = document.createElement('td');
+        actionCell.dataset.label = 'Acciones';
+        const useButton = document.createElement('button');
+        useButton.type = 'button';
+        useButton.className = 'secondary';
+        const normalizedId =
+          categoryId === null || categoryId === undefined ? '' : String(categoryId).trim();
+        const normalizedCode =
+          categoryCode === null || categoryCode === undefined ? '' : String(categoryCode).trim();
+        const filterValue = normalizedId || normalizedCode;
+        if (!filterValue) {
+          useButton.disabled = true;
+          useButton.textContent = 'Sin ID disponible';
+        } else {
+          useButton.textContent = 'Usar en productos';
+          useButton.addEventListener('click', () => {
+            state.contificoPreviewProductsCategoryId = filterValue;
+            state.contificoPreviewProductsPage = 1;
+            if (contificoPreviewCategoryInput) {
+              contificoPreviewCategoryInput.value = filterValue;
+              contificoPreviewCategoryInput.focus();
+            }
+            if (contificoPreviewPageInput) {
+              contificoPreviewPageInput.value = '1';
+            }
+            renderContificoPreviewProducts();
+            showToast('Filtro de productos actualizado con la categoría seleccionada.', 'success');
+            if (!state.contificoPreviewProductsLoading) {
+              handleContificoPreviewProductsFetch();
+            }
+          });
+        }
+        actionCell.appendChild(useButton);
+
+        row.appendChild(idCell);
+        row.appendChild(codeCell);
+        row.appendChild(nameCell);
+        row.appendChild(descriptionCell);
+        row.appendChild(actionCell);
+        contificoPreviewCategoriesTableBody.appendChild(row);
+      });
+    } else if (
+      state.contificoPreviewProductCategoriesFetched &&
+      !state.contificoPreviewProductCategoriesLoading &&
+      !state.contificoPreviewProductCategoriesError
+    ) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 5;
+      cell.className = 'muted';
+      cell.textContent = 'No se encontraron categorías configuradas en Contífico.';
+      row.appendChild(cell);
+      contificoPreviewCategoriesTableBody.appendChild(row);
+    }
+  }
+
+  let statusMessage = '';
+  let tone = 'info';
+  if (state.contificoPreviewProductCategoriesLoading) {
+    statusMessage = 'Consultando categorías en Contífico...';
+    tone = 'loading';
+  } else if (state.contificoPreviewProductCategoriesError) {
+    statusMessage = state.contificoPreviewProductCategoriesError;
+    tone = 'error';
+  } else if (state.contificoPreviewProductCategoriesFetched) {
+    if (state.contificoPreviewProductCategories.length) {
+      statusMessage = `Se muestran ${state.contificoPreviewProductCategories.length} categorías.`;
+      tone = 'success';
+    } else {
+      statusMessage = 'No se encontraron categorías configuradas en Contífico.';
+    }
+  } else {
+    statusMessage = 'Haz clic en “Cargar categorías” para consultar la API de Contífico.';
+  }
+  updateContificoStatus(contificoPreviewCategoriesStatus, { text: statusMessage, tone });
+}
+
+function renderContificoPreviewProductDetail() {
+  const isAdmin = state.token && state.user?.role === 'administrador';
+  if (!isAdmin) {
+    if (contificoPreviewProductDetailForm) {
+      const elements = contificoPreviewProductDetailForm.querySelectorAll('input, button');
+      elements.forEach((element) => {
+        element.disabled = true;
+      });
+    }
+    if (contificoPreviewProductIdInput) {
+      contificoPreviewProductIdInput.value = '';
+    }
+    if (contificoPreviewProductDetailResult) {
+      contificoPreviewProductDetailResult.innerHTML = '';
+    }
+    updateContificoStatus(contificoPreviewProductDetailStatus, {
+      text: 'Inicia sesión como administrador para consultar productos específicos en Contífico.',
+      tone: 'info',
+    });
+    return;
+  }
+
+  if (contificoPreviewProductDetailForm) {
+    const elements = contificoPreviewProductDetailForm.querySelectorAll('input, button');
+    elements.forEach((element) => {
+      element.disabled = state.contificoPreviewProductDetailLoading;
+    });
+  }
+
+  if (contificoPreviewProductIdInput) {
+    contificoPreviewProductIdInput.value = state.contificoPreviewProductDetailId || '';
+  }
+
+  if (contificoPreviewProductDetailResult) {
+    contificoPreviewProductDetailResult.innerHTML = '';
+    const detail = state.contificoPreviewProductDetail;
+    if (detail) {
+      const list = document.createElement('dl');
+      list.className = 'contifico-preview-detail-list';
+      const entries = [
+        ['ID', detail.id],
+        ['Código', detail.codigo],
+        ['Nombre', detail.nombre || detail.descripcion],
+        ['Descripción', detail.descripcion],
+        ['Precio base', formatCurrencyUSD(detail.pvp1)],
+        ['Precio alterno 2', formatCurrencyUSD(detail.pvp2)],
+        ['Precio alterno 3', formatCurrencyUSD(detail.pvp3)],
+      ];
+      entries.forEach(([label, value]) => {
+        const dt = document.createElement('dt');
+        dt.textContent = label;
+        const dd = document.createElement('dd');
+        if (value === null || value === undefined || value === '') {
+          dd.textContent = '—';
+        } else {
+          dd.textContent = String(value);
+        }
+        list.appendChild(dt);
+        list.appendChild(dd);
+      });
+      contificoPreviewProductDetailResult.appendChild(list);
+
+      const rawPayload = detail.raw ?? detail;
+      if (rawPayload && typeof rawPayload === 'object') {
+        const detailsElement = document.createElement('details');
+        detailsElement.classList.add('contifico-invoice-raw');
+        const summary = document.createElement('summary');
+        summary.textContent = 'Ver respuesta completa';
+        detailsElement.appendChild(summary);
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(rawPayload, null, 2);
+        detailsElement.appendChild(pre);
+        contificoPreviewProductDetailResult.appendChild(detailsElement);
+      }
+    } else if (
+      state.contificoPreviewProductDetailFetched &&
+      !state.contificoPreviewProductDetailLoading &&
+      !state.contificoPreviewProductDetailError
+    ) {
+      const emptyMessage = document.createElement('p');
+      emptyMessage.className = 'muted';
+      emptyMessage.textContent = 'No se encontró un producto con el identificador consultado.';
+      contificoPreviewProductDetailResult.appendChild(emptyMessage);
+    }
+  }
+
+  let statusMessage = '';
+  let tone = 'info';
+  if (state.contificoPreviewProductDetailLoading) {
+    statusMessage = 'Consultando producto en Contífico...';
+    tone = 'loading';
+  } else if (state.contificoPreviewProductDetailError) {
+    statusMessage = state.contificoPreviewProductDetailError;
+    tone = 'error';
+  } else if (state.contificoPreviewProductDetailFetched) {
+    if (state.contificoPreviewProductDetail) {
+      statusMessage = 'Producto obtenido correctamente desde Contífico.';
+      tone = 'success';
+    } else {
+      statusMessage = 'No se encontró un producto con el identificador consultado.';
+    }
+  } else {
+    statusMessage =
+      'Ingresa un ID o código y presiona “Consultar producto” para obtener información desde Contífico.';
+  }
+  updateContificoStatus(contificoPreviewProductDetailStatus, { text: statusMessage, tone });
 }
 
 function renderContificoPreviewWarehouses() {
@@ -7050,6 +7372,8 @@ function renderContificoPreviewInvoiceLookup() {
 }
 function renderContificoPreview() {
   renderContificoPreviewProducts();
+  renderContificoPreviewProductCategories();
+  renderContificoPreviewProductDetail();
   renderContificoPreviewWarehouses();
   renderContificoPreviewCustomerInvoices();
   renderContificoPreviewCustomerInvoiceLookup();
@@ -7074,21 +7398,31 @@ async function handleContificoPreviewProductsFetch(event) {
       state.contificoPreviewProductsPageSize ??
       CONTIFICO_DEFAULT_PAGE_SIZE
   );
+  const rawCategoryId =
+    contificoPreviewCategoryInput?.value ?? state.contificoPreviewProductsCategoryId ?? '';
   const normalizedPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const normalizedPageSize = Number.isFinite(rawPageSize) && rawPageSize > 0
     ? Math.min(Math.floor(rawPageSize), CONTIFICO_MAX_PAGE_SIZE)
     : CONTIFICO_DEFAULT_PAGE_SIZE;
+  const normalizedCategoryId = String(rawCategoryId ?? '').trim();
 
   state.contificoPreviewProductsPage = normalizedPage;
   state.contificoPreviewProductsPageSize = normalizedPageSize;
+  state.contificoPreviewProductsCategoryId = normalizedCategoryId;
   state.contificoPreviewProductsLoading = true;
   state.contificoPreviewProductsError = null;
+  state.contificoPreviewProductsFetched = false;
   renderContificoPreviewProducts();
 
   try {
-    const response = await apiFetch(
-      `/temp/contifico/products?page=${normalizedPage}&page_size=${normalizedPageSize}`
-    );
+    const params = new URLSearchParams({
+      page: String(normalizedPage),
+      page_size: String(normalizedPageSize),
+    });
+    if (normalizedCategoryId) {
+      params.append('category_id', normalizedCategoryId);
+    }
+    const response = await apiFetch(`/temp/contifico/products?${params.toString()}`);
     const items = Array.isArray(response?.items) ? response.items : [];
     state.contificoPreviewProducts = items;
     state.contificoPreviewProductsPage = Number.isFinite(response?.page)
@@ -7108,6 +7442,107 @@ async function handleContificoPreviewProductsFetch(event) {
   } finally {
     state.contificoPreviewProductsLoading = false;
     renderContificoPreviewProducts();
+  }
+}
+
+function handleContificoPreviewClearCategory() {
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden modificar el filtro de Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewProductsLoading) {
+    return;
+  }
+  state.contificoPreviewProductsCategoryId = '';
+  if (contificoPreviewCategoryInput) {
+    contificoPreviewCategoryInput.value = '';
+    contificoPreviewCategoryInput.focus();
+  }
+  renderContificoPreviewProducts();
+}
+
+async function handleContificoPreviewProductCategoriesFetch() {
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden consultar Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewProductCategoriesLoading) {
+    return;
+  }
+
+  state.contificoPreviewProductCategoriesLoading = true;
+  state.contificoPreviewProductCategoriesError = null;
+  state.contificoPreviewProductCategoriesFetched = false;
+  renderContificoPreviewProductCategories();
+
+  try {
+    const response = await apiFetch('/temp/contifico/product-categories');
+    const items = Array.isArray(response) ? response : [];
+    state.contificoPreviewProductCategories = items;
+    state.contificoPreviewProductCategoriesFetched = true;
+    renderContificoPreviewProductCategories();
+  } catch (error) {
+    state.contificoPreviewProductCategoriesError =
+      error.message || 'No se pudieron consultar las categorías.';
+    state.contificoPreviewProductCategories = [];
+    state.contificoPreviewProductCategoriesFetched = true;
+    renderContificoPreviewProductCategories();
+    showToast(state.contificoPreviewProductCategoriesError, 'error');
+  } finally {
+    state.contificoPreviewProductCategoriesLoading = false;
+    renderContificoPreviewProductCategories();
+  }
+}
+
+async function handleContificoPreviewProductDetailFetch(event) {
+  if (event) {
+    event.preventDefault();
+  }
+  if (!state.token || !state.user || state.user.role !== 'administrador') {
+    showToast('Solo los administradores pueden consultar Contífico.', 'error');
+    return;
+  }
+  if (state.contificoPreviewProductDetailLoading) {
+    return;
+  }
+
+  const rawProductId =
+    contificoPreviewProductIdInput?.value ?? state.contificoPreviewProductDetailId ?? '';
+  const normalizedProductId = String(rawProductId ?? '').trim();
+
+  if (!normalizedProductId) {
+    state.contificoPreviewProductDetailError = 'Ingresa un identificador de producto válido.';
+    state.contificoPreviewProductDetail = null;
+    state.contificoPreviewProductDetailFetched = true;
+    renderContificoPreviewProductDetail();
+    showToast(state.contificoPreviewProductDetailError, 'error');
+    return;
+  }
+
+  state.contificoPreviewProductDetailId = normalizedProductId;
+  state.contificoPreviewProductDetailLoading = true;
+  state.contificoPreviewProductDetailError = null;
+  state.contificoPreviewProductDetailFetched = false;
+  state.contificoPreviewProductDetail = null;
+  renderContificoPreviewProductDetail();
+
+  try {
+    const product = await apiFetch(
+      `/temp/contifico/products/${encodeURIComponent(normalizedProductId)}`
+    );
+    state.contificoPreviewProductDetail = product || null;
+    state.contificoPreviewProductDetailFetched = true;
+    renderContificoPreviewProductDetail();
+  } catch (error) {
+    state.contificoPreviewProductDetailError =
+      error.message || 'No se pudo consultar el producto.';
+    state.contificoPreviewProductDetail = null;
+    state.contificoPreviewProductDetailFetched = true;
+    renderContificoPreviewProductDetail();
+    showToast(state.contificoPreviewProductDetailError, 'error');
+  } finally {
+    state.contificoPreviewProductDetailLoading = false;
+    renderContificoPreviewProductDetail();
   }
 }
 
