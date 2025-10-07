@@ -16,6 +16,18 @@ def create_legacy_schema(engine):
         connection.execute(
             text(
                 """
+                CREATE TABLE customers (
+                    id INTEGER PRIMARY KEY,
+                    full_name VARCHAR(100) NOT NULL,
+                    document_id VARCHAR(50) NOT NULL,
+                    phone VARCHAR(50)
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
                 CREATE TABLE orders (
                     id INTEGER PRIMARY KEY,
                     order_number VARCHAR(50) NOT NULL,
@@ -58,6 +70,30 @@ def test_apply_schema_upgrades_adds_vendor_column(tmp_path):
     inspector = inspect(engine)
     column_names = {column["name"] for column in inspector.get_columns("orders")}
     assert "assigned_vendor_id" in column_names
+
+
+def test_apply_schema_upgrades_adds_customer_contact_columns(tmp_path):
+    database_path = tmp_path / "legacy_customers.db"
+    engine = create_engine(f"sqlite:///{database_path}")
+    create_legacy_schema(engine)
+
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("customers")}
+    assert "email" not in columns
+    assert "address" not in columns
+
+    migrations.apply_schema_upgrades(engine)
+
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("customers")}
+    assert "email" in columns
+    assert "address" in columns
+
+    migrations.apply_schema_upgrades(engine)
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("customers")}
+    assert "email" in columns
+    assert "address" in columns
 
 
 def test_apply_schema_upgrades_handles_missing_table(tmp_path):

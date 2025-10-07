@@ -311,6 +311,17 @@ const updateCustomerMeasurementsContainer = document.getElementById('updateCusto
 const updateCustomerNameInput = document.getElementById('updateCustomerName');
 const updateCustomerDocumentInput = document.getElementById('updateCustomerDocument');
 const updateCustomerPhoneInput = document.getElementById('updateCustomerPhone');
+const customerFullNameInput = document.getElementById('customerFullName');
+const customerDocumentInput = document.getElementById('customerDocumentInput');
+const customerPhoneInput = document.getElementById('customerPhone');
+const customerEmailInput = document.getElementById('customerEmail');
+const customerAddressInput = document.getElementById('customerAddress');
+const fetchContificoCustomerButton = document.getElementById('fetchContificoCustomerButton');
+const contificoCustomerLookupStatus = document.getElementById('contificoCustomerLookupStatus');
+const updateCustomerEmailInput = document.getElementById('updateCustomerEmail');
+const updateCustomerAddressInput = document.getElementById('updateCustomerAddress');
+const updateCustomerFetchContificoButton = document.getElementById('updateCustomerFetchContificoButton');
+const updateContificoCustomerLookupStatus = document.getElementById('updateContificoCustomerLookupStatus');
 const addCustomerMeasurementSetButton = document.getElementById('addCustomerMeasurementSet');
 const addUpdateCustomerMeasurementSetButton = document.getElementById('addUpdateCustomerMeasurementSet');
 const deleteCustomerButton = document.getElementById('deleteCustomerButton');
@@ -948,6 +959,15 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toastElement.classList.remove('show', 'success', 'error');
   }, 3500);
+}
+
+function setContificoLookupStatus(element, message, tone = 'info') {
+  if (!element) return;
+  element.textContent = message || '';
+  element.classList.remove('info', 'success', 'error');
+  if (message) {
+    element.classList.add(tone);
+  }
 }
 
 function formatDate(dateString) {
@@ -2058,6 +2078,90 @@ function resetCreateCustomerForm() {
   if (customerMeasurementsContainer) {
     customerMeasurementsContainer.innerHTML = '';
     createMeasurementSetBlock(customerMeasurementsContainer);
+  }
+  setContificoLookupStatus(contificoCustomerLookupStatus, '');
+  if (fetchContificoCustomerButton) {
+    fetchContificoCustomerButton.disabled = false;
+  }
+}
+
+function applyContificoCustomerData(target, data = {}) {
+  if (!data || typeof data !== 'object') return;
+  const name = typeof data.full_name === 'string' ? data.full_name.trim() : '';
+  const documentId = typeof data.document_id === 'string' ? data.document_id.trim() : '';
+  const phone = typeof data.phone === 'string' ? data.phone.trim() : '';
+  const email = typeof data.email === 'string' ? data.email.trim() : '';
+  const address = typeof data.address === 'string' ? data.address.trim() : '';
+
+  if (target === 'create') {
+    if (customerFullNameInput && name) customerFullNameInput.value = name;
+    if (customerDocumentInput && documentId) customerDocumentInput.value = documentId;
+    if (customerPhoneInput && phone) customerPhoneInput.value = phone;
+    if (customerEmailInput && email) customerEmailInput.value = email;
+    if (customerAddressInput && address) customerAddressInput.value = address;
+    return;
+  }
+
+  const nameInput = updateCustomerNameInput || customerDetail?.querySelector('#updateCustomerName');
+  const documentInput =
+    updateCustomerDocumentInput || customerDetail?.querySelector('#updateCustomerDocument');
+  const phoneInput = updateCustomerPhoneInput || customerDetail?.querySelector('#updateCustomerPhone');
+  const emailInput = updateCustomerEmailInput || customerDetail?.querySelector('#updateCustomerEmail');
+  const addressInput =
+    updateCustomerAddressInput || customerDetail?.querySelector('#updateCustomerAddress');
+
+  if (nameInput && name) nameInput.value = name;
+  if (documentInput && documentId) documentInput.value = documentId;
+  if (phoneInput && phone) phoneInput.value = phone;
+  if (emailInput && email) emailInput.value = email;
+  if (addressInput && address) addressInput.value = address;
+}
+
+async function handleContificoCustomerLookup(source) {
+  const isCreate = source === 'create';
+  const documentInput = isCreate
+    ? customerDocumentInput
+    : updateCustomerDocumentInput || customerDetail?.querySelector('#updateCustomerDocument');
+  const statusElement = isCreate
+    ? contificoCustomerLookupStatus
+    : updateContificoCustomerLookupStatus;
+  const triggerButton = isCreate ? fetchContificoCustomerButton : updateCustomerFetchContificoButton;
+
+  if (!documentInput) return;
+
+  const rawDocument = documentInput.value || '';
+  const normalizedDocument = rawDocument.trim();
+  if (!normalizedDocument) {
+    setContificoLookupStatus(statusElement, 'Ingresa una cédula o RUC para consultar.', 'error');
+    documentInput.focus();
+    return;
+  }
+
+  setContificoLookupStatus(statusElement, 'Buscando datos en Contífico...', 'info');
+  if (triggerButton) {
+    triggerButton.disabled = true;
+  }
+  try {
+    const data = await apiFetch(
+      `/integrations/contifico/customers/${encodeURIComponent(normalizedDocument)}`
+    );
+    applyContificoCustomerData(source, data || {});
+    if (documentInput && normalizedDocument) {
+      const returnedDocument =
+        typeof data?.document_id === 'string' ? data.document_id.trim() : '';
+      documentInput.value = returnedDocument || normalizedDocument;
+    }
+    setContificoLookupStatus(
+      statusElement,
+      'Datos importados desde Contífico. Puedes ajustarlos antes de guardar.',
+      'success'
+    );
+  } catch (error) {
+    setContificoLookupStatus(statusElement, error.message || 'No se pudo obtener la información.', 'error');
+  } finally {
+    if (triggerButton) {
+      triggerButton.disabled = false;
+    }
   }
 }
 
@@ -3560,6 +3664,10 @@ function getCustomerDisplayData(customer, ordersForCustomer = []) {
     typeof customer?.document_id === 'string' ? customer.document_id.trim() : '';
   const normalizedContact =
     typeof customer?.phone === 'string' ? customer.phone.trim() : '';
+  const normalizedEmail =
+    typeof customer?.email === 'string' ? customer.email.trim() : '';
+  const normalizedAddress =
+    typeof customer?.address === 'string' ? customer.address.trim() : '';
 
   const cacheKey =
     customer?.id !== null && customer?.id !== undefined ? String(customer.id) : null;
@@ -3601,6 +3709,8 @@ function getCustomerDisplayData(customer, ordersForCustomer = []) {
   const name = normalizedName || fallbackName || cachedDisplay.name || '';
   const document = normalizedDocument || fallbackDocument || cachedDisplay.document || '';
   const contact = normalizedContact || fallbackContact || cachedDisplay.contact || '';
+  const email = normalizedEmail || cachedDisplay.email || '';
+  const address = normalizedAddress || cachedDisplay.address || '';
 
   if (cacheKey) {
     if (!state.customerDisplayCache) {
@@ -3610,6 +3720,8 @@ function getCustomerDisplayData(customer, ordersForCustomer = []) {
       name,
       document,
       contact,
+      email,
+      address,
     };
   }
 
@@ -3617,6 +3729,8 @@ function getCustomerDisplayData(customer, ordersForCustomer = []) {
     name,
     document,
     contact,
+    email,
+    address,
   };
 }
 
@@ -3890,6 +4004,11 @@ async function populateCustomerDetail(customer) {
   if (!customerDetail) return;
   state.selectedCustomerId = customer.id;
 
+  setContificoLookupStatus(updateContificoCustomerLookupStatus, '');
+  if (updateCustomerFetchContificoButton) {
+    updateCustomerFetchContificoButton.disabled = false;
+  }
+
   const cacheKey = String(customer.id);
   const expectedOrderCount =
     typeof customer.order_count === 'number' ? customer.order_count : undefined;
@@ -3922,6 +4041,12 @@ async function populateCustomerDetail(customer) {
     if (displayData.contact) {
       summaryParts.push(`Teléfono: ${displayData.contact}`);
     }
+    if (displayData.email) {
+      summaryParts.push(`Correo: ${displayData.email}`);
+    }
+    if (displayData.address) {
+      summaryParts.push(`Dirección: ${displayData.address}`);
+    }
     const orderCountForSummary =
       typeof expectedOrderCount === 'number' ? expectedOrderCount : ordersForCustomer.length;
     if (orderCountForSummary > 0) {
@@ -3939,6 +4064,9 @@ async function populateCustomerDetail(customer) {
   const documentInput =
     updateCustomerDocumentInput || customerDetail?.querySelector('#updateCustomerDocument');
   const phoneInput = updateCustomerPhoneInput || customerDetail?.querySelector('#updateCustomerPhone');
+  const emailInput = updateCustomerEmailInput || customerDetail?.querySelector('#updateCustomerEmail');
+  const addressInput =
+    updateCustomerAddressInput || customerDetail?.querySelector('#updateCustomerAddress');
 
   const normalizedCustomerName =
     typeof customer?.full_name === 'string' ? customer.full_name.trim() : '';
@@ -3946,6 +4074,10 @@ async function populateCustomerDetail(customer) {
     typeof customer?.document_id === 'string' ? customer.document_id.trim() : '';
   const normalizedCustomerPhone =
     typeof customer?.phone === 'string' ? customer.phone.trim() : '';
+  const normalizedCustomerEmail =
+    typeof customer?.email === 'string' ? customer.email.trim() : '';
+  const normalizedCustomerAddress =
+    typeof customer?.address === 'string' ? customer.address.trim() : '';
   if (nameInput) {
     nameInput.value = normalizedCustomerName || displayData.name || '';
   }
@@ -3954,6 +4086,12 @@ async function populateCustomerDetail(customer) {
   }
   if (phoneInput) {
     phoneInput.value = normalizedCustomerPhone || displayData.contact || '';
+  }
+  if (emailInput) {
+    emailInput.value = normalizedCustomerEmail || displayData.email || '';
+  }
+  if (addressInput) {
+    addressInput.value = normalizedCustomerAddress || displayData.address || '';
   }
 
   if (updateCustomerMeasurementsContainer) {
@@ -3992,6 +4130,10 @@ function clearCustomerDetail(options = {}) {
   if (updateCustomerMeasurementsContainer) {
     updateCustomerMeasurementsContainer.innerHTML = '';
   }
+  setContificoLookupStatus(updateContificoCustomerLookupStatus, '');
+  if (updateCustomerFetchContificoButton) {
+    updateCustomerFetchContificoButton.disabled = false;
+  }
 
   if (reRender) {
     renderCustomers();
@@ -4007,6 +4149,147 @@ if (closeCustomerDetailButton) {
   closeCustomerDetailButton.addEventListener('click', () => {
     clearCustomerDetail({ reRender: true });
   });
+}
+
+const orderCustomerDetailState = {
+  name: '',
+  document: '',
+  contact: '',
+  hasAnyDetail: false,
+};
+
+let lastOrderCustomerDetailTrigger = null;
+
+function normalizeOrderCustomerDetailValue(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  try {
+    return value.toString().trim();
+  } catch (error) {
+    return '';
+  }
+}
+
+function setOrderCustomerDetailField(element, value, fallback = 'Sin registrar') {
+  if (!element) {
+    return;
+  }
+  const normalized = normalizeOrderCustomerDetailValue(value);
+  if (normalized) {
+    element.textContent = normalized;
+    element.classList.remove('muted');
+  } else {
+    element.textContent = fallback;
+    element.classList.add('muted');
+  }
+}
+
+function updateOrderCustomerDetailModalContent() {
+  setOrderCustomerDetailField(orderCustomerDetailName, orderCustomerDetailState.name);
+  setOrderCustomerDetailField(orderCustomerDetailDocument, orderCustomerDetailState.document);
+  setOrderCustomerDetailField(orderCustomerDetailContact, orderCustomerDetailState.contact);
+  if (orderCustomerDetailDescription) {
+    if (orderCustomerDetailState.hasAnyDetail) {
+      orderCustomerDetailDescription.textContent =
+        'Consulta los datos registrados para el cliente asociado a esta orden.';
+    } else {
+      orderCustomerDetailDescription.textContent =
+        'No se registraron datos adicionales del cliente.';
+    }
+  }
+}
+
+function updateOrderCustomerDetailTrigger() {
+  if (!orderDetailCustomerButton) {
+    return;
+  }
+  const label = orderCustomerDetailState.name || 'Sin registrar';
+  orderDetailCustomerButton.textContent = label;
+  if (orderCustomerDetailState.name) {
+    orderDetailCustomerButton.classList.remove('muted');
+  } else {
+    orderDetailCustomerButton.classList.add('muted');
+  }
+  const interactive = orderCustomerDetailState.hasAnyDetail;
+  orderDetailCustomerButton.disabled = !interactive;
+  orderDetailCustomerButton.classList.toggle('is-interactive', interactive);
+  if (interactive) {
+    orderDetailCustomerButton.setAttribute('aria-label', 'Ver datos del cliente');
+    orderDetailCustomerButton.setAttribute('aria-haspopup', 'dialog');
+    orderDetailCustomerButton.setAttribute('title', 'Ver datos del cliente');
+  } else {
+    orderDetailCustomerButton.removeAttribute('aria-label');
+    orderDetailCustomerButton.removeAttribute('aria-haspopup');
+    orderDetailCustomerButton.removeAttribute('title');
+  }
+}
+
+function resetOrderCustomerDetailState() {
+  orderCustomerDetailState.name = '';
+  orderCustomerDetailState.document = '';
+  orderCustomerDetailState.contact = '';
+  orderCustomerDetailState.hasAnyDetail = false;
+  updateOrderCustomerDetailTrigger();
+  updateOrderCustomerDetailModalContent();
+}
+
+function applyOrderCustomerDetailState(order) {
+  if (!order) {
+    resetOrderCustomerDetailState();
+    return;
+  }
+
+  orderCustomerDetailState.name = normalizeOrderCustomerDetailValue(order.customer_name);
+  orderCustomerDetailState.document = normalizeOrderCustomerDetailValue(order.customer_document);
+  orderCustomerDetailState.contact = normalizeOrderCustomerDetailValue(order.customer_contact);
+  orderCustomerDetailState.hasAnyDetail = Boolean(
+    orderCustomerDetailState.name ||
+      orderCustomerDetailState.document ||
+      orderCustomerDetailState.contact,
+  );
+
+  updateOrderCustomerDetailTrigger();
+  updateOrderCustomerDetailModalContent();
+}
+
+function openOrderCustomerDetailModal() {
+  if (!orderCustomerDetailOverlay || !orderCustomerDetailState.hasAnyDetail) {
+    return;
+  }
+  if (!orderCustomerDetailOverlay.classList.contains('hidden')) {
+    return;
+  }
+  lastOrderCustomerDetailTrigger =
+    document.activeElement && typeof document.activeElement.focus === 'function'
+      ? document.activeElement
+      : null;
+  orderCustomerDetailOverlay.classList.remove('hidden');
+  orderCustomerDetailOverlay.setAttribute('aria-hidden', 'false');
+  updateModalBodyState();
+  requestAnimationFrame(() => {
+    if (orderCustomerDetailDialog?.isConnected) {
+      orderCustomerDetailDialog.focus();
+    }
+  });
+}
+
+function closeOrderCustomerDetailModal() {
+  if (!orderCustomerDetailOverlay || orderCustomerDetailOverlay.classList.contains('hidden')) {
+    return;
+  }
+  orderCustomerDetailOverlay.classList.add('hidden');
+  orderCustomerDetailOverlay.setAttribute('aria-hidden', 'true');
+  updateModalBodyState();
+  if (lastOrderCustomerDetailTrigger?.isConnected) {
+    lastOrderCustomerDetailTrigger.focus();
+  } else if (orderDetailCustomerButton?.isConnected) {
+    orderDetailCustomerButton.focus();
+  }
+  lastOrderCustomerDetailTrigger = null;
 }
 
 document.addEventListener('keydown', (event) => {
@@ -4547,9 +4830,11 @@ if (typeof document !== 'undefined') {
 if (createCustomerForm) {
   createCustomerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
-    const fullName = document.getElementById('customerFullName').value.trim();
-    const documentId = document.getElementById('customerDocumentInput').value.trim();
-    const phone = document.getElementById('customerPhone').value.trim();
+    const fullName = customerFullNameInput?.value.trim() || '';
+    const documentId = customerDocumentInput?.value.trim() || '';
+    const phone = customerPhoneInput?.value.trim() || '';
+    const email = customerEmailInput?.value.trim() || '';
+    const address = customerAddressInput?.value.trim() || '';
     if (!fullName || !documentId) {
       showToast('El nombre y la cédula del cliente son obligatorios.', 'error');
       return;
@@ -4564,6 +4849,8 @@ if (createCustomerForm) {
           full_name: fullName,
           document_id: documentId,
           phone: phone || null,
+          email: email || null,
+          address: address || null,
           measurements,
         },
       });
@@ -4585,6 +4872,12 @@ if (createCustomerForm) {
   });
 }
 
+if (fetchContificoCustomerButton) {
+  fetchContificoCustomerButton.addEventListener('click', () => {
+    void handleContificoCustomerLookup('create');
+  });
+}
+
 if (updateCustomerForm) {
   updateCustomerForm.addEventListener('submit', async (event) => {
     event.preventDefault();
@@ -4598,9 +4891,15 @@ if (updateCustomerForm) {
       updateCustomerDocumentInput || customerDetail?.querySelector('#updateCustomerDocument');
     const phoneInput =
       updateCustomerPhoneInput || customerDetail?.querySelector('#updateCustomerPhone');
+    const emailInput =
+      updateCustomerEmailInput || customerDetail?.querySelector('#updateCustomerEmail');
+    const addressInput =
+      updateCustomerAddressInput || customerDetail?.querySelector('#updateCustomerAddress');
     const fullName = fullNameInput?.value.trim() || '';
     const documentId = documentInput?.value.trim() || '';
     const phone = phoneInput?.value.trim() || '';
+    const email = emailInput?.value.trim() || '';
+    const address = addressInput?.value.trim() || '';
     const measurements = collectMeasurementSets(updateCustomerMeasurementsContainer);
     const submitButton = updateCustomerForm.querySelector('button[type="submit"]');
     submitButton.disabled = true;
@@ -4611,6 +4910,8 @@ if (updateCustomerForm) {
           full_name: fullName || null,
           document_id: documentId || null,
           phone: phone || null,
+          email: email || null,
+          address: address || null,
           measurements,
         },
       });
@@ -4626,6 +4927,12 @@ if (updateCustomerForm) {
     } finally {
       submitButton.disabled = false;
     }
+  });
+}
+
+if (updateCustomerFetchContificoButton) {
+  updateCustomerFetchContificoButton.addEventListener('click', () => {
+    void handleContificoCustomerLookup('update');
   });
 }
 

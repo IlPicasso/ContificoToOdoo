@@ -228,11 +228,33 @@
                     </div>
                     <div class="form-row">
                       <label for="customerDocumentInput">Cédula o identificación</label>
-                      <input type="text" id="customerDocumentInput" required />
+                      <div class="field-with-action">
+                        <input type="text" id="customerDocumentInput" required />
+                        <button type="button" id="fetchContificoCustomerButton" class="secondary">
+                          Buscar en Contífico
+                        </button>
+                      </div>
+                      <p
+                        id="contificoCustomerLookupStatus"
+                        class="muted small contifico-lookup-status"
+                        aria-live="polite"
+                      ></p>
                     </div>
                     <div class="form-row">
                       <label for="customerPhone">Teléfono</label>
                       <input type="text" id="customerPhone" placeholder="Número de contacto" />
+                    </div>
+                    <div class="form-row">
+                      <label for="customerEmail">Correo electrónico</label>
+                      <input type="text" id="customerEmail" placeholder="Correo de contacto" />
+                    </div>
+                    <div class="form-row">
+                      <label for="customerAddress">Dirección</label>
+                      <textarea
+                        id="customerAddress"
+                        rows="2"
+                        placeholder="Dirección de facturación o contacto"
+                      ></textarea>
                     </div>
                     <div class="form-row">
                       <label>Conjuntos de medidas</label>
@@ -334,11 +356,33 @@
                     </div>
                     <div class="form-row">
                       <label for="updateCustomerDocument">Cédula o identificación</label>
-                      <input type="text" id="updateCustomerDocument" required />
+                      <div class="field-with-action">
+                        <input type="text" id="updateCustomerDocument" required />
+                        <button
+                          type="button"
+                          id="updateCustomerFetchContificoButton"
+                          class="secondary"
+                        >
+                          Actualizar desde Contífico
+                        </button>
+                      </div>
+                      <p
+                        id="updateContificoCustomerLookupStatus"
+                        class="muted small contifico-lookup-status"
+                        aria-live="polite"
+                      ></p>
                     </div>
                     <div class="form-row">
                       <label for="updateCustomerPhone">Teléfono</label>
                       <input type="text" id="updateCustomerPhone" />
+                    </div>
+                    <div class="form-row">
+                      <label for="updateCustomerEmail">Correo electrónico</label>
+                      <input type="text" id="updateCustomerEmail" />
+                    </div>
+                    <div class="form-row">
+                      <label for="updateCustomerAddress">Dirección</label>
+                      <textarea id="updateCustomerAddress" rows="2"></textarea>
                     </div>
                     <div class="form-row">
                       <label>Conjuntos de medidas</label>

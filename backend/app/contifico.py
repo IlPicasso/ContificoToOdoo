@@ -203,6 +203,13 @@ class ContificoClient:
         return normalized
 
     @staticmethod
+    def _normalize_document(value: str) -> str:
+        cleaned = (value or "").strip().lower()
+        for char in ("-", " ", ".", "/", "_"):
+            cleaned = cleaned.replace(char, "")
+        return cleaned
+
+    @staticmethod
     def _sleep(seconds: float) -> None:
         if seconds <= 0:
             return
@@ -270,6 +277,47 @@ class ContificoClient:
                 nested_value = nested.get("identificacion") or nested.get("IDENTIFICACION")
                 if isinstance(nested_value, str) and nested_value.strip():
                     return nested_value.strip()
+        return None
+
+    @classmethod
+    def _extract_customer_document(cls, payload: Dict[str, Any]) -> Optional[str]:
+        if not isinstance(payload, dict):
+            return None
+        keys = (
+            "identificacion",
+            "persona_identificacion",
+            "identification",
+            "personaIdentificacion",
+            "IDENTIFICACION",
+            "PERSONA_IDENTIFICACION",
+            "IDENTIFICATION",
+            "documento",
+            "DOCUMENTO",
+            "numero_documento",
+            "NUMERO_DOCUMENTO",
+            "ruc",
+            "RUC",
+            "cedula",
+            "CEDULA",
+        )
+        for key in keys:
+            value = payload.get(key)
+            if value is None:
+                continue
+            if isinstance(value, (int, float)):
+                candidate = str(value)
+            elif isinstance(value, str):
+                candidate = value.strip()
+            else:
+                continue
+            if candidate:
+                return candidate
+        for nested_key in ("persona", "cliente", "CLIENTE", "PERSONA"):
+            nested = payload.get(nested_key)
+            if isinstance(nested, dict):
+                nested_value = cls._extract_customer_document(nested)
+                if nested_value:
+                    return nested_value
         return None
 
     @classmethod
@@ -354,6 +402,105 @@ class ContificoClient:
                 continue
             seen.add(size)
             yield size
+
+    def fetch_customer_by_document(self, document_id: str) -> Optional[Dict[str, Any]]:
+        """Obtiene la ficha del cliente en Contífico usando su identificación."""
+
+        normalized_target = self._normalize_document(document_id)
+        if not normalized_target:
+            raise ValueError("El número de documento del cliente es obligatorio.")
+
+        for candidate in self._customer_document_queries(document_id):
+            params = {"identificacion": candidate}
+            try:
+                payload = self._request("GET", "persona/", params=params)
+            except ContificoAPIError as exc:
+                if exc.status_code == HTTPStatus.NOT_FOUND:
+                    continue
+                raise
+
+            match = self._find_customer_in_payload(payload, normalized_target)
+            if match is not None:
+                return match
+
+        return None
+
+    @classmethod
+    def _customer_document_queries(cls, document_id: str) -> Iterable[str]:
+        candidates: list[str] = []
+        seen: set[str] = set()
+
+        def add_candidate(value: str | None) -> None:
+            candidate = (value or "").strip()
+            if not candidate or candidate in seen:
+                return
+            seen.add(candidate)
+            candidates.append(candidate)
+
+        raw = (document_id or "").strip()
+        normalized = cls._normalize_document(document_id)
+
+        add_candidate(raw)
+        if normalized and normalized != raw:
+            add_candidate(normalized)
+
+        if normalized:
+            if len(normalized) == 10:
+                add_candidate(f"{normalized}001")
+            if len(normalized) == 13 and normalized.endswith("001"):
+                add_candidate(normalized[:10])
+
+        return candidates
+
+    @classmethod
+    def _find_customer_in_payload(
+        cls, payload: Any, normalized_target: str
+    ) -> Optional[Dict[str, Any]]:
+        if payload is None:
+            return None
+
+        candidates: list[Dict[str, Any]] = []
+        seen: set[int] = set()
+
+        def _collect(value: Any) -> None:
+            if isinstance(value, dict):
+                obj_id = id(value)
+                if obj_id in seen:
+                    return
+                seen.add(obj_id)
+                candidates.append(value)
+                for nested in value.values():
+                    _collect(nested)
+            elif isinstance(value, list):
+                for item in value:
+                    _collect(item)
+
+        _collect(payload)
+        if isinstance(payload, dict):
+            for key in ("results", "data", "datos", "items", "personas", "records", "rows"):
+                _collect(payload.get(key))
+
+        for candidate in candidates:
+            document_value = cls._extract_customer_document(candidate)
+            if not document_value:
+                continue
+            normalized_candidate = cls._normalize_document(document_value)
+            if cls._documents_match(normalized_candidate, normalized_target):
+                return candidate
+
+        return None
+
+    @staticmethod
+    def _documents_match(candidate: str, target: str) -> bool:
+        if not candidate or not target:
+            return False
+        if candidate == target:
+            return True
+        if len(target) == 10 and len(candidate) == 13:
+            return candidate.startswith(target) and candidate.endswith("001")
+        if len(target) == 13 and target.endswith("001") and len(candidate) == 10:
+            return target.startswith(candidate)
+        return False
 
     def list_products(
         self, *, page: int = 1, page_size: int = 100
