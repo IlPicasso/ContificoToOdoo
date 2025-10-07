@@ -624,16 +624,18 @@
                 </div>
                 <form id="updateOrderForm" class="form-grid">
                   <div class="form-row">
-                    <label for="orderDetailCustomer">Cliente</label>
-                    <input type="text" id="orderDetailCustomer" readonly />
-                  </div>
-                  <div class="form-row">
-                    <label for="orderDetailDocument">Documento</label>
-                    <input type="text" id="orderDetailDocument" readonly />
-                  </div>
-                  <div class="form-row">
-                    <label for="orderDetailContact">Contacto</label>
-                    <input type="text" id="orderDetailContact" />
+                    <label for="orderDetailCustomerButton">Cliente</label>
+                    <button
+                      type="button"
+                      id="orderDetailCustomerButton"
+                      class="order-detail-customer-button"
+                      disabled
+                    >
+                      Sin registrar
+                    </button>
+                    <p id="orderDetailCustomerHint" class="muted small">
+                      No hay datos adicionales del cliente registrados.
+                    </p>
                   </div>
                   <div class="form-row">
                     <label for="orderDetailInvoice">Número de factura</label>
@@ -1261,6 +1263,61 @@
         </div>
       </section>
     </main>
+
+    <div
+      id="orderCustomerDetailModal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="orderCustomerDetailTitle"
+      aria-hidden="true"
+    >
+      <div class="modal-backdrop" data-order-customer-modal-close="true"></div>
+      <div
+        id="orderCustomerDetailDialog"
+        class="modal-dialog"
+        role="document"
+        tabindex="-1"
+      >
+        <div class="modal-content customer-modal">
+          <div class="customer-modal-header">
+            <div>
+              <h4 id="orderCustomerDetailTitle">Datos del cliente</h4>
+              <p id="orderCustomerDetailDescription" class="muted small">
+                Consulta o actualiza los datos registrados para el cliente de esta orden.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="link-button"
+              data-close-order-customer-modal="true"
+              aria-label="Cerrar datos del cliente"
+            >
+              Cerrar
+            </button>
+          </div>
+          <dl class="customer-modal-info">
+            <div class="customer-modal-info-item">
+              <dt>Nombre completo</dt>
+              <dd id="orderCustomerDetailName" class="muted">Sin registrar</dd>
+            </div>
+            <div class="customer-modal-info-item">
+              <dt>Documento</dt>
+              <dd id="orderCustomerDetailDocument" class="muted">Sin registrar</dd>
+            </div>
+            <div class="customer-modal-info-item">
+              <dt>Contacto</dt>
+              <dd>
+                <input type="text" id="orderDetailContact" placeholder="Ej. 0999999999" />
+                <span class="customer-modal-note muted small">
+                  Los cambios se guardarán al actualizar la orden.
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
 
     <div
       id="toast"
