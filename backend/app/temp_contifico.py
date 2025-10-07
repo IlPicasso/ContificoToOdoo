@@ -24,9 +24,17 @@ def build_product_page(
     *,
     page: int,
     page_size: int,
+    category_id: str | None = None,
 ) -> schemas.ContificoProductPage:
     try:
-        products = contifico_client.list_products(page=page, page_size=page_size)
+        products = contifico_client.list_products(
+            page=page, page_size=page_size, category_id=category_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except ContificoTransportError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -37,6 +45,54 @@ def build_product_page(
 
     items = [schemas.ContificoProduct.from_api(product) for product in products]
     return schemas.ContificoProductPage(page=page, page_size=page_size, items=items)
+
+
+def fetch_product_detail(
+    contifico_client: ContificoClient,
+    *,
+    product_id: str,
+) -> schemas.ContificoProduct:
+    try:
+        product = contifico_client.get_product(product_id)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
+    except ContificoTransportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.detail,
+        ) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    if not isinstance(product, dict):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="El formato de respuesta para el producto no es el esperado.",
+        )
+
+    return schemas.ContificoProduct.from_api(product)
+
+
+def build_product_category_list(
+    contifico_client: ContificoClient,
+) -> list[schemas.ContificoProductCategory]:
+    try:
+        categories = contifico_client.list_product_categories()
+    except ContificoTransportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.detail,
+        ) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+    return [
+        schemas.ContificoProductCategory.from_api(category)
+        for category in categories
+    ]
 
 
 def build_warehouse_list(contifico_client: ContificoClient) -> list[schemas.ContificoWarehouse]:
@@ -176,13 +232,45 @@ def serialize_invoice_lookup_job(job) -> schemas.ContificoInvoiceLookupJob:
 def preview_contifico_products(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    category_id: str | None = Query(default=None),
     contifico_client: ContificoClient = Depends(get_contifico_client),
     current_user=Depends(admin_required()),
 ):
     """Vista temporal de productos obtenidos desde Contífico."""
 
     _ = current_user
-    return build_product_page(contifico_client, page=page, page_size=page_size)
+    return build_product_page(
+        contifico_client,
+        page=page,
+        page_size=page_size,
+        category_id=category_id,
+    )
+
+
+@router.get("/products/{product_id}", response_model=schemas.ContificoProduct)
+def preview_contifico_product_detail(
+    product_id: str,
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user=Depends(admin_required()),
+):
+    """Detalle temporal de un producto obtenido desde Contífico."""
+
+    _ = current_user
+    return fetch_product_detail(contifico_client, product_id=product_id)
+
+
+@router.get(
+    "/product-categories",
+    response_model=list[schemas.ContificoProductCategory],
+)
+def preview_contifico_product_categories(
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+    current_user=Depends(admin_required()),
+):
+    """Lista temporal de categorías de productos desde Contífico."""
+
+    _ = current_user
+    return build_product_category_list(contifico_client)
 
 
 @router.get("/warehouses", response_model=list[schemas.ContificoWarehouse])
