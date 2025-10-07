@@ -933,6 +933,25 @@
                     <label for="contificoPreviewPageSize">Filas por página</label>
                     <input type="number" id="contificoPreviewPageSize" min="1" max="200" step="1" value="25" />
                   </div>
+                  <div class="form-row">
+                    <label for="contificoPreviewCategoryId">Categoría (opcional)</label>
+                    <div class="field-with-action">
+                      <input
+                        type="text"
+                        id="contificoPreviewCategoryId"
+                        name="category_id"
+                        placeholder="ID o código de la categoría"
+                        autocomplete="off"
+                      />
+                      <button type="button" class="secondary" id="contificoPreviewClearCategoryButton">
+                        Quitar filtro
+                      </button>
+                    </div>
+                    <p class="muted small">
+                      Usa el módulo de categorías para rellenar este campo automáticamente y consultar los
+                      productos de dicha categoría.
+                    </p>
+                  </div>
                   <div class="form-row contifico-preview-submit">
                     <button type="submit" class="primary">Consultar productos</button>
                   </div>
@@ -950,12 +969,85 @@
                         <th>ID</th>
                         <th>Código</th>
                         <th>Nombre</th>
+                        <th>Categoría</th>
                         <th>Precio base</th>
                       </tr>
                     </thead>
                     <tbody id="contificoPreviewProductsTableBody"></tbody>
                   </table>
                 </div>
+              </article>
+
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
+                    <h4>Categorías de productos</h4>
+                    <p class="muted small">
+                      Descarga el catálogo de categorías configuradas en Contífico para facilitar las pruebas del
+                      listado de productos.
+                    </p>
+                  </div>
+                </header>
+                <div class="contifico-preview-actions">
+                  <button type="button" class="primary" id="contificoPreviewCategoriesButton">
+                    Cargar categorías
+                  </button>
+                </div>
+                <p
+                  id="contificoPreviewCategoriesStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div class="table-wrapper">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="contificoPreviewCategoriesTableBody"></tbody>
+                  </table>
+                </div>
+              </article>
+
+              <article class="contifico-preview-card">
+                <header class="contifico-preview-card-header">
+                  <div>
+                    <h4>Producto específico</h4>
+                    <p class="muted small">
+                      Consulta los detalles de un producto puntual utilizando su identificador o código registrado en
+                      Contífico.
+                    </p>
+                  </div>
+                </header>
+                <form id="contificoPreviewProductDetailForm" class="form-grid contifico-preview-form">
+                  <div class="form-row">
+                    <label for="contificoPreviewProductId">ID o código del producto</label>
+                    <input
+                      type="text"
+                      id="contificoPreviewProductId"
+                      name="product_id"
+                      placeholder="Ej. 123 o SKU-001"
+                      autocomplete="off"
+                      required
+                    />
+                  </div>
+                  <div class="form-row contifico-preview-submit">
+                    <button type="submit" class="primary">Consultar producto</button>
+                  </div>
+                </form>
+                <p
+                  id="contificoPreviewProductDetailStatus"
+                  class="contifico-preview-status muted small"
+                  role="status"
+                  aria-live="polite"
+                ></p>
+                <div id="contificoPreviewProductDetailResult" class="contifico-preview-detail"></div>
               </article>
 
               <article class="contifico-preview-card">

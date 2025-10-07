@@ -503,11 +503,26 @@ class ContificoClient:
         return False
 
     def list_products(
-        self, *, page: int = 1, page_size: int = 100
+        self,
+        *,
+        page: int = 1,
+        page_size: int = 100,
+        category_id: str | int | None = None,
     ) -> Iterable[Dict[str, Any]]:
         """Devuelve un lote de productos desde Contífico."""
 
-        params = {"result_page": page, "result_size": page_size}
+        params: Dict[str, Any] = {
+            "page": page,
+            "page_size": page_size,
+            # Algunos entornos aún utilizan los parámetros históricos de paginación.
+            "result_page": page,
+            "result_size": page_size,
+        }
+        if category_id is not None:
+            category_value = str(category_id).strip()
+            if not category_value:
+                raise ValueError("El identificador de la categoría no puede estar vacío.")
+            params["categoria_id"] = category_value
         data = self._request("GET", "producto/", params=params)
         if data is None:
             return []
@@ -516,6 +531,73 @@ class ContificoClient:
         raise ContificoAPIError(
             status_code=200,
             detail="El formato de respuesta para productos no es el esperado.",
+            payload=data,
+        )
+
+    def get_product(self, product_id: str | int) -> Dict[str, Any]:
+        """Obtiene la información de un producto específico."""
+
+        if isinstance(product_id, str):
+            normalized_id = product_id.strip()
+        else:
+            normalized_id = str(product_id)
+        if not normalized_id:
+            raise ValueError("El identificador del producto es obligatorio.")
+
+        try:
+            data = self._request("GET", f"producto/{normalized_id}")
+        except ContificoAPIError as exc:
+            if exc.status_code != HTTPStatus.NOT_FOUND:
+                raise
+
+            fallback_params: Dict[str, Any] = {
+                "page": 1,
+                "page_size": 1,
+                "result_page": 1,
+                "result_size": 1,
+                "codigo": normalized_id,
+            }
+            try:
+                fallback = self._request("GET", "producto/", params=fallback_params)
+            except ContificoAPIError:
+                raise exc from None
+
+            if isinstance(fallback, list):
+                for product in fallback:
+                    if not isinstance(product, dict):
+                        continue
+                    product_code = str(product.get("codigo", "")).strip()
+                    product_identifier = str(product.get("id", "")).strip()
+                    if normalized_id in {product_code, product_identifier}:
+                        return product
+
+            raise exc from None
+
+        if isinstance(data, dict):
+            return data
+        if data is None:
+            raise ContificoAPIError(
+                status_code=200,
+                detail="El producto solicitado no fue encontrado.",
+                payload=data,
+            )
+        raise ContificoAPIError(
+            status_code=200,
+            detail="El formato de respuesta para un producto no es el esperado.",
+            payload=data,
+        )
+
+    def list_product_categories(self) -> Iterable[Dict[str, Any]]:
+        """Lista las categorías de productos configuradas en Contífico."""
+
+        data = self._request("GET", "categoria/")
+        if data is None:
+            return []
+        if isinstance(data, list):
+            return data
+        raise ContificoAPIError(
+            status_code=200,
+            detail="El formato de respuesta para categorías de productos no es el esperado.",
             payload=data,
         )
 
