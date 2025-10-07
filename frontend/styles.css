@@ -2388,6 +2388,29 @@ th {
   color: var(--primary);
 }
 
+.contifico-preview-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.contifico-preview-detail-list {
+  display: grid;
+  grid-template-columns: minmax(0, 160px) minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+
+.contifico-preview-detail-list dt {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.contifico-preview-detail-list dd {
+  margin: 0;
+  word-break: break-word;
+}
+
 .contifico-progress {
   display: flex;
   flex-direction: column;
