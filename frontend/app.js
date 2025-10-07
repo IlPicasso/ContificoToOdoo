@@ -745,21 +745,11 @@ dashboardShortcutButtons.forEach((btn) => {
 });
 
 if (loginNavButton) {
-  loginNavButton.addEventListener('click', (event) => {
-    if (event?.preventDefault) {
-      event.preventDefault();
-    }
+  loginNavButton.addEventListener('click', () => {
     setActiveView('staff-view');
-    hideDashboard();
-    const loginCard = document.getElementById('staffLogin');
-    if (loginCard?.scrollIntoView) {
-      loginCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    } else if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
     const usernameInput = document.getElementById('username');
     if (usernameInput) {
-      usernameInput.focus({ preventScroll: true });
+      usernameInput.focus();
     }
   });
 }
