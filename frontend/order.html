@@ -100,15 +100,16 @@
             <dl class="order-detail-summary-grid">
               <div class="order-detail-summary-item">
                 <dt>Cliente</dt>
-                <dd id="orderSummaryCustomer">—</dd>
-              </div>
-              <div class="order-detail-summary-item">
-                <dt>Documento</dt>
-                <dd id="orderSummaryDocument">—</dd>
-              </div>
-              <div class="order-detail-summary-item">
-                <dt>Contacto</dt>
-                <dd id="orderSummaryContact">—</dd>
+                <dd>
+                  <button
+                    type="button"
+                    id="orderSummaryCustomer"
+                    class="order-detail-customer-button muted"
+                    disabled
+                  >
+                    —
+                  </button>
+                </dd>
               </div>
               <div class="order-detail-summary-item">
                 <dt>Factura</dt>
@@ -156,6 +157,56 @@
         </div>
       </section>
     </main>
+
+    <div
+      id="customerDetailModal"
+      class="modal-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="customerDetailTitle"
+      aria-hidden="true"
+    >
+      <div class="modal-backdrop" data-close-customer-modal="true"></div>
+      <div
+        id="customerDetailDialog"
+        class="modal-dialog"
+        role="document"
+        tabindex="-1"
+      >
+        <div class="modal-content customer-modal">
+          <div class="customer-modal-header">
+            <div>
+              <h4 id="customerDetailTitle">Datos del cliente</h4>
+              <p id="customerDetailDescription" class="muted small">
+                Consulta los datos registrados para el cliente asociado a esta orden.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="link-button"
+              data-close-customer-modal="true"
+              aria-label="Cerrar datos del cliente"
+            >
+              Cerrar
+            </button>
+          </div>
+          <dl class="customer-modal-info">
+            <div class="customer-modal-info-item">
+              <dt>Nombre completo</dt>
+              <dd id="customerDetailName" class="muted">Sin registrar</dd>
+            </div>
+            <div class="customer-modal-info-item">
+              <dt>Documento</dt>
+              <dd id="customerDetailDocument" class="muted">Sin registrar</dd>
+            </div>
+            <div class="customer-modal-info-item">
+              <dt>Contacto</dt>
+              <dd id="customerDetailContact" class="muted">Sin registrar</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </div>
 
     <footer class="container footer">
       <small>
