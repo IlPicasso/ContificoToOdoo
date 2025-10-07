@@ -24,9 +24,11 @@ from app.contifico import (
 from app.temp_contifico import (
     build_invoice_page,
     build_product_page,
+    build_product_category_list,
     build_warehouse_list,
     fetch_invoice_by_customer_and_document,
     fetch_invoice_by_document_number,
+    fetch_product_detail,
 )
 
 
@@ -82,6 +84,42 @@ def test_list_products_success() -> None:
     assert str(captured["url"]).startswith("https://api.example.com/v1/producto/")
 
 
+def test_list_products_with_category_filter() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json=[{"id": 1, "codigo": "SKU-2"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "pos-token-abc",
+        base_url="https://api.example.com/v1",
+        transport=transport,
+    )
+
+    products = list(client.list_products(category_id="CAT-1"))
+
+    assert products == [{"id": 1, "codigo": "SKU-2"}]
+    params = captured["params"]
+    assert isinstance(params, dict)
+    assert params["categoria"] == "CAT-1"
+
+
+def test_list_products_rejects_blank_category() -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json=[]))
+    client = ContificoClient(
+        "key123",
+        "pos-token-abc",
+        base_url="https://api.example.com/v1",
+        transport=transport,
+    )
+
+    with pytest.raises(ValueError):
+        list(client.list_products(category_id="   "))
+
+
 def test_list_products_error_response() -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(401, json={"mensaje": "No autorizado"})
@@ -99,6 +137,58 @@ def test_list_products_error_response() -> None:
 
     assert exc_info.value.status_code == 401
     assert "No autorizado" in exc_info.value.detail
+
+
+def test_get_product_success() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json={"id": 42, "codigo": "SKU-42"})
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    product = client.get_product(42)
+
+    assert product["id"] == 42
+    assert str(captured["url"]).endswith("/producto/42/")
+
+
+def test_get_product_rejects_blank_identifier() -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(200, json={}))
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    with pytest.raises(ValueError):
+        client.get_product("   ")
+
+
+def test_list_product_categories_success() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/producto/categoria/")
+        return httpx.Response(200, json=[{"id": "CAT-1", "nombre": "Camisas"}])
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    categories = list(client.list_product_categories())
+
+    assert categories == [{"id": "CAT-1", "nombre": "Camisas"}]
 
 
 def test_list_warehouses_success() -> None:
@@ -1083,9 +1173,10 @@ def test_find_invoice_by_document_number_handles_404_error() -> None:
 
 def test_build_product_page_success() -> None:
     class StubClient:
-        def list_products(self, *, page: int, page_size: int):
+        def list_products(self, *, page: int, page_size: int, category_id: str | None = None):
             assert page == 2
             assert page_size == 5
+            assert category_id is None
             return [
                 {"id": 1, "nombre": "Camisa"},
                 {"id": 2, "nombre": "Pantalón"},
@@ -1101,7 +1192,7 @@ def test_build_product_page_success() -> None:
 
 def test_build_product_page_raises_http_exception() -> None:
     class StubClient:
-        def list_products(self, *, page: int, page_size: int):
+        def list_products(self, *, page: int, page_size: int, category_id: str | None = None):
             raise ContificoTransportError("Network error")
 
     with pytest.raises(HTTPException) as exc_info:
@@ -1110,6 +1201,92 @@ def test_build_product_page_raises_http_exception() -> None:
     assert exc_info.value.status_code == 503
     assert "Network error" in exc_info.value.detail
 
+
+def test_build_product_page_with_category() -> None:
+    class StubClient:
+        def list_products(self, *, page: int, page_size: int, category_id: str | None = None):
+            assert category_id == "CAT-9"
+            return []
+
+    result = build_product_page(StubClient(), page=1, page_size=10, category_id="CAT-9")
+
+    assert result.items == []
+    assert result.page == 1
+    assert result.page_size == 10
+
+
+def test_build_product_page_with_invalid_category() -> None:
+    class StubClient:
+        def list_products(self, *, page: int, page_size: int, category_id: str | None = None):
+            raise ValueError("Categoría inválida")
+
+    with pytest.raises(HTTPException) as exc_info:
+        build_product_page(StubClient(), page=1, page_size=10, category_id=" ")
+
+    assert exc_info.value.status_code == 422
+    assert "Categoría inválida" in exc_info.value.detail
+
+
+def test_build_product_category_list_success() -> None:
+    class StubClient:
+        def list_product_categories(self):
+            return [
+                {"id": "CAT-1", "nombre": "Camisas"},
+                {"id": "CAT-2", "nombre": "Pantalones"},
+            ]
+
+    result = build_product_category_list(StubClient())
+
+    assert len(result) == 2
+    assert result[0].nombre == "Camisas"
+
+
+def test_build_product_category_list_handles_error() -> None:
+    class StubClient:
+        def list_product_categories(self):
+            raise ContificoAPIError(404, "No disponible")
+
+    with pytest.raises(HTTPException) as exc_info:
+        build_product_category_list(StubClient())
+
+    assert exc_info.value.status_code == 404
+    assert "No disponible" in exc_info.value.detail
+
+
+def test_fetch_product_detail_success() -> None:
+    class StubClient:
+        def get_product(self, product_id: str):
+            assert product_id == "SKU-1"
+            return {"id": "SKU-1", "nombre": "Camisa"}
+
+    result = fetch_product_detail(StubClient(), product_id="SKU-1")
+
+    assert result.id == "SKU-1"
+    assert result.nombre == "Camisa"
+
+
+def test_fetch_product_detail_handles_errors() -> None:
+    class StubClient:
+        def get_product(self, product_id: str):
+            raise ContificoAPIError(404, "No existe")
+
+    with pytest.raises(HTTPException) as exc_info:
+        fetch_product_detail(StubClient(), product_id="SKU-1")
+
+    assert exc_info.value.status_code == 404
+    assert "No existe" in exc_info.value.detail
+
+
+def test_fetch_product_detail_handles_validation_error() -> None:
+    class StubClient:
+        def get_product(self, product_id: str):
+            raise ValueError("ID inválido")
+
+    with pytest.raises(HTTPException) as exc_info:
+        fetch_product_detail(StubClient(), product_id=" ")
+
+    assert exc_info.value.status_code == 422
+    assert "ID inválido" in exc_info.value.detail
 
 def test_build_warehouse_list_success() -> None:
     class StubClient:
