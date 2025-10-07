@@ -353,7 +353,9 @@ const updateOrderForm = document.getElementById('updateOrderForm');
 const orderDetailNumberElement = document.getElementById('orderDetailNumber');
 const orderDetailCreatedAtElement = document.getElementById('orderDetailCreatedAt');
 const orderDetailUpdatedAtElement = document.getElementById('orderDetailUpdatedAt');
-const orderDetailCustomerButton = document.getElementById('orderDetailCustomerButton');
+const orderDetailCustomerInput = document.getElementById('orderDetailCustomer');
+const orderDetailDocumentInput = document.getElementById('orderDetailDocument');
+const orderDetailContactInput = document.getElementById('orderDetailContact');
 const orderDetailStatusSelect = document.getElementById('orderDetailStatus');
 const orderDetailTailorSelect = document.getElementById('orderDetailTailor');
 const orderDetailVendorSelect = document.getElementById('orderDetailVendor');
@@ -370,13 +372,6 @@ const orderTaskDescriptionInput = document.getElementById('orderTaskDescription'
 const orderTaskResponsibleSelect = document.getElementById('orderTaskResponsibleSelect');
 const orderTasksPermissionsNotice = document.getElementById('orderTasksPermissionsNotice');
 const closeOrderDetailButton = document.getElementById('closeOrderDetailButton');
-const orderCustomerDetailOverlay = document.getElementById('orderCustomerDetailOverlay');
-const orderCustomerDetailDialog = document.getElementById('orderCustomerDetailDialog');
-const orderCustomerDetailName = document.getElementById('orderCustomerDetailName');
-const orderCustomerDetailDocument = document.getElementById('orderCustomerDetailDocument');
-const orderCustomerDetailContact = document.getElementById('orderCustomerDetailContact');
-const orderCustomerDetailDescription = document.getElementById('orderCustomerDetailDescription');
-const orderCustomerDetailCloseElements = document.querySelectorAll('[data-order-customer-modal-close]');
 const toastElement = document.getElementById('toast');
 const currentYearElement = document.getElementById('currentYear');
 const currentUserNameElement = document.getElementById('currentUserName');
@@ -4006,147 +4001,6 @@ if (closeCustomerDetailButton) {
   });
 }
 
-const orderCustomerDetailState = {
-  name: '',
-  document: '',
-  contact: '',
-  hasAnyDetail: false,
-};
-
-let lastOrderCustomerDetailTrigger = null;
-
-function normalizeOrderCustomerDetailValue(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-  if (typeof value === 'string') {
-    return value.trim();
-  }
-  try {
-    return value.toString().trim();
-  } catch (error) {
-    return '';
-  }
-}
-
-function setOrderCustomerDetailField(element, value, fallback = 'Sin registrar') {
-  if (!element) {
-    return;
-  }
-  const normalized = normalizeOrderCustomerDetailValue(value);
-  if (normalized) {
-    element.textContent = normalized;
-    element.classList.remove('muted');
-  } else {
-    element.textContent = fallback;
-    element.classList.add('muted');
-  }
-}
-
-function updateOrderCustomerDetailModalContent() {
-  setOrderCustomerDetailField(orderCustomerDetailName, orderCustomerDetailState.name);
-  setOrderCustomerDetailField(orderCustomerDetailDocument, orderCustomerDetailState.document);
-  setOrderCustomerDetailField(orderCustomerDetailContact, orderCustomerDetailState.contact);
-  if (orderCustomerDetailDescription) {
-    if (orderCustomerDetailState.hasAnyDetail) {
-      orderCustomerDetailDescription.textContent =
-        'Consulta los datos registrados para el cliente asociado a esta orden.';
-    } else {
-      orderCustomerDetailDescription.textContent =
-        'No se registraron datos adicionales del cliente.';
-    }
-  }
-}
-
-function updateOrderCustomerDetailTrigger() {
-  if (!orderDetailCustomerButton) {
-    return;
-  }
-  const label = orderCustomerDetailState.name || 'Sin registrar';
-  orderDetailCustomerButton.textContent = label;
-  if (orderCustomerDetailState.name) {
-    orderDetailCustomerButton.classList.remove('muted');
-  } else {
-    orderDetailCustomerButton.classList.add('muted');
-  }
-  const interactive = orderCustomerDetailState.hasAnyDetail;
-  orderDetailCustomerButton.disabled = !interactive;
-  orderDetailCustomerButton.classList.toggle('is-interactive', interactive);
-  if (interactive) {
-    orderDetailCustomerButton.setAttribute('aria-label', 'Ver datos del cliente');
-    orderDetailCustomerButton.setAttribute('aria-haspopup', 'dialog');
-    orderDetailCustomerButton.setAttribute('title', 'Ver datos del cliente');
-  } else {
-    orderDetailCustomerButton.removeAttribute('aria-label');
-    orderDetailCustomerButton.removeAttribute('aria-haspopup');
-    orderDetailCustomerButton.removeAttribute('title');
-  }
-}
-
-function resetOrderCustomerDetailState() {
-  orderCustomerDetailState.name = '';
-  orderCustomerDetailState.document = '';
-  orderCustomerDetailState.contact = '';
-  orderCustomerDetailState.hasAnyDetail = false;
-  updateOrderCustomerDetailTrigger();
-  updateOrderCustomerDetailModalContent();
-}
-
-function applyOrderCustomerDetailState(order) {
-  if (!order) {
-    resetOrderCustomerDetailState();
-    return;
-  }
-
-  orderCustomerDetailState.name = normalizeOrderCustomerDetailValue(order.customer_name);
-  orderCustomerDetailState.document = normalizeOrderCustomerDetailValue(order.customer_document);
-  orderCustomerDetailState.contact = normalizeOrderCustomerDetailValue(order.customer_contact);
-  orderCustomerDetailState.hasAnyDetail = Boolean(
-    orderCustomerDetailState.name ||
-      orderCustomerDetailState.document ||
-      orderCustomerDetailState.contact,
-  );
-
-  updateOrderCustomerDetailTrigger();
-  updateOrderCustomerDetailModalContent();
-}
-
-function openOrderCustomerDetailModal() {
-  if (!orderCustomerDetailOverlay || !orderCustomerDetailState.hasAnyDetail) {
-    return;
-  }
-  if (!orderCustomerDetailOverlay.classList.contains('hidden')) {
-    return;
-  }
-  lastOrderCustomerDetailTrigger =
-    document.activeElement && typeof document.activeElement.focus === 'function'
-      ? document.activeElement
-      : null;
-  orderCustomerDetailOverlay.classList.remove('hidden');
-  orderCustomerDetailOverlay.setAttribute('aria-hidden', 'false');
-  updateModalBodyState();
-  requestAnimationFrame(() => {
-    if (orderCustomerDetailDialog?.isConnected) {
-      orderCustomerDetailDialog.focus();
-    }
-  });
-}
-
-function closeOrderCustomerDetailModal() {
-  if (!orderCustomerDetailOverlay || orderCustomerDetailOverlay.classList.contains('hidden')) {
-    return;
-  }
-  orderCustomerDetailOverlay.classList.add('hidden');
-  orderCustomerDetailOverlay.setAttribute('aria-hidden', 'true');
-  updateModalBodyState();
-  if (lastOrderCustomerDetailTrigger?.isConnected) {
-    lastOrderCustomerDetailTrigger.focus();
-  } else if (orderDetailCustomerButton?.isConnected) {
-    orderDetailCustomerButton.focus();
-  }
-  lastOrderCustomerDetailTrigger = null;
-}
-
 document.addEventListener('keydown', (event) => {
   if (event.key !== 'Escape' || event.defaultPrevented) {
     return;
@@ -4155,13 +4009,6 @@ document.addEventListener('keydown', (event) => {
   if (detailOpen) {
     event.preventDefault();
     clearCustomerDetail({ reRender: true });
-    return;
-  }
-  const orderCustomerModalOpen =
-    orderCustomerDetailOverlay && !orderCustomerDetailOverlay.classList.contains('hidden');
-  if (orderCustomerModalOpen) {
-    event.preventDefault();
-    closeOrderCustomerDetailModal();
     return;
   }
   const createOpen = customerCreateOverlay && !customerCreateOverlay.classList.contains('hidden');
@@ -4189,7 +4036,15 @@ function populateOrderDetail(order, options = {}) {
   if (orderDetailUpdatedAtElement) {
     orderDetailUpdatedAtElement.textContent = formatDate(order.updated_at);
   }
-  applyOrderCustomerDetailState(order);
+  if (orderDetailCustomerInput) {
+    orderDetailCustomerInput.value = order.customer_name || '';
+  }
+  if (orderDetailDocumentInput) {
+    orderDetailDocumentInput.value = order.customer_document || '';
+  }
+  if (orderDetailContactInput) {
+    orderDetailContactInput.value = order.customer_contact || '';
+  }
   if (orderDetailStatusSelect) {
     populateStatusSelect(orderDetailStatusSelect, order.status);
   }
@@ -4269,12 +4124,13 @@ function clearOrderDetail(options = {}) {
   const focusElement = lastKanbanFocusedElement;
 
   state.selectedOrderId = null;
-  closeOrderCustomerDetailModal();
-  resetOrderCustomerDetailState();
   updateOrderForm?.reset();
   if (orderDetailNumberElement) orderDetailNumberElement.textContent = '';
   if (orderDetailCreatedAtElement) orderDetailCreatedAtElement.textContent = '';
   if (orderDetailUpdatedAtElement) orderDetailUpdatedAtElement.textContent = '';
+  if (orderDetailCustomerInput) orderDetailCustomerInput.value = '';
+  if (orderDetailDocumentInput) orderDetailDocumentInput.value = '';
+  if (orderDetailContactInput) orderDetailContactInput.value = '';
   if (orderDetailStatusSelect) populateStatusSelect(orderDetailStatusSelect);
   if (orderDetailTailorSelect) populateTailorSelect(orderDetailTailorSelect);
   if (orderDetailVendorSelect) populateVendorSelect(orderDetailVendorSelect);
@@ -4359,6 +4215,7 @@ async function handleOrderUpdate(event) {
         assigned_vendor_id: orderDetailVendorSelect?.value
           ? Number(orderDetailVendorSelect.value)
           : null,
+        customer_contact: orderDetailContactInput?.value.trim() || null,
         notes: orderDetailNotesTextarea?.value.trim() || null,
         delivery_date: deliveryDateValue ? deliveryDateValue : null,
         invoice_number: invoiceValue,
@@ -4390,29 +4247,6 @@ async function handleOrderUpdate(event) {
       markKanbanDataStale();
     }
   }
-}
-
-if (orderDetailCustomerButton) {
-  orderDetailCustomerButton.addEventListener('click', () => {
-    if (orderDetailCustomerButton.disabled) {
-      return;
-    }
-    openOrderCustomerDetailModal();
-  });
-}
-
-orderCustomerDetailCloseElements.forEach((element) => {
-  element.addEventListener('click', () => {
-    closeOrderCustomerDetailModal();
-  });
-});
-
-if (orderCustomerDetailOverlay) {
-  orderCustomerDetailOverlay.addEventListener('click', (event) => {
-    if (event.target === orderCustomerDetailOverlay) {
-      closeOrderCustomerDetailModal();
-    }
-  });
 }
 
 if (addCustomerMeasurementSetButton) {
