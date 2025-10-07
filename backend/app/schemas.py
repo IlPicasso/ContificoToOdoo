@@ -274,6 +274,28 @@ class ContificoProduct(BaseModel):
         )
 
 
+class ContificoProductCategory(BaseModel):
+    id: Optional[Union[int, str]] = None
+    codigo: Optional[str] = None
+    nombre: Optional[str] = None
+    descripcion: Optional[str] = None
+    raw: Dict[str, Any] = Field(default_factory=dict, description="Respuesta original de Contífico.")
+
+    @classmethod
+    def from_api(cls, payload: Dict[str, Any]) -> "ContificoProductCategory":
+        if not isinstance(payload, dict):
+            raise TypeError(
+                "La categoría de producto devuelta por Contífico debe ser un diccionario"
+            )
+        return cls(
+            id=payload.get("id"),
+            codigo=payload.get("codigo") or payload.get("abreviatura"),
+            nombre=payload.get("nombre") or payload.get("descripcion"),
+            descripcion=payload.get("descripcion"),
+            raw=payload,
+        )
+
+
 class ContificoProductPage(BaseModel):
     items: List[ContificoProduct] = Field(default_factory=list)
     page: int
