@@ -176,6 +176,72 @@ def test_get_product_rejects_blank_identifier() -> None:
         client.get_product("   ")
 
 
+def test_get_product_falls_back_to_code_lookup() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if request.url.path.endswith("/producto/SKU-42"):
+            return httpx.Response(404, json={"detail": "No encontrado"})
+        if request.url.path.endswith("/producto/"):
+            params = request.url.params
+            assert params.get("codigo") == "SKU-42"
+            assert params.get("page") == "1"
+            assert params.get("page_size") == "1"
+            assert params.get("result_page") == "1"
+            assert params.get("result_size") == "1"
+            return httpx.Response(
+                200,
+                json=[{"id": "abc123", "codigo": "SKU-42", "nombre": "Camisa"}],
+            )
+        raise AssertionError(f"Ruta inesperada: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    product = client.get_product("SKU-42")
+
+    assert product["codigo"] == "SKU-42"
+    assert calls == [
+        "https://api.example.com/producto/SKU-42",
+        "https://api.example.com/producto/?page=1&page_size=1&result_page=1&result_size=1&codigo=SKU-42",
+    ]
+
+
+def test_get_product_fallback_preserves_not_found_error() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if request.url.path.endswith("/producto/MISSING"):
+            return httpx.Response(404, json={"detail": "No encontrado"})
+        if request.url.path.endswith("/producto/"):
+            return httpx.Response(200, json=[])
+        raise AssertionError(f"Ruta inesperada: {request.url}")
+
+    transport = httpx.MockTransport(handler)
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com",
+        transport=transport,
+    )
+
+    with pytest.raises(ContificoAPIError) as exc_info:
+        client.get_product("MISSING")
+
+    assert exc_info.value.status_code == 404
+    assert calls == [
+        "https://api.example.com/producto/MISSING",
+        "https://api.example.com/producto/?page=1&page_size=1&result_page=1&result_size=1&codigo=MISSING",
+    ]
+
+
 def test_list_product_categories_success() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path.endswith("/categoria/")

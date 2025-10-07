@@ -544,7 +544,35 @@ class ContificoClient:
         if not normalized_id:
             raise ValueError("El identificador del producto es obligatorio.")
 
-        data = self._request("GET", f"producto/{normalized_id}")
+        try:
+            data = self._request("GET", f"producto/{normalized_id}")
+        except ContificoAPIError as exc:
+            if exc.status_code != HTTPStatus.NOT_FOUND:
+                raise
+
+            fallback_params: Dict[str, Any] = {
+                "page": 1,
+                "page_size": 1,
+                "result_page": 1,
+                "result_size": 1,
+                "codigo": normalized_id,
+            }
+            try:
+                fallback = self._request("GET", "producto/", params=fallback_params)
+            except ContificoAPIError:
+                raise exc from None
+
+            if isinstance(fallback, list):
+                for product in fallback:
+                    if not isinstance(product, dict):
+                        continue
+                    product_code = str(product.get("codigo", "")).strip()
+                    product_identifier = str(product.get("id", "")).strip()
+                    if normalized_id in {product_code, product_identifier}:
+                        return product
+
+            raise exc from None
+
         if isinstance(data, dict):
             return data
         if data is None:
