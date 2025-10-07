@@ -624,15 +624,16 @@
                 </div>
                 <form id="updateOrderForm" class="form-grid">
                   <div class="form-row">
-                    <label for="orderDetailCustomerButton">Cliente</label>
-                    <button
-                      type="button"
-                      id="orderDetailCustomerButton"
-                      class="order-detail-customer-button muted"
-                      disabled
-                    >
-                      Sin registrar
-                    </button>
+                    <label for="orderDetailCustomer">Cliente</label>
+                    <input type="text" id="orderDetailCustomer" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailDocument">Documento</label>
+                    <input type="text" id="orderDetailDocument" readonly />
+                  </div>
+                  <div class="form-row">
+                    <label for="orderDetailContact">Contacto</label>
+                    <input type="text" id="orderDetailContact" />
                   </div>
                   <div class="form-row">
                     <label for="orderDetailInvoice">Número de factura</label>
@@ -759,56 +760,6 @@
             </div>
 
           </section>
-
-          <div
-            id="orderCustomerDetailOverlay"
-            class="modal-overlay hidden"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="orderCustomerDetailTitle"
-            aria-hidden="true"
-          >
-            <div class="modal-backdrop" data-order-customer-modal-close="true"></div>
-            <div
-              id="orderCustomerDetailDialog"
-              class="modal-dialog"
-              role="document"
-              tabindex="-1"
-            >
-              <div class="modal-content customer-modal">
-                <div class="customer-modal-header">
-                  <div>
-                    <h4 id="orderCustomerDetailTitle">Datos del cliente</h4>
-                    <p id="orderCustomerDetailDescription" class="muted small">
-                      Consulta los datos registrados para el cliente asociado a esta orden.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    class="link-button"
-                    data-order-customer-modal-close="true"
-                    aria-label="Cerrar datos del cliente"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-                <dl class="customer-modal-info">
-                  <div class="customer-modal-info-item">
-                    <dt>Nombre completo</dt>
-                    <dd id="orderCustomerDetailName" class="muted">Sin registrar</dd>
-                  </div>
-                  <div class="customer-modal-info-item">
-                    <dt>Documento</dt>
-                    <dd id="orderCustomerDetailDocument" class="muted">Sin registrar</dd>
-                  </div>
-                  <div class="customer-modal-info-item">
-                    <dt>Contacto</dt>
-                    <dd id="orderCustomerDetailContact" class="muted">Sin registrar</dd>
-                  </div>
-                </dl>
-              </div>
-            </div>
-          </div>
 
           <section class="card dashboard-panel hidden" id="usersPanel">
             <div class="users-panel-header">
