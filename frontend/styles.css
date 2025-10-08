@@ -570,6 +570,36 @@ button[disabled] {
   border-color: var(--primary);
 }
 
+.panel-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.panel-header h3 {
+  margin: 0;
+}
+
+.panel-header p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  max-width: 48ch;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.panel-actions button {
+  white-space: nowrap;
+}
+
 .customer-panel-header {
   display: flex;
   flex-wrap: wrap;
@@ -2253,6 +2283,16 @@ th {
   background: rgba(17, 17, 17, 0.26);
 }
 
+.job-catalog-table th,
+.job-catalog-table td {
+  vertical-align: top;
+}
+
+.job-catalog-table td {
+  max-width: 28ch;
+  word-break: break-word;
+}
+
 .order-task-input-label {
   font-weight: 600;
 }
@@ -2523,6 +2563,10 @@ th {
 
 .muted {
   color: var(--muted);
+}
+
+.text-center {
+  text-align: center;
 }
 
 .small {
