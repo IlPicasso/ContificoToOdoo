@@ -141,6 +141,14 @@
             >
               Contífico (vista previa)
             </button>
+            <button
+              type="button"
+              class="dashboard-tab admin-only hidden"
+              data-tab="jobCatalogPanel"
+              id="jobCatalogTabButton"
+            >
+              Listado de trabajos
+            </button>
           </nav>
 
           <section class="card dashboard-panel hidden" id="customersPanel">
@@ -494,16 +502,7 @@
                 </p>
                 <div id="newOrderTasksList" class="measurement-list"></div>
                 <button type="button" id="addOrderTaskButton" class="secondary">Agregar trabajo</button>
-                <div class="order-task-suggestions">
-                  <button
-                    type="button"
-                    id="refreshOrderTaskSuggestionsButton"
-                    class="link-button"
-                  >
-                    Actualizar trabajos desde Contífico
-                  </button>
-                  <p id="orderTaskSuggestionsStatus" class="muted small"></p>
-                </div>
+                <p id="orderTaskSuggestionsStatus" class="muted small"></p>
                 <datalist id="orderTaskSuggestions"></datalist>
               </div>
               <div class="form-row">
@@ -521,6 +520,36 @@
               <button type="submit" class="primary">Guardar orden</button>
             </form>
             <datalist id="orderInvoiceSuggestions"></datalist>
+          </section>
+
+          <section class="card dashboard-panel hidden" id="jobCatalogPanel">
+            <div class="panel-header">
+              <div>
+                <h3>Listado de trabajos</h3>
+                <p class="muted">
+                  Consulta los trabajos sincronizados desde Contífico y actualiza el listado cuando lo
+                  necesites.
+                </p>
+              </div>
+              <div class="panel-actions">
+                <button type="button" class="secondary" id="refreshJobCatalogButton">
+                  Actualizar listado
+                </button>
+              </div>
+            </div>
+            <p id="jobCatalogStatus" class="muted small"></p>
+            <div class="table-wrapper compact">
+              <table class="job-catalog-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Código</th>
+                    <th scope="col">Nombre</th>
+                    <th scope="col">Descripción</th>
+                  </tr>
+                </thead>
+                <tbody id="jobCatalogTableBody"></tbody>
+              </table>
+            </div>
           </section>
 
           <section class="card dashboard-panel hidden" id="ordersPanel">

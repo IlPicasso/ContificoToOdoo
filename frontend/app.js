@@ -64,6 +64,7 @@ const state = {
   orderTaskSuggestions: [],
   orderTaskSuggestionsLoading: false,
   orderTaskSuggestionsLoaded: false,
+  orderTaskSuggestionsUpdatedAt: null,
   orderTaskSuggestionsError: null,
   customerRequestId: 0,
   orderRequestId: 0,
@@ -283,8 +284,14 @@ const DASHBOARD_TAB_IDS = [
   'usersPanel',
   'auditLogPanel',
   'contificoPreviewPanel',
+  'jobCatalogPanel',
 ];
-const ADMIN_ONLY_TABS = new Set(['usersPanel', 'auditLogPanel', 'contificoPreviewPanel']);
+const ADMIN_ONLY_TABS = new Set([
+  'usersPanel',
+  'auditLogPanel',
+  'contificoPreviewPanel',
+  'jobCatalogPanel',
+]);
 const dashboardTabButtons = Array.from(document.querySelectorAll('[data-tab]')).filter((btn) =>
   DASHBOARD_TAB_IDS.includes(btn.dataset.tab)
 );
@@ -372,7 +379,9 @@ const newOrderTasksList = document.getElementById('newOrderTasksList');
 const addOrderTaskButton = document.getElementById('addOrderTaskButton');
 const orderTaskSuggestionsStatus = document.getElementById('orderTaskSuggestionsStatus');
 const orderTaskSuggestionsDatalist = document.getElementById('orderTaskSuggestions');
-const refreshOrderTaskSuggestionsButton = document.getElementById('refreshOrderTaskSuggestionsButton');
+const jobCatalogStatus = document.getElementById('jobCatalogStatus');
+const jobCatalogTableBody = document.getElementById('jobCatalogTableBody');
+const refreshJobCatalogButton = document.getElementById('refreshJobCatalogButton');
 const statusSelect = document.getElementById('newOrderStatus');
 const assignTailorSelect = document.getElementById('assignTailor');
 const assignVendorSelect = document.getElementById('assignVendor');
@@ -423,6 +432,7 @@ const usersTabButton = document.getElementById('usersTabButton');
 const auditLogTabButton = document.getElementById('auditLogTabButton');
 const auditLogTableBody = document.getElementById('auditLogTableBody');
 const contificoPreviewTabButton = document.getElementById('contificoPreviewTabButton');
+const jobCatalogTabButton = document.getElementById('jobCatalogTabButton');
 const contificoPreviewProductsForm = document.getElementById('contificoPreviewProductsForm');
 const contificoPreviewPageInput = document.getElementById('contificoPreviewPage');
 const contificoPreviewPageSizeInput = document.getElementById('contificoPreviewPageSize');
@@ -1858,25 +1868,29 @@ function updateNewOrderTaskLabels() {
 }
 
 function renderOrderTaskSuggestions() {
-  if (refreshOrderTaskSuggestionsButton) {
-    refreshOrderTaskSuggestionsButton.disabled = state.orderTaskSuggestionsLoading;
-  }
-
   if (orderTaskSuggestionsStatus) {
     let message = '';
     if (state.orderTaskSuggestionsLoading) {
-      message = 'Cargando trabajos desde Contífico...';
+      message = 'Actualizando trabajos desde Contífico...';
     } else if (state.orderTaskSuggestionsError) {
-      message = state.orderTaskSuggestionsError;
+      message = `${state.orderTaskSuggestionsError} Pide a un administrador que actualice el listado desde la pestaña “Listado de trabajos”.`;
     } else if (state.orderTaskSuggestionsLoaded) {
       if (state.orderTaskSuggestions.length) {
-        message =
-          'Sugerencias disponibles desde Contífico. Empieza a escribir para seleccionarlas.';
+        const updatedLabel = state.orderTaskSuggestionsUpdatedAt
+          ? formatDate(state.orderTaskSuggestionsUpdatedAt)
+          : null;
+        message = `Se cargaron ${state.orderTaskSuggestions.length} trabajos desde Contífico como sugerencias.`;
+        if (updatedLabel) {
+          message += ` Última actualización: ${updatedLabel}.`;
+        }
+        message += ' Los administradores pueden administrar el listado desde la pestaña “Listado de trabajos”.';
       } else {
-        message = 'No se encontraron trabajos en la categoría configurada de Contífico.';
+        message =
+          'No se encontraron trabajos en la categoría configurada de Contífico. Pide a un administrador que revise la pestaña “Listado de trabajos” para actualizar el listado manualmente.';
       }
     } else {
-      message = 'Puedes cargar los trabajos registrados en Contífico para usarlos como sugerencias.';
+      message =
+        'Las sugerencias se cargarán automáticamente al iniciar sesión. Los administradores pueden revisarlas en la pestaña “Listado de trabajos”.';
     }
     orderTaskSuggestionsStatus.textContent = message;
   }
@@ -1920,6 +1934,80 @@ function renderOrderTaskSuggestions() {
       input.setAttribute('list', 'orderTaskSuggestions');
     });
   }
+
+  renderJobCatalog();
+}
+
+function renderJobCatalog() {
+  if (refreshJobCatalogButton) {
+    refreshJobCatalogButton.disabled = state.orderTaskSuggestionsLoading;
+  }
+
+  if (jobCatalogStatus) {
+    let message = '';
+    if (state.orderTaskSuggestionsLoading) {
+      message = 'Sincronizando trabajos desde Contífico...';
+    } else if (state.orderTaskSuggestionsError) {
+      message = `${state.orderTaskSuggestionsError} Usa “Actualizar listado” para intentar nuevamente.`;
+    } else if (state.orderTaskSuggestionsLoaded) {
+      const count = Array.isArray(state.orderTaskSuggestions)
+        ? state.orderTaskSuggestions.length
+        : 0;
+      if (count > 0) {
+        const updatedLabel = state.orderTaskSuggestionsUpdatedAt
+          ? formatDate(state.orderTaskSuggestionsUpdatedAt)
+          : null;
+        message = `Se registran ${count} trabajos.`;
+        if (updatedLabel) {
+          message += ` Última actualización: ${updatedLabel}.`;
+        }
+        message += ' Usa “Actualizar listado” para sincronizar manualmente.';
+      } else {
+        message =
+          'No se encontraron trabajos en la categoría configurada de Contífico. Usa “Actualizar listado” para sincronizar manualmente.';
+      }
+    } else {
+      message = 'El listado se cargará automáticamente al iniciar sesión.';
+    }
+    jobCatalogStatus.textContent = message;
+  }
+
+  if (jobCatalogTableBody) {
+    jobCatalogTableBody.innerHTML = '';
+    const suggestions = Array.isArray(state.orderTaskSuggestions)
+      ? state.orderTaskSuggestions
+      : [];
+    if (!suggestions.length) {
+      const row = document.createElement('tr');
+      const cell = document.createElement('td');
+      cell.colSpan = 3;
+      cell.className = 'muted text-center';
+      cell.textContent = state.orderTaskSuggestionsLoading
+        ? 'Cargando trabajos...'
+        : 'No hay trabajos registrados.';
+      row.appendChild(cell);
+      jobCatalogTableBody.appendChild(row);
+      return;
+    }
+
+    suggestions.forEach((item) => {
+      const row = document.createElement('tr');
+      const codeCell = document.createElement('td');
+      const nameCell = document.createElement('td');
+      const descriptionCell = document.createElement('td');
+
+      const code = typeof item.codigo === 'string' ? item.codigo.trim() : '';
+      const name = typeof item.nombre === 'string' ? item.nombre.trim() : '';
+      const description = typeof item.descripcion === 'string' ? item.descripcion.trim() : '';
+
+      codeCell.textContent = code || '—';
+      nameCell.textContent = name || '—';
+      descriptionCell.textContent = description || '—';
+
+      row.append(codeCell, nameCell, descriptionCell);
+      jobCatalogTableBody.appendChild(row);
+    });
+  }
 }
 
 async function loadOrderTaskSuggestions(force = false) {
@@ -1948,11 +2036,17 @@ async function loadOrderTaskSuggestions(force = false) {
       .filter((item) => item.nombre || item.descripcion || item.codigo);
     state.orderTaskSuggestionsError = null;
     state.orderTaskSuggestionsLoaded = true;
+    state.orderTaskSuggestionsUpdatedAt = new Date().toISOString();
   } catch (error) {
-    state.orderTaskSuggestions = [];
+    const hasExistingSuggestions =
+      Array.isArray(state.orderTaskSuggestions) && state.orderTaskSuggestions.length > 0;
     state.orderTaskSuggestionsError =
       error?.message || 'No se pudieron obtener los trabajos desde Contífico.';
-    state.orderTaskSuggestionsLoaded = false;
+    if (!hasExistingSuggestions) {
+      state.orderTaskSuggestions = [];
+      state.orderTaskSuggestionsLoaded = false;
+      state.orderTaskSuggestionsUpdatedAt = null;
+    }
     showToast(state.orderTaskSuggestionsError, 'error');
   } finally {
     state.orderTaskSuggestionsLoading = false;
@@ -1972,8 +2066,8 @@ if (addOrderTaskButton) {
   addOrderTaskButton.addEventListener('click', () => addNewOrderTaskRow());
 }
 
-if (refreshOrderTaskSuggestionsButton) {
-  refreshOrderTaskSuggestionsButton.addEventListener('click', () => {
+if (refreshJobCatalogButton) {
+  refreshJobCatalogButton.addEventListener('click', () => {
     void loadOrderTaskSuggestions(true);
   });
 }
@@ -2625,6 +2719,7 @@ async function bootstrapAuthenticatedSession({ showWelcomeToast = false } = {}) 
   await loadCustomers();
   await refreshCustomerOptions();
   await loadOrders();
+  await loadOrderTaskSuggestions();
   if (state.user?.role === 'administrador') {
     await loadUsers();
     await loadAuditLogs();
@@ -3634,6 +3729,11 @@ function handleLogout(auto = false) {
   state.orderInvoiceSuggestionRequestId = 0;
   state.orderInvoiceSuggestionsLoading = false;
   state.orderInvoiceSuggestionsError = null;
+  state.orderTaskSuggestions = [];
+  state.orderTaskSuggestionsLoading = false;
+  state.orderTaskSuggestionsLoaded = false;
+  state.orderTaskSuggestionsUpdatedAt = null;
+  state.orderTaskSuggestionsError = null;
   state.orderInvoiceLookup = null;
   state.orderInvoiceLookupLoading = false;
   state.orderInvoiceLookupError = null;
@@ -3652,6 +3752,7 @@ function handleLogout(auto = false) {
   setOrderInvoiceSuggestionsStatus('');
   renderOrderInvoiceSuggestions();
   renderOrderInvoiceLookupDetails();
+  renderOrderTaskSuggestions();
   if (currentUserNameElement) {
     currentUserNameElement.textContent = '';
   }
@@ -3679,6 +3780,9 @@ function handleLogout(auto = false) {
   }
   if (contificoPreviewTabButton) {
     contificoPreviewTabButton.classList.add('hidden');
+  }
+  if (jobCatalogTabButton) {
+    jobCatalogTabButton.classList.add('hidden');
   }
   setActiveDashboardTab('ordersPanel');
   hideDashboard();
