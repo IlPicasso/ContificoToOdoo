@@ -19,6 +19,7 @@ const ORDER_CUSTOMER_DESCRIPTION_DEFAULT =
 const ORDER_CUSTOMER_DESCRIPTION_EMPTY =
   'No se registraron datos adicionales del cliente para esta orden.';
 const CONTIFICO_SEWING_TASK_CATEGORY_ID = 'xGge0zg6H2Q4bADR';
+const JOB_CATALOG_STORAGE_KEY = 'sastreria.jobCatalog.v1';
 
 
 const state = {
@@ -270,6 +271,54 @@ function readStoredToken() {
 
 function clearStoredToken() {
   persistToken(null);
+}
+
+function readStoredJobCatalog() {
+  const storage = getTokenStorage();
+  if (!storage) {
+    return null;
+  }
+  try {
+    const rawValue = storage.getItem(JOB_CATALOG_STORAGE_KEY);
+    if (typeof rawValue !== 'string' || !rawValue.trim()) {
+      return null;
+    }
+    const parsed = JSON.parse(rawValue);
+    if (!parsed || typeof parsed !== 'object') {
+      return null;
+    }
+    const items = Array.isArray(parsed.items) ? parsed.items : [];
+    const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
+    return { items, updatedAt };
+  } catch (error) {
+    console.warn('No se pudo leer el listado de trabajos almacenado.', error);
+    return null;
+  }
+}
+
+function persistJobCatalog(items, updatedAt = null) {
+  const storage = getTokenStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    const payload = JSON.stringify({ items, updatedAt });
+    storage.setItem(JOB_CATALOG_STORAGE_KEY, payload);
+  } catch (error) {
+    console.warn('No se pudo guardar el listado de trabajos.', error);
+  }
+}
+
+function clearStoredJobCatalog() {
+  const storage = getTokenStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.removeItem(JOB_CATALOG_STORAGE_KEY);
+  } catch (error) {
+    console.warn('No se pudo limpiar el listado de trabajos almacenado.', error);
+  }
 }
 
 const views = document.querySelectorAll('.view');
@@ -1867,6 +1916,33 @@ function updateNewOrderTaskLabels() {
 
 }
 
+function normalizeJobCatalogItems(rawItems) {
+  if (!Array.isArray(rawItems)) {
+    return [];
+  }
+  return rawItems
+    .map((item) => ({
+      id: item?.id ?? null,
+      codigo: typeof item?.codigo === 'string' ? item.codigo : '',
+      nombre: typeof item?.nombre === 'string' ? item.nombre : '',
+      descripcion: typeof item?.descripcion === 'string' ? item.descripcion : '',
+    }))
+    .filter((item) => item.codigo || item.nombre || item.descripcion);
+}
+
+function hydrateOrderTaskSuggestionsFromStorage() {
+  const storedCatalog = readStoredJobCatalog();
+  if (!storedCatalog) {
+    return false;
+  }
+  const items = normalizeJobCatalogItems(storedCatalog.items);
+  state.orderTaskSuggestions = items;
+  state.orderTaskSuggestionsLoaded = true;
+  state.orderTaskSuggestionsUpdatedAt = storedCatalog.updatedAt || null;
+  state.orderTaskSuggestionsError = null;
+  return true;
+}
+
 function renderOrderTaskSuggestions() {
   if (orderTaskSuggestionsStatus) {
     let message = '';
@@ -2014,9 +2090,16 @@ async function loadOrderTaskSuggestions(force = false) {
   if (state.orderTaskSuggestionsLoading) {
     return;
   }
-  if (!force && state.orderTaskSuggestionsLoaded) {
-    renderOrderTaskSuggestions();
-    return;
+  if (!force) {
+    if (state.orderTaskSuggestionsLoaded) {
+      renderOrderTaskSuggestions();
+      return;
+    }
+    const hydrated = hydrateOrderTaskSuggestionsFromStorage();
+    if (hydrated) {
+      renderOrderTaskSuggestions();
+      return;
+    }
   }
   state.orderTaskSuggestionsLoading = true;
   renderOrderTaskSuggestions();
@@ -2026,17 +2109,11 @@ async function loadOrderTaskSuggestions(force = false) {
       `&category_id=${encodeURIComponent(CONTIFICO_SEWING_TASK_CATEGORY_ID)}`;
     const response = await apiFetch(url);
     const items = Array.isArray(response?.items) ? response.items : [];
-    state.orderTaskSuggestions = items
-      .map((item) => ({
-        id: item?.id ?? null,
-        codigo: typeof item?.codigo === 'string' ? item.codigo : '',
-        nombre: typeof item?.nombre === 'string' ? item.nombre : '',
-        descripcion: typeof item?.descripcion === 'string' ? item.descripcion : '',
-      }))
-      .filter((item) => item.nombre || item.descripcion || item.codigo);
+    state.orderTaskSuggestions = normalizeJobCatalogItems(items);
     state.orderTaskSuggestionsError = null;
     state.orderTaskSuggestionsLoaded = true;
     state.orderTaskSuggestionsUpdatedAt = new Date().toISOString();
+    persistJobCatalog(state.orderTaskSuggestions, state.orderTaskSuggestionsUpdatedAt);
   } catch (error) {
     const hasExistingSuggestions =
       Array.isArray(state.orderTaskSuggestions) && state.orderTaskSuggestions.length > 0;
@@ -2046,6 +2123,7 @@ async function loadOrderTaskSuggestions(force = false) {
       state.orderTaskSuggestions = [];
       state.orderTaskSuggestionsLoaded = false;
       state.orderTaskSuggestionsUpdatedAt = null;
+      clearStoredJobCatalog();
     }
     showToast(state.orderTaskSuggestionsError, 'error');
   } finally {
@@ -2072,6 +2150,7 @@ if (refreshJobCatalogButton) {
   });
 }
 
+hydrateOrderTaskSuggestionsFromStorage();
 renderOrderTaskSuggestions();
 
 function addMeasurementRowToList(listElement, data = { nombre: '', valor: '' }) {
@@ -2710,6 +2789,8 @@ async function bootstrapAuthenticatedSession({ showWelcomeToast = false } = {}) 
   if (orderSearchInput) {
     orderSearchInput.value = '';
   }
+
+  hydrateOrderTaskSuggestionsFromStorage();
 
   await loadCurrentUser();
   updateUserInfo();
