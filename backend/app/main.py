@@ -144,13 +144,19 @@ def list_statuses() -> List[str]:
 def list_contifico_products(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    category_id: Optional[str] = Query(default=None, description="Identificador de la categoría de productos a filtrar."),
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user: models.User = Depends(admin_required()),
+    current_user: models.User = Depends(vendor_or_admin_required()),
 ):
     """Devuelve un listado de productos desde Contífico."""
 
     _ = current_user
-    return build_product_page(contifico_client, page=page, page_size=page_size)
+    return build_product_page(
+        contifico_client,
+        page=page,
+        page_size=page_size,
+        category_id=category_id,
+    )
 
 
 @app.get(
