@@ -1,3 +1,13 @@
+"""Database session and engine helpers."""
+
+from importlib.util import find_spec
+
+if find_spec("sqlalchemy") is None:
+    raise ModuleNotFoundError(
+        "SQLAlchemy no está instalado. Ejecuta `pip install -r backend/requirements.txt` "
+        "desde la carpeta del backend antes de iniciar la API."
+    )
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 

@@ -1,6 +1,13 @@
 """Utility script to bootstrap an administrator user."""
 
 import argparse
+from importlib.util import find_spec
+
+if find_spec("sqlalchemy") is None:
+    raise ModuleNotFoundError(
+        "SQLAlchemy no está instalado. Ejecuta `pip install -r backend/requirements.txt` "
+        "antes de usar create_admin.py."
+    )
 
 from sqlalchemy.orm import Session
 

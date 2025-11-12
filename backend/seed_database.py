@@ -9,7 +9,14 @@ import secrets
 import string
 from collections import Counter
 from datetime import UTC, date, datetime, time, timedelta
+from importlib.util import find_spec
 from typing import Iterable, List, Optional, Sequence, Tuple
+
+if find_spec("sqlalchemy") is None:
+    raise ModuleNotFoundError(
+        "SQLAlchemy no está instalado. Ejecuta `pip install -r backend/requirements.txt` "
+        "antes de usar seed_database.py."
+    )
 
 from sqlalchemy import MetaData, Table, delete, inspect, select
 
