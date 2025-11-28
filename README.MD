@@ -1,5 +1,7 @@
 # Portal de Sastrería
 
+Versión 0.1.1
+
 Aplicación completa para gestionar y consultar órdenes de un taller de sastrería. El proyecto incluye un backend basado en FastAPI con autenticación JWT y un frontend ligero en HTML/JavaScript para clientes y personal interno.
 
 ## Requisitos
@@ -39,6 +41,23 @@ export SECRET_KEY="pon-aqui-una-clave-de-al-menos-32-caracteres"
 # export CONTIFICO_API_KEY="tu-api-key"
 # export CONTIFICO_API_TOKEN="tu-api-token"
 ```
+
+#### Límites para la búsqueda de facturas en Contífico
+
+Para evitar cargar el catálogo completo de facturas en memoria, la descarga se realiza en
+bloques y se persiste a disco. Estos parámetros se pueden ajustar con variables de entorno:
+
+- `CONTIFICO_INVOICE_CATALOG_PAGE_SIZE` (predeterminado: `100`): cuántas facturas se
+  solicitan por página.
+- `CONTIFICO_INVOICE_CATALOG_MAX_PAGES` (predeterminado: `200`): número máximo de páginas
+  a recorrer.
+- `CONTIFICO_INVOICE_CATALOG_MAX_RECORDS` (predeterminado: `20000`, usa `0` o `None` para
+  desactivar): cantidad máxima de facturas a descargar antes de detener la búsqueda.
+- `CONTIFICO_INVOICE_CATALOG_STOP_ON_FIRST_MATCH` (predeterminado: `true`): detiene la
+  descarga del catálogo en cuanto se encuentra la factura buscada.
+
+Al buscar una factura, el cliente elimina de memoria las páginas que ya fueron persistidas,
+manteniendo sólo las coincidencias necesarias para continuar con la consulta.
 
 La aplicación fallará con un mensaje descriptivo si `SECRET_KEY` no está definida o es
 demasiado corta.

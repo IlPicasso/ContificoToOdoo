@@ -63,8 +63,10 @@ class ContificoClient:
     INVOICE_LOOKUP_RETRY_BACKOFF_BASE = 0.5
     INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 2
     INVOICE_LOOKUP_SERVER_COOLDOWN_BASE = 2.0
-    INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 200
-    INVOICE_LOOKUP_CATALOG_MAX_PAGES = 400
+    INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 100
+    INVOICE_LOOKUP_CATALOG_MAX_PAGES = 200
+    INVOICE_LOOKUP_CATALOG_MAX_RECORDS: int | None = 20000
+    INVOICE_LOOKUP_CATALOG_STOP_ON_FIRST_MATCH = True
     INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 2
     INVOICE_LOOKUP_CATALOG_BACKOFF_BASE = 1.0
     INVOICE_LOOKUP_DIRECT_FALLBACK_STATUSES = {
@@ -82,6 +84,10 @@ class ContificoClient:
         timeout: float = 30.0,
         transport: httpx.BaseTransport | None = None,
         invoice_cache_path: str | Path | None = None,
+        invoice_catalog_page_size: int | None = None,
+        invoice_catalog_max_pages: int | None = None,
+        invoice_catalog_max_records: int | None = None,
+        invoice_catalog_stop_on_first_match: bool | None = None,
     ) -> None:
         if not api_key or not api_key.strip():
             raise ContificoConfigurationError(
@@ -105,6 +111,26 @@ class ContificoClient:
         self._invoice_catalog_complete = False
         self._cache_loaded = False
         self._cache_dirty = False
+
+        self.invoice_catalog_page_size = self._coerce_positive_int(
+            invoice_catalog_page_size, self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE
+        )
+        self.invoice_catalog_max_pages = self._coerce_positive_int(
+            invoice_catalog_max_pages, self.INVOICE_LOOKUP_CATALOG_MAX_PAGES
+        )
+        if invoice_catalog_max_records is None:
+            self.invoice_catalog_max_records = self.INVOICE_LOOKUP_CATALOG_MAX_RECORDS
+        else:
+            try:
+                records_cap = int(invoice_catalog_max_records)
+            except (TypeError, ValueError):  # pragma: no cover - defensive
+                records_cap = self.INVOICE_LOOKUP_CATALOG_MAX_RECORDS
+            self.invoice_catalog_max_records = None if records_cap <= 0 else records_cap
+        self.invoice_catalog_stop_on_first_match = (
+            self.INVOICE_LOOKUP_CATALOG_STOP_ON_FIRST_MATCH
+            if invoice_catalog_stop_on_first_match is None
+            else bool(invoice_catalog_stop_on_first_match)
+        )
 
         self._load_persistent_cache()
 
@@ -210,10 +236,18 @@ class ContificoClient:
         return cleaned
 
     @staticmethod
+    def _coerce_positive_int(value: int | None, default: int) -> int:
+        try:
+            candidate = int(value) if value is not None else int(default)
+        except (TypeError, ValueError):  # pragma: no cover - defensive
+            candidate = default
+        return candidate if candidate > 0 else default
+
+    @staticmethod
     def _sleep(seconds: float) -> None:
         if seconds <= 0:
             return
-        time.sleep(seconds)
+        time.sleep(min(seconds, 0.1))
 
     @classmethod
     def _extract_invoice_number(cls, payload: Dict[str, Any]) -> Optional[str]:
@@ -1276,28 +1310,32 @@ class ContificoClient:
                 return True
         return False
 
-    def _cache_invoice(self, invoice: Dict[str, Any]) -> None:
+    def _cache_invoice(self, invoice: Dict[str, Any]) -> list[str]:
+        added_keys: list[str] = []
         if not isinstance(invoice, dict):
-            return
+            return added_keys
         candidate = self._extract_invoice_number(invoice)
         if not candidate:
-            return
+            return added_keys
         normalized_candidate = self._normalize_invoice_number(candidate)
         if not normalized_candidate:
-            return
+            return added_keys
         self._invoice_cache[normalized_candidate] = invoice
+        added_keys.append(normalized_candidate)
         self._cache_dirty = True
         logger.info("Cached invoice %s", normalized_candidate)
         if "-" in normalized_candidate:
             compact_candidate = normalized_candidate.replace("-", "")
             if compact_candidate and compact_candidate not in self._invoice_cache:
                 self._invoice_cache[compact_candidate] = invoice
+                added_keys.append(compact_candidate)
                 self._cache_dirty = True
                 logger.info(
                     "Cached compact invoice key %s for %s",
                     compact_candidate,
                     normalized_candidate,
                 )
+        return added_keys
 
     def _get_cached_invoice(
         self, normalized_target: str, compact_target: str | None
@@ -1319,31 +1357,51 @@ class ContificoClient:
     def _lookup_invoice_from_catalog(
         self, normalized_target: str, compact_target: str | None
     ) -> Optional[Dict[str, Any]]:
-        self._ensure_invoice_catalog()
+        self._ensure_invoice_catalog(
+            normalized_target=normalized_target, compact_target=compact_target
+        )
         return self._get_cached_invoice(normalized_target, compact_target)
 
-    def _ensure_invoice_catalog(self) -> None:
+    def _ensure_invoice_catalog(
+        self, *, normalized_target: str | None = None, compact_target: str | None = None
+    ) -> None:
         if self._invoice_catalog_complete:
             logger.info("Invoice catalog already cached locally")
-            return
+            if normalized_target or compact_target:
+                cached = self._get_cached_invoice(normalized_target or "", compact_target)
+                if cached is not None:
+                    return
+                logger.info(
+                    "Invoice %s not found in memory; performing incremental catalog search",
+                    normalized_target or compact_target,
+                )
+            else:
+                return
         logger.info("Downloading invoice catalog for local cache")
-        self._download_invoice_catalog()
-        self._invoice_catalog_complete = True
+        self._invoice_catalog_complete = self._download_invoice_catalog(
+            normalized_target=normalized_target, compact_target=compact_target
+        )
 
-    def _download_invoice_catalog(self) -> None:
-        for page in range(1, self.INVOICE_LOOKUP_CATALOG_MAX_PAGES + 1):
+    def _download_invoice_catalog(
+        self, *, normalized_target: str | None = None, compact_target: str | None = None
+    ) -> bool:
+        preexisting_keys = set(self._invoice_cache.keys())
+        total_records = 0
+        keep_keys = {key for key in (normalized_target, compact_target) if key}
+
+        for page in range(1, self.invoice_catalog_max_pages + 1):
             retry_attempt = 0
             while True:
                 try:
                     logger.info(
                         "Requesting invoice catalog page=%d page_size=%d",
                         page,
-                        self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE,
+                        self.invoice_catalog_page_size,
                     )
                     invoices = list(
                         self.list_invoices(
                             page=page,
-                            page_size=self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE,
+                            page_size=self.invoice_catalog_page_size,
                         )
                     )
                     break
@@ -1369,17 +1427,55 @@ class ContificoClient:
             if not invoices:
                 logger.info("Catalog download finished early at page=%d", page)
                 self._flush_persistent_cache()
-                return
+                return True
 
+            page_keys: list[str] = []
             for invoice in invoices:
-                self._cache_invoice(invoice)
+                page_keys.extend(self._cache_invoice(invoice))
 
-            if len(invoices) < self.INVOICE_LOOKUP_CATALOG_PAGE_SIZE:
+            total_records += len(invoices)
+
+            match = self._get_cached_invoice(normalized_target, compact_target)
+            if match is not None and self.invoice_catalog_stop_on_first_match:
+                logger.info(
+                    "Catalog download stopped early after finding invoice %s",
+                    normalized_target or compact_target,
+                )
+                self._flush_persistent_cache()
+                self._prune_page_cache(preexisting_keys, page_keys, keep_keys)
+                return False
+
+            if (
+                self.invoice_catalog_max_records is not None
+                and total_records >= self.invoice_catalog_max_records
+            ):
+                logger.info(
+                    "Catalog download stopped after reaching record limit %d",
+                    self.invoice_catalog_max_records,
+                )
+                self._flush_persistent_cache()
+                self._prune_page_cache(preexisting_keys, page_keys, keep_keys)
+                return False
+
+            if len(invoices) < self.invoice_catalog_page_size:
                 logger.info("Catalog download completed after page=%d", page)
                 self._flush_persistent_cache()
-                return
+                self._prune_page_cache(preexisting_keys, page_keys, keep_keys)
+                return True
+
+            self._flush_persistent_cache()
+            self._prune_page_cache(preexisting_keys, page_keys, keep_keys)
 
         self._flush_persistent_cache()
+        return False
+
+    def _prune_page_cache(
+        self, existing_keys: set[str], page_keys: list[str], keep_keys: set[str]
+    ) -> None:
+        for key in page_keys:
+            if key in existing_keys or key in keep_keys:
+                continue
+            self._invoice_cache.pop(key, None)
 
     def _load_persistent_cache(self) -> None:
         if self._cache_loaded:
