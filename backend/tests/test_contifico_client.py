@@ -1032,8 +1032,10 @@ def test_find_invoice_by_document_number_downloads_catalog_after_timeouts(
     client.INVOICE_LOOKUP_MAX_PAGES = 1
     client.INVOICE_LOOKUP_SERVER_RETRIES = 0
     client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
-    client.INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 2
-    client.INVOICE_LOOKUP_CATALOG_MAX_PAGES = 1
+    client.invoice_catalog_page_size = 2
+    client.invoice_catalog_max_pages = 1
+    client.invoice_catalog_max_records = None
+    client.invoice_catalog_stop_on_first_match = False
     client.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 0
 
     invoice = client.find_invoice_by_document_number("001-001-0000044")
@@ -1043,7 +1045,7 @@ def test_find_invoice_by_document_number_downloads_catalog_after_timeouts(
     assert requests[0][0] == "direct"
     assert any(kind == "search" for kind, _ in requests)
     assert catalog_requests == [{"result_page": "1", "result_size": "2", "tipo_registro": "CLI", "tipo": "FAC"}]
-    assert client._invoice_catalog_complete is True
+    assert client._invoice_catalog_complete is False
     assert "001-001-0000044" in client._invoice_cache
     assert sleeps == []
 
@@ -1083,8 +1085,10 @@ def test_find_invoice_by_document_number_reuses_catalog_without_http() -> None:
     client.INVOICE_LOOKUP_MAX_PAGES = 1
     client.INVOICE_LOOKUP_SERVER_RETRIES = 0
     client.INVOICE_LOOKUP_SERVER_FAILURE_ATTEMPTS = 0
-    client.INVOICE_LOOKUP_CATALOG_PAGE_SIZE = 1
-    client.INVOICE_LOOKUP_CATALOG_MAX_PAGES = 1
+    client.invoice_catalog_page_size = 1
+    client.invoice_catalog_max_pages = 1
+    client.invoice_catalog_max_records = None
+    client.invoice_catalog_stop_on_first_match = False
     client.INVOICE_LOOKUP_CATALOG_SERVER_RETRIES = 0
 
     invoice = client.find_invoice_by_document_number("001-001-0000045")

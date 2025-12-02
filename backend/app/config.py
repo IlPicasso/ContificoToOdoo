@@ -67,6 +67,33 @@ class Settings(BaseSettings):
             "para búsquedas locales."
         ),
     )
+    contifico_invoice_catalog_page_size: int = Field(
+        default=100,
+        ge=1,
+        description=(
+            "Cantidad de facturas solicitadas por página al construir el catálogo local."
+        ),
+    )
+    contifico_invoice_catalog_max_pages: int = Field(
+        default=200,
+        ge=1,
+        description="Número máximo de páginas a descargar del catálogo de facturas.",
+    )
+    contifico_invoice_catalog_max_records: int | None = Field(
+        default=20000,
+        ge=0,
+        description=(
+            "Límite superior de facturas a descargar antes de detener el catálogo. "
+            "Usa 0 o None para desactivar este tope."
+        ),
+    )
+    contifico_invoice_catalog_stop_on_first_match: bool = Field(
+        default=True,
+        description=(
+            "Detiene la descarga del catálogo al encontrar la primera factura que coincida "
+            "con la búsqueda en curso."
+        ),
+    )
     contifico_invoice_lookup_job_timeout_seconds: float | None = Field(
         default=120.0,
         ge=0.0,
