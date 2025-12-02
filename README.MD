@@ -1,6 +1,6 @@
 # Portal de Sastrería
 
-Versión 0.1.1
+Versión 0.1.2
 
 Aplicación completa para gestionar y consultar órdenes de un taller de sastrería. El proyecto incluye un backend basado en FastAPI con autenticación JWT y un frontend ligero en HTML/JavaScript para clientes y personal interno.
 
@@ -109,6 +109,21 @@ python -m app.main
 ```
 
 La documentación interactiva estará disponible en `http://<host>:<puerto>/docs`.
+
+### Posibles causas de caída o bloqueo en el VPS
+
+- **Falta de variables críticas**: si `SECRET_KEY` no está definida o tiene menos de 32
+  caracteres, la API detendrá el arranque con un error descriptivo. Ajusta la variable en
+  `.env` o en el entorno antes de iniciar el servicio.
+- **Problemas de disco**: el backend usa SQLite por defecto (`sastreria.db`) y persiste
+  cachés de facturas de Contífico en `./data`. Ambos requieren permisos de escritura y
+  espacio libre suficiente; un disco lleno o de solo lectura impedirá escribir y puede
+  forzar la caída del proceso de aplicación o del servidor de la base de datos.
+- **Recursos saturados**: aunque las descargas del catálogo de Contífico ahora se podan y
+  persisten por página, tamaños de página y límites de registros demasiado altos, o
+  tiempos de espera muy amplios, pueden consumir CPU/ RAM o hilos hasta provocar que el
+  proceso sea terminado por el sistema operativo. Ajusta los límites mediante las
+  variables de entorno documentadas arriba para mantener el consumo controlado.
 
 ### 2. Preparar el frontend
 
