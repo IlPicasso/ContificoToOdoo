@@ -1,4 +1,6 @@
 from pathlib import Path
+from uuid import uuid4
+from threading import Lock, Thread
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -9,9 +11,17 @@ from .service import OdooMigrationService
 
 router = APIRouter(prefix="/odoo-migration", tags=["Odoo Migration"])
 
+EXPORT_JOBS: dict[str, dict] = {}
+EXPORT_LOCK = Lock()
+
 
 def _output_root() -> Path:
     return Path("backend/data/odoo_migration")
+
+
+def _set_job(job_id: str, payload: dict):
+    with EXPORT_LOCK:
+        EXPORT_JOBS[job_id] = {**EXPORT_JOBS.get(job_id, {}), **payload}
 
 
 @router.post("/products-stock/export")
@@ -35,6 +45,52 @@ def export_products_stock(
         "total_products": output.total_products,
         "total_errors": output.total_errors,
     }
+
+
+@router.post("/products-stock/export-jobs")
+def start_export_job(
+    page_size: int = Query(default=200, ge=1, le=500),
+    max_pages: int = Query(default=50, ge=1, le=500),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+):
+    job_id = str(uuid4())
+    _set_job(job_id, {"status": "running", "stage": "queued", "found_items": 0, "processed_items": 0})
+
+    def worker():
+        try:
+            service = OdooMigrationService(contifico_client)
+            output = service.generate_products_and_stock_csv(
+                page_size=page_size,
+                max_pages=max_pages,
+                progress_callback=lambda p: _set_job(job_id, p),
+            )
+            run_id = output.folder.name
+            _set_job(job_id, {
+                "status": "completed",
+                "run_id": run_id,
+                "files": {
+                    "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
+                    "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
+                    "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
+                    "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
+                },
+                "total_products": output.total_products,
+                "total_errors": output.total_errors,
+            })
+        except Exception as exc:  # pragma: no cover
+            _set_job(job_id, {"status": "failed", "error": str(exc)})
+
+    Thread(target=worker, daemon=True).start()
+    return {"job_id": job_id, "status": "running"}
+
+
+@router.get("/products-stock/export-jobs/{job_id}")
+def get_export_job(job_id: str):
+    with EXPORT_LOCK:
+        payload = EXPORT_JOBS.get(job_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Job no encontrado")
+    return payload
 
 
 @router.get("/runs")

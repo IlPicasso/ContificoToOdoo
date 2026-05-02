@@ -3,7 +3,7 @@ import csv
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from ..contifico import ContificoClient
 from .parser import parse_adams_sku, make_external_id
@@ -41,7 +41,7 @@ class OdooMigrationService:
         self.client = client
         self.output_root = Path(output_root)
 
-    def generate_products_and_stock_csv(self, *, page_size: int = 200, max_pages: int = 50) -> MigrationOutput:
+    def generate_products_and_stock_csv(self, *, page_size: int = 200, max_pages: int = 50, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
         timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
         folder = self.output_root / timestamp
@@ -51,11 +51,12 @@ class OdooMigrationService:
         errors_csv = folder / "migration_errors.csv"
         mapping_csv = folder / "mapping_report.csv"
 
-        products = self._fetch_products(page_size=page_size, max_pages=max_pages)
+        products = self._fetch_products(page_size=page_size, max_pages=max_pages, progress_callback=progress_callback)
 
         product_rows, stock_rows, error_rows, map_rows = [], [], [], []
         seen_skus, seen_barcodes = set(), set()
-        for item in products:
+        total = len(products)
+        for idx, item in enumerate(products, start=1):
             sku = str(item.get("codigo") or item.get("sku") or "").strip()
             name = str(item.get("nombre") or item.get("name") or "")
             barcode = str(item.get("codigo_barra") or item.get("barcode") or "").strip()
@@ -114,11 +115,15 @@ class OdooMigrationService:
                 "stock_bat": f"{float(stock_map.get('BAT',0)):.2f}",
                 "estado": status,
             })
+            if progress_callback and (idx == 1 or idx % 25 == 0 or idx == total):
+                progress_callback({"stage": "processing", "processed_items": idx, "total_items": total})
 
         self._write_csv(product_csv, PRODUCT_COLUMNS, product_rows)
         self._write_csv(stock_csv, STOCK_COLUMNS, stock_rows)
         self._write_csv(errors_csv, ERROR_COLUMNS, error_rows)
         self._write_csv(mapping_csv, MAP_COLUMNS, map_rows)
+        if progress_callback:
+            progress_callback({"stage": "completed", "processed_items": total, "total_items": total})
         return MigrationOutput(folder, product_csv, stock_csv, errors_csv, mapping_csv, len(product_rows), len(error_rows))
 
 
@@ -144,13 +149,17 @@ class OdooMigrationService:
                 f"Esperado={expected_stock} Actual={STOCK_COLUMNS}"
             )
 
-    def _fetch_products(self, *, page_size: int, max_pages: int) -> list[dict[str, Any]]:
+    def _fetch_products(self, *, page_size: int, max_pages: int, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> list[dict[str, Any]]:
         all_items = []
         for page in range(1, max_pages + 1):
+            if progress_callback:
+                progress_callback({"stage": "fetching", "page": page, "max_pages": max_pages, "found_items": len(all_items)})
             batch = list(self.client.list_products(page=page, page_size=page_size))
             if not batch:
                 break
             all_items.extend([b for b in batch if isinstance(b, dict)])
+            if progress_callback:
+                progress_callback({"stage": "fetched_page", "page": page, "fetched": len(batch), "found_items": len(all_items)})
             if len(batch) < page_size:
                 break
         return all_items

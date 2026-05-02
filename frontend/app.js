@@ -27,29 +27,10 @@ async function apiGet(path, params = {}) {
 function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
 function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
 
-async function apiPost(path, params = {}) {
-  const url = new URL(`${base()}${path}`);
-  Object.entries(params).forEach(([k, v]) => { if (v !== "" && v != null) url.searchParams.set(k, String(v)); });
-  let resp;
-  try { resp = await fetch(url, { method: "POST" }); } catch (error) {
-    throw new Error(`No se pudo conectar con ${base()}. Verifica URL, puerto, CORS/SSL y que la API esté arriba.`);
-  }
-  const text = await resp.text();
-  let data; try { data = JSON.parse(text); } catch { data = text; }
-  if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
-  statusEl.textContent = `${resp.status} ${resp.statusText}`;
-  return data;
-}
-
-
-let migrationProgressTimer = null;
-
 function setMigrationStatus(message) {
   const el = $('migrationStatus');
   if (el) el.textContent = message || '';
 }
-function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
-function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
 
 function setProgress(visible, value = 0) {
   const wrap = $('migrationProgress');
@@ -64,27 +45,21 @@ function toggleMigrationButtons(disabled) {
   $('loadRuns').disabled = disabled;
 }
 
-function startProgressSimulation() {
-  let progress = 8;
-  setProgress(true, progress);
-  setMigrationStatus('Iniciando exportación...');
-  migrationProgressTimer = window.setInterval(() => {
-    progress = Math.min(progress + 7, 92);
-    setProgress(true, progress);
-    if (progress < 35) setMigrationStatus('Extrayendo productos de Contífico...');
-    else if (progress < 70) setMigrationStatus('Procesando SKU ADAMS y validando plantilla...');
-    else setMigrationStatus('Generando archivos CSV revisables...');
-  }, 450);
+
+async function apiPost(path, params = {}) {
+  const url = new URL(`${base()}${path}`);
+  Object.entries(params).forEach(([k, v]) => { if (v !== "" && v != null) url.searchParams.set(k, String(v)); });
+  let resp;
+  try { resp = await fetch(url, { method: "POST" }); } catch (error) {
+    throw new Error(`No se pudo conectar con ${base()}. Verifica URL, puerto, CORS/SSL y que la API esté arriba.`);
+  }
+  const text = await resp.text();
+  let data; try { data = JSON.parse(text); } catch { data = text; }
+  if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
+  statusEl.textContent = `${resp.status} ${resp.statusText}`;
+  return data;
 }
 
-function stopProgressSimulation(success = true) {
-  if (migrationProgressTimer) {
-    window.clearInterval(migrationProgressTimer);
-    migrationProgressTimer = null;
-  }
-  setProgress(true, success ? 100 : 0);
-  if (success) setMigrationStatus('Exportación finalizada. Revisa el resumen y descarga los archivos.');
-}
 
 $('loadProducts').addEventListener('click', async () => {
   try {
@@ -139,16 +114,39 @@ function renderMigrationLinks(files) {
 $('generateMigrationCsv').addEventListener('click', async () => {
   try {
     toggleMigrationButtons(true);
-    startProgressSimulation();
-    const data = await apiPost('/odoo-migration/products-stock/export', {
+    setProgress(true, 3);
+    setMigrationStatus('Creando job de exportación...');
+    const started = await apiPost('/odoo-migration/products-stock/export-jobs', {
       page_size: $('exportPageSize').value,
       max_pages: $('exportMaxPages').value,
     });
-    stopProgressSimulation(true);
-    show('migrationSummaryOut', data);
-    renderMigrationLinks(data.files);
+    const jobId = started.job_id;
+    let done = false;
+    while (!done) {
+      await new Promise((r) => setTimeout(r, 800));
+      const job = await apiGet(`/odoo-migration/products-stock/export-jobs/${jobId}`);
+      if (job.status === 'failed') {
+        setMigrationStatus(`Error en exportación: ${job.error || 'desconocido'}`);
+        throw new Error(job.error || 'Export job failed');
+      }
+      const stage = job.stage || 'running';
+      const found = Number(job.found_items || 0);
+      const processed = Number(job.processed_items || 0);
+      const total = Number(job.total_items || 0);
+      let progress = 12;
+      if (stage === 'fetching' || stage === 'fetched_page') progress = Math.min(45, 10 + found / 3);
+      if (stage === 'processing') progress = total > 0 ? Math.min(92, 45 + (processed / total) * 47) : 55;
+      if (job.status === 'completed') progress = 100;
+      setProgress(true, progress);
+      setMigrationStatus(`Etapa: ${stage} · items encontrados: ${found} · procesados: ${processed}${total ? `/${total}` : ''}`);
+      if (job.status === 'completed') {
+        done = true;
+        show('migrationSummaryOut', job);
+        renderMigrationLinks(job.files);
+        setMigrationStatus('Exportación completada. Descarga los archivos generados.');
+      }
+    }
   } catch (e) {
-    stopProgressSimulation(false);
     setMigrationStatus('La exportación falló. Revisa el detalle de error global.');
     showErr(e);
   } finally {
