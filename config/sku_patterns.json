@@ -1,0 +1,7 @@
+{
+  "shirt": "^(?P<model>\\d+)-(?P<size>\\d+(?:\\.\\d+)?)-(?P<sleeve>S[12])$",
+  "suit": "^(?P<base>.+)/(?P<size>\\d+(?:\\.\\d+)?)$",
+  "tie_width": "^(?P<base>.+)-(?P<width>6|6\\.5|7|7\\.5)$",
+  "bowtie": "^(?P<base>.+)-CO$",
+  "fajin": "^(?P<base>.+)-FJ$"
+}
