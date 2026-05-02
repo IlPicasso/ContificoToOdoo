@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 0.9.7
+Versión 1.0.0
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.0 (2026-05-02)**: Refactor del parser/exportador con reglas configurables (`config/*.json`), clasificación ampliada por familias, exclusión automática de stock total 0 a `excluded_zero_stock.csv`, y enriquecimiento de `mapping_report.csv` con confidence/parser_rule/estado.
 - **0.9.7 (2026-05-02)**: Se agregó `raw.log` por corrida con respuestas en crudo de cada fetch paginado a Contífico, además de `debug.log`.
 - **0.9.6 (2026-05-02)**: Se añadió soporte para atributo `Ancho Corbata` y parsing de SKUs de corbatas (código estándar o `codigo/ancho`) en categoría `Ropa / Corbatas`.
 - **0.9.5 (2026-05-02)**: Se agregó exportación de trazas por fetch en `debug.log` por corrida (páginas consultadas y conteos de respuesta), descargable desde el flujo de migración.
