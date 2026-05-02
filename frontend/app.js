@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
 const BASE_URL_STORAGE_KEY = 'contifico.preview.apiBaseUrl';
 
-const DEFAULT_API_BASE_URL = (window.API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:9000`).trim();
+const DEFAULT_API_BASE_URL = (window.API_BASE_URL || 'https://api.adams.com.ec').trim();
 
 function base() {
   const value = $('baseUrl').value.trim() || DEFAULT_API_BASE_URL;

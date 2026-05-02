@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 0.6.4
+Versión 0.6.5
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **0.6.5 (2026-05-02)**: Se eliminó el requisito de autenticación en endpoints temporales `/temp/contifico/*` para uso operativo del migrador y se estableció `https://api.adams.com.ec` como base URL por defecto del frontend.
 - **0.6.4 (2026-05-02)**: Se eliminó el manejo de token Bearer en la vista previa del migrador para operar sin capas de autenticación adicionales, y se ajustó el mensaje de error de conectividad.
 - **0.6.3 (2026-05-02)**: Se ajustó la vista previa para usar puerto API por defecto 9000 y se retiró el flujo de login en frontend según operación actual (token manual opcional).
 - **0.6.2 (2026-05-02)**: Se añadió login directo en la vista previa de Contífico (`/auth/login`) con guardado de token, para recuperar el flujo funcional sin copiar token manual en cada prueba.
