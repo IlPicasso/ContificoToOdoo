@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 0.9.4
+Versión 0.9.5
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **0.9.5 (2026-05-02)**: Se agregó exportación de trazas por fetch en `debug.log` por corrida (páginas consultadas y conteos de respuesta), descargable desde el flujo de migración.
 - **0.9.4 (2026-05-02)**: Se ajustó el límite por defecto de exportación a `max_pages=200` (antes 50) y se agregó metadata de corrida (`pages_fetched`, `hit_max_pages`) para detectar truncamientos de inventario.
 - **0.9.3 (2026-05-02)**: Se añadió exportación por jobs con polling de progreso real (páginas e items procesados) y feedback en frontend durante la carga de inventario.
 - **0.9.2 (2026-05-02)**: Se mejoró la UX del frontend de migración con feedback de progreso, estados descriptivos durante exportación y controles deshabilitados mientras se procesa.
