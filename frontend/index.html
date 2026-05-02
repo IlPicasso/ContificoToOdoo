@@ -6,20 +6,13 @@
   <body>
     <main class="container">
       <h1>Contífico (vista previa)</h1>
-      <p class="lead">Panel para validar productos, categorías, bodegas y facturas desde la API temporal. Usa <code>window.API_BASE_URL</code> o detecta <code>http://&lt;host&gt;:8000</code> por defecto.</p>
+      <p class="lead">Panel para validar productos, categorías, bodegas y facturas desde la API temporal. Usa <code>window.API_BASE_URL</code> o detecta <code>http://&lt;host&gt;:9000</code> por defecto.</p>
       <section class="card">
-        <label>Base URL API</label><input id="baseUrl" placeholder="http://localhost:8000" />
+        <label>Base URL API</label><input id="baseUrl" placeholder="http://localhost:9000" />
         <label>Token Bearer (admin)</label><input id="token" placeholder="eyJ..." />
       </section>
 
-      <section class="card">
-        <h2>Autenticación</h2>
-        <label>Usuario</label><input id="username" placeholder="admin" />
-        <label>Contraseña</label><input id="password" type="password" placeholder="••••••" />
-        <button id="loginBtn">Iniciar sesión y guardar token</button>
-      </section>
-
-      <section class="grid">
+            <section class="grid">
         <article class="card"><h2>Productos</h2>
           <input id="productsPage" type="number" value="1" min="1" placeholder="Página" />
           <input id="productsPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
