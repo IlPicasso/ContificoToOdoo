@@ -1,6 +1,6 @@
 # Portal de Sastrería
 
-Versión 0.2.0
+Versión 0.4.0
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -188,3 +188,10 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 | Servir frontend | `python -m http.server 5173` |
 
 ¡Listo! Ya puedes gestionar las órdenes de tu sastrería y ofrecer a tus clientes un portal de consulta.
+
+
+## Historial de cambios
+
+- **0.4.0 (2026-05-02)**: Se simplificó el frontend para dejar únicamente funcionalidades relacionadas al migrador Contífico → Odoo (transformación JSON, vista previa tabular y descarga CSV).
+- **0.3.0 (2026-05-02)**: Se agregó la base del migrador Contífico → Odoo con parsing de SKU (terno/camisa), mapeo de stocks por bodega (BPU/TUR/BAT) y pruebas unitarias iniciales.
+- **0.2.0**: Reorientación documental del repositorio hacia migración Contífico → Odoo.
