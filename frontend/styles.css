@@ -1,15 +1,14 @@
-:root { font-family: Inter, system-ui, sans-serif; color-scheme: light; }
-body { margin: 0; background: #f7f7f8; color: #1f2937; }
-.container { max-width: 1100px; margin: 0 auto; padding: 24px; }
-h1 { margin-bottom: 8px; }
-.lead { margin-top: 0; color: #4b5563; }
-.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 16px; }
-textarea { width: 100%; font-family: ui-monospace, monospace; }
-.actions { display: flex; gap: 8px; margin-top: 12px; }
+:root { font-family: Inter, system-ui, sans-serif; }
+body { margin: 0; background: #f4f6f8; color: #111827; }
+.container { max-width: 1080px; margin: 0 auto; padding: 24px; }
+.card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+.lead { color: #4b5563; }
+label { display: block; font-size: 12px; margin: 8px 0 4px; color: #374151; }
+input, select, textarea { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; }
+textarea { min-height: 90px; font-family: ui-monospace, monospace; }
+.row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.actions { display: flex; gap: 8px; margin-top: 10px; }
 button { border: 1px solid #111827; background: #111827; color: #fff; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 button.secondary { background: #fff; color: #111827; }
-.status { min-height: 24px; color: #374151; }
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-th, td { border: 1px solid #e5e7eb; padding: 8px; text-align: left; white-space: nowrap; }
-th { background: #f9fafb; }
+.status { font-weight: 600; }
+pre { overflow-x: auto; background: #0b1020; color: #d1fae5; padding: 12px; border-radius: 8px; }

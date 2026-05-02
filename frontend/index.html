@@ -3,41 +3,55 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Migrador Contífico → Odoo</title>
+    <title>Contífico → Odoo | API Tester</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="container">
-      <h1>Migrador Contífico → Odoo</h1>
-      <p class="lead">
-        Interfaz mínima para validar SKUs y preparar filas limpias para importación a Odoo.
-      </p>
+      <h1>API Tester · Contífico → Odoo</h1>
+      <p class="lead">Página para probar todos los métodos de la API usando OpenAPI automáticamente.</p>
 
       <section class="card">
-        <h2>Entrada rápida (JSON)</h2>
-        <p>Pega un arreglo de productos de Contífico y genera vista previa del export.</p>
-        <textarea id="inputJson" rows="10">[
-  {"sku":"210001/46","codigo_barras":"1234567890123","precio_venta":89.99,"costo":55,"stock_por_bodega":{"BPU":3,"TUR":1,"BAT":0}},
-  {"sku":"17601-15.5-S1","codigo_barras":"0987654321098","precio_venta":39.99,"costo":19,"stock_por_bodega":{"BPU":6,"TUR":3,"BAT":2}}
-]</textarea>
-        <div class="actions">
-          <button id="transformButton">Transformar</button>
-          <button id="downloadCsvButton" class="secondary">Descargar CSV</button>
-        </div>
-        <p id="status" class="status"></p>
+        <h2>Configuración</h2>
+        <label>Base URL API</label>
+        <input id="baseUrl" value="http://localhost:8000" />
+        <label>Token Bearer (opcional)</label>
+        <input id="token" placeholder="eyJ..." />
+        <button id="loadOpenApi">Cargar métodos desde /openapi.json</button>
       </section>
 
       <section class="card">
-        <h2>Vista previa Odoo</h2>
-        <div class="table-wrap">
-          <table id="previewTable">
-            <thead></thead>
-            <tbody></tbody>
-          </table>
+        <h2>Ejecutar request</h2>
+        <label>Método detectado</label>
+        <select id="endpointSelect"></select>
+        <div class="row">
+          <div>
+            <label>Método</label>
+            <input id="method" />
+          </div>
+          <div>
+            <label>Path</label>
+            <input id="path" />
+          </div>
         </div>
+        <label>Query params (JSON)</label>
+        <textarea id="query">{}</textarea>
+        <label>Headers extra (JSON)</label>
+        <textarea id="headers">{}</textarea>
+        <label>Body (JSON)</label>
+        <textarea id="body">{}</textarea>
+        <div class="actions">
+          <button id="sendBtn">Enviar</button>
+          <button id="curlBtn" class="secondary">Copiar cURL</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Respuesta</h2>
+        <p id="status" class="status"></p>
+        <pre id="response"></pre>
       </section>
     </main>
-
     <script src="app.js"></script>
   </body>
 </html>

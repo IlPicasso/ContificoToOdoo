@@ -1,92 +1,118 @@
-const inputJson = document.getElementById('inputJson');
-const transformButton = document.getElementById('transformButton');
-const downloadCsvButton = document.getElementById('downloadCsvButton');
-const statusElement = document.getElementById('status');
-const tableHead = document.querySelector('#previewTable thead');
-const tableBody = document.querySelector('#previewTable tbody');
+const $ = (id) => document.getElementById(id);
+const baseUrlEl = $('baseUrl');
+const tokenEl = $('token');
+const endpointSelect = $('endpointSelect');
+const methodEl = $('method');
+const pathEl = $('path');
+const queryEl = $('query');
+const headersEl = $('headers');
+const bodyEl = $('body');
+const statusEl = $('status');
+const responseEl = $('response');
 
-const sleeveMap = { S1: 'S1 - 32/33', S2: 'S2 - 34/35' };
-let lastRows = [];
+let endpoints = [];
 
-function parseSku(skuRaw) {
-  const sku = String(skuRaw || '').trim();
-  const suit = /^(\d+)\/(\d+(?:\.\d+)?)$/.exec(sku);
-  if (suit) return { producto_madre: `Terno ${suit[1]}`, talla: suit[2], manga: '' };
-  const shirt = /^(\d+)-(\d+(?:\.\d+)?)-(S[12])$/.exec(sku);
-  if (shirt) return { producto_madre: `Camisa ${shirt[1]}`, talla: shirt[2], manga: sleeveMap[shirt[3]] || '' };
-  return { producto_madre: `Producto ${sku}`, talla: '', manga: '' };
+function safeJsonParse(text, fallback = {}) {
+  try { return JSON.parse(text || ''); } catch { return fallback; }
 }
 
-function mapRow(item) {
-  const sku = String(item.sku || '').trim();
-  const parsed = parseSku(sku);
-  const stocks = item.stock_por_bodega || {};
-  return {
-    producto_madre: parsed.producto_madre,
-    sku,
-    codigo_barras: String(item.codigo_barras || ''),
-    categoria_odoo: item.categoria_odoo || 'Ropa / Accesorios',
-    talla: parsed.talla,
-    manga: parsed.manga,
-    marca: item.marca || 'BRUNO CASSINI',
-    color: item.color || '',
-    precio_venta: Number(item.precio_venta || 0),
-    costo: Number(item.costo || 0),
-    stock_bpu: Number(stocks.BPU || 0),
-    stock_tur: Number(stocks.TUR || 0),
-    stock_bat: Number(stocks.BAT || 0),
-  };
+function pretty(value) {
+  return JSON.stringify(value, null, 2);
 }
 
-function renderTable(rows) {
-  tableHead.innerHTML = '';
-  tableBody.innerHTML = '';
-  if (!rows.length) return;
-  const columns = Object.keys(rows[0]);
-  const tr = document.createElement('tr');
-  columns.forEach((col) => {
-    const th = document.createElement('th'); th.textContent = col; tr.appendChild(th);
+function populateEndpoints() {
+  endpointSelect.innerHTML = '';
+  endpoints.forEach((ep, idx) => {
+    const opt = document.createElement('option');
+    opt.value = String(idx);
+    opt.textContent = `${ep.method.toUpperCase()} ${ep.path}`;
+    endpointSelect.appendChild(opt);
   });
-  tableHead.appendChild(tr);
-  rows.forEach((row) => {
-    const r = document.createElement('tr');
-    columns.forEach((col) => {
-      const td = document.createElement('td'); td.textContent = String(row[col]); r.appendChild(td);
-    });
-    tableBody.appendChild(r);
+  if (endpoints.length) selectEndpoint(0);
+}
+
+function selectEndpoint(index) {
+  const ep = endpoints[index];
+  if (!ep) return;
+  methodEl.value = ep.method.toUpperCase();
+  pathEl.value = ep.path;
+}
+
+async function loadOpenApi() {
+  const base = baseUrlEl.value.trim().replace(/\/$/, '');
+  const resp = await fetch(`${base}/openapi.json`);
+  if (!resp.ok) throw new Error(`No se pudo cargar OpenAPI (${resp.status})`);
+  const spec = await resp.json();
+  endpoints = [];
+  Object.entries(spec.paths || {}).forEach(([path, methods]) => {
+    Object.keys(methods).forEach((method) => endpoints.push({ path, method }));
   });
+  endpoints.sort((a, b) => `${a.path}${a.method}`.localeCompare(`${b.path}${b.method}`));
+  populateEndpoints();
+  statusEl.textContent = `OpenAPI cargado: ${endpoints.length} método(s) detectados.`;
 }
 
-function toCsv(rows) {
-  if (!rows.length) return '';
-  const cols = Object.keys(rows[0]);
-  const head = cols.join(',');
-  const body = rows.map((r) => cols.map((c) => `"${String(r[c]).replaceAll('"', '""')}"`).join(',')).join('\n');
-  return `${head}\n${body}`;
+function buildUrl(base, path, query) {
+  const url = new URL(`${base.replace(/\/$/, '')}${path}`);
+  Object.entries(query || {}).forEach(([k, v]) => {
+    if (v !== null && v !== undefined && `${v}` !== '') url.searchParams.set(k, String(v));
+  });
+  return url;
 }
 
-transformButton.addEventListener('click', () => {
-  try {
-    const payload = JSON.parse(inputJson.value);
-    if (!Array.isArray(payload)) throw new Error('Debe ser un arreglo JSON.');
-    lastRows = payload.map(mapRow);
-    renderTable(lastRows);
-    statusElement.textContent = `OK: ${lastRows.length} fila(s) transformadas.`;
-  } catch (error) {
-    statusElement.textContent = `Error: ${error.message}`;
-  }
+async function sendRequest() {
+  const base = baseUrlEl.value.trim();
+  const method = methodEl.value.trim().toUpperCase();
+  const path = pathEl.value.trim();
+  const query = safeJsonParse(queryEl.value, {});
+  const extraHeaders = safeJsonParse(headersEl.value, {});
+  const body = safeJsonParse(bodyEl.value, {});
+
+  const headers = { 'Content-Type': 'application/json', ...extraHeaders };
+  const token = tokenEl.value.trim();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const url = buildUrl(base, path, query);
+  const init = { method, headers };
+  if (!['GET', 'DELETE'].includes(method)) init.body = JSON.stringify(body);
+
+  const startedAt = performance.now();
+  const resp = await fetch(url, init);
+  const elapsed = (performance.now() - startedAt).toFixed(0);
+  const text = await resp.text();
+  let parsed;
+  try { parsed = JSON.parse(text); } catch { parsed = text; }
+
+  statusEl.textContent = `${resp.status} ${resp.statusText} · ${elapsed} ms`;
+  responseEl.textContent = pretty(parsed);
+}
+
+function buildCurl() {
+  const base = baseUrlEl.value.trim();
+  const method = methodEl.value.trim().toUpperCase();
+  const path = pathEl.value.trim();
+  const query = safeJsonParse(queryEl.value, {});
+  const headers = safeJsonParse(headersEl.value, {});
+  const body = safeJsonParse(bodyEl.value, {});
+  const token = tokenEl.value.trim();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const url = buildUrl(base, path, query).toString();
+
+  const chunks = [`curl -X ${method} '${url}'`];
+  Object.entries(headers).forEach(([k, v]) => chunks.push(`-H '${k}: ${String(v)}'`));
+  if (!['GET', 'DELETE'].includes(method)) chunks.push(`-H 'Content-Type: application/json' -d '${JSON.stringify(body)}'`);
+  return chunks.join(' \\\n  ');
+}
+
+$('loadOpenApi').addEventListener('click', async () => {
+  try { await loadOpenApi(); } catch (e) { statusEl.textContent = `Error: ${e.message}`; }
 });
-
-downloadCsvButton.addEventListener('click', () => {
-  if (!lastRows.length) {
-    statusElement.textContent = 'Primero transforma datos para poder descargar.';
-    return;
-  }
-  const blob = new Blob([toCsv(lastRows)], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'contifico_odoo_productos.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+endpointSelect.addEventListener('change', () => selectEndpoint(Number(endpointSelect.value)));
+$('sendBtn').addEventListener('click', async () => {
+  try { await sendRequest(); } catch (e) { statusEl.textContent = `Error: ${e.message}`; }
+});
+$('curlBtn').addEventListener('click', async () => {
+  const curl = buildCurl();
+  await navigator.clipboard.writeText(curl);
+  statusEl.textContent = 'cURL copiado al portapapeles.';
 });
