@@ -1,8 +1,20 @@
 # Portal de Sastrería
 
-Versión 0.1.2
+Versión 0.2.0
 
-Aplicación completa para gestionar y consultar órdenes de un taller de sastrería. El proyecto incluye un backend basado en FastAPI con autenticación JWT y un frontend ligero en HTML/JavaScript para clientes y personal interno.
+Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
+
+
+## Enfoque actual: Migrador Contífico → Odoo
+
+A partir de la **versión 0.2.0**, este repositorio pasa a enfocarse en la migración de datos de negocio desde Contífico hacia Odoo.
+
+Prioridades iniciales de migración:
+- Clientes (contactos y datos fiscales).
+- Productos y servicios.
+- Facturas y movimientos clave para continuidad operativa.
+
+La estrategia será incremental, con etapas de mapeo de datos, validaciones y sincronización controlada para minimizar riesgos en producción.
 
 ## Requisitos
 
