@@ -8,18 +8,14 @@ function base() {
   const value = $('baseUrl').value.trim() || DEFAULT_API_BASE_URL;
   return value.replace(/\/$/, '');
 }
-function authHeaders() {
-  const token = $('token').value.trim();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 async function apiGet(path, params = {}) {
   const url = new URL(`${base()}${path}`);
   Object.entries(params).forEach(([k, v]) => { if (v !== '' && v != null) url.searchParams.set(k, String(v)); });
   let resp;
   try {
-    resp = await fetch(url, { headers: authHeaders() });
+    resp = await fetch(url);
   } catch (error) {
-    throw new Error(`No se pudo conectar con ${base()}. Verifica API_BASE_URL/puerto/CORS y que la API esté arriba.`);
+    throw new Error(`No se pudo conectar con ${base()}. Verifica URL, puerto, CORS/SSL y que la API esté arriba.`);
   }
   const text = await resp.text();
   let data;
