@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..contifico import ContificoClient
-from .parser import parse_adams_sku, make_external_id
+from .parser import parse_adams_product, make_external_id
 
 WAREHOUSE_TO_LOCATION = {
     "BPU": "BPU/Existencias",
@@ -37,6 +37,7 @@ class MigrationOutput:
     pages_fetched: int
     hit_max_pages: bool
     debug_log: Path
+    raw_log: Path
 
 
 class OdooMigrationService:
@@ -54,9 +55,11 @@ class OdooMigrationService:
         errors_csv = folder / "migration_errors.csv"
         mapping_csv = folder / "mapping_report.csv"
         debug_log = folder / "debug.log"
+        raw_log = folder / "raw.log"
 
         debug_lines = [f"start_utc={datetime.utcnow().isoformat()}Z", f"page_size={page_size}", f"max_pages={max_pages}"]
-        products, pages_fetched, hit_max_pages = self._fetch_products(page_size=page_size, max_pages=max_pages, progress_callback=progress_callback, debug_lines=debug_lines)
+        raw_lines: list[str] = []
+        products, pages_fetched, hit_max_pages = self._fetch_products(page_size=page_size, max_pages=max_pages, progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines)
 
         product_rows, stock_rows, error_rows, map_rows = [], [], [], []
         seen_skus, seen_barcodes = set(), set()
@@ -71,7 +74,8 @@ class OdooMigrationService:
             color = str(item.get("color") or "").strip()
             stock_map = self._extract_stock_by_warehouse(item)
             try:
-                parsed = parse_adams_sku(sku)
+                category_raw = str(item.get("categoria") or item.get("category") or "")
+                parsed = parse_adams_product(sku, product_name_hint=name, category_hint=category_raw)
                 if sku in seen_skus:
                     raise ValueError("SKU duplicado")
                 if barcode and barcode in seen_barcodes:
@@ -79,9 +83,13 @@ class OdooMigrationService:
                 seen_skus.add(sku)
                 if barcode:
                     seen_barcodes.add(barcode)
-                pvalues = [f"Talla:{parsed.talla}"]
+                pvalues = []
+                if parsed.talla:
+                    pvalues.append(f"Talla:{parsed.talla}")
                 if parsed.manga:
                     pvalues.append(f"Manga de Camisa:{parsed.manga}")
+                if parsed.ancho_corbata:
+                    pvalues.append(f"Ancho Corbata:{parsed.ancho_corbata}")
                 pvalues += [f"Marca:{brand}", f"Color:{color}"]
                 product_rows.append({
                     "External ID": make_external_id(parsed),
@@ -129,9 +137,10 @@ class OdooMigrationService:
         self._write_csv(mapping_csv, MAP_COLUMNS, map_rows)
         debug_lines += [f"total_products_parsed={len(product_rows)}", f"total_errors={len(error_rows)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}"]
         debug_log.write_text("\n".join(debug_lines) + "\n", encoding="utf-8")
+        raw_log.write_text("\n".join(raw_lines) + "\n", encoding="utf-8")
         if progress_callback:
             progress_callback({"stage": "completed", "processed_items": total, "total_items": total})
-        return MigrationOutput(folder, product_csv, stock_csv, errors_csv, mapping_csv, len(product_rows), len(error_rows), pages_fetched, hit_max_pages, debug_log)
+        return MigrationOutput(folder, product_csv, stock_csv, errors_csv, mapping_csv, len(product_rows), len(error_rows), pages_fetched, hit_max_pages, debug_log, raw_log)
 
 
     @staticmethod
@@ -156,7 +165,7 @@ class OdooMigrationService:
                 f"Esperado={expected_stock} Actual={STOCK_COLUMNS}"
             )
 
-    def _fetch_products(self, *, page_size: int, max_pages: int, progress_callback: Callable[[dict[str, Any]], None] | None = None, debug_lines: list[str] | None = None) -> tuple[list[dict[str, Any]], int, bool]:
+    def _fetch_products(self, *, page_size: int, max_pages: int, progress_callback: Callable[[dict[str, Any]], None] | None = None, debug_lines: list[str] | None = None, raw_lines: list[str] | None = None) -> tuple[list[dict[str, Any]], int, bool]:
         all_items = []
         pages_fetched = 0
         for page in range(1, max_pages + 1):
@@ -166,6 +175,9 @@ class OdooMigrationService:
             pages_fetched = page
             if debug_lines is not None:
                 debug_lines.append(f"fetch page={page} size={page_size} response_items={len(batch)}")
+            if raw_lines is not None:
+                import json
+                raw_lines.append(json.dumps({"page": page, "page_size": page_size, "response": batch}, ensure_ascii=False))
             if not batch:
                 break
             all_items.extend([b for b in batch if isinstance(b, dict)])

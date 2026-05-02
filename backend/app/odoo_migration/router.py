@@ -42,12 +42,16 @@ def export_products_stock(
             "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
             "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
             "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
+                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
         },
         "total_products": output.total_products,
         "total_errors": output.total_errors,
         "pages_fetched": output.pages_fetched,
         "hit_max_pages": output.hit_max_pages,
         "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
+                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
     }
 
 
@@ -78,7 +82,11 @@ def start_export_job(
                     "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
                     "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
                     "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
+                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
             "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
+                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
                 },
                 "total_products": output.total_products,
                 "total_errors": output.total_errors,
@@ -114,7 +122,7 @@ def list_runs(limit: int = Query(default=10, ge=1, le=100)):
 
 @router.get("/runs/{run_id}/files/{filename}")
 def download_file(run_id: str, filename: str):
-    allowed = {"product_product.csv", "initial_stock.csv", "migration_errors.csv", "mapping_report.csv", "debug.log"}
+    allowed = {"product_product.csv", "initial_stock.csv", "migration_errors.csv", "mapping_report.csv", "debug.log", "raw.log"}
     if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
     file_path = _output_root() / run_id / filename
