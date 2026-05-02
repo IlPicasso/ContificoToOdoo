@@ -119,6 +119,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
     const started = await apiPost('/odoo-migration/products-stock/export-jobs', {
       page_size: $('exportPageSize').value,
       max_pages: $('exportMaxPages').value,
+      export_stock: false,
     });
     const jobId = started.job_id;
     let done = false;

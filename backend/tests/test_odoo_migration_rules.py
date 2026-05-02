@@ -24,3 +24,15 @@ def test_zero_stock_rule_and_values():
     assert should_exclude_zero_stock(0)
     assert not should_exclude_zero_stock(0.01)
     assert build_product_values(talla='46', marca='BRUNO CASSINI', color='Azul') == 'Talla:46,Marca:BRUNO CASSINI,Color:Azul'
+
+
+def test_group_stock_rule_base_key():
+    from app.odoo_migration.service import OdooMigrationService
+    assert OdooMigrationService._base_group_key('MF11829/1-CO', '') == 'MF11829/1'
+    assert OdooMigrationService._base_group_key('MF11829/1-FJ', '') == 'MF11829/1'
+
+
+def test_stock_fallback_from_cantidad_stock():
+    from app.odoo_migration.service import OdooMigrationService
+    stock = OdooMigrationService._extract_stock_by_warehouse({'cantidad_stock':'1.0'})
+    assert stock['BPU'] == 1.0

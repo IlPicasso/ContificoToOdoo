@@ -28,10 +28,12 @@ def _set_job(job_id: str, payload: dict):
 def export_products_stock(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
+    export_stock: bool = Query(default=False),
+    export_stock: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     service = OdooMigrationService(contifico_client)
-    output = service.generate_products_and_stock_csv(page_size=page_size, max_pages=max_pages)
+    output = service.generate_products_and_stock_csv(page_size=page_size, max_pages=max_pages, export_stock=export_stock)
     run_id = output.folder.name
     return {
         "run_id": run_id,
@@ -63,6 +65,7 @@ def export_products_stock(
 def start_export_job(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
+    export_stock: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     job_id = str(uuid4())
@@ -74,6 +77,7 @@ def start_export_job(
             output = service.generate_products_and_stock_csv(
                 page_size=page_size,
                 max_pages=max_pages,
+                export_stock=export_stock,
                 progress_callback=lambda p: _set_job(job_id, p),
             )
             run_id = output.folder.name
