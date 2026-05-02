@@ -40,6 +40,8 @@ async function apiPost(path, params = {}) {
   statusEl.textContent = `${resp.status} ${resp.statusText}`;
   return data;
 }
+function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
+function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
 
 $('loadProducts').addEventListener('click', async () => {
   try {
