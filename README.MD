@@ -1,8 +1,20 @@
 # Portal de Sastrería
 
-Versión 0.1.2
+Versión 0.9.4
 
-Aplicación completa para gestionar y consultar órdenes de un taller de sastrería. El proyecto incluye un backend basado en FastAPI con autenticación JWT y un frontend ligero en HTML/JavaScript para clientes y personal interno.
+Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
+
+
+## Enfoque actual: Migrador Contífico → Odoo
+
+A partir de la **versión 0.2.0**, este repositorio pasa a enfocarse en la migración de datos de negocio desde Contífico hacia Odoo.
+
+Prioridades iniciales de migración:
+- Clientes (contactos y datos fiscales).
+- Productos y servicios.
+- Facturas y movimientos clave para continuidad operativa.
+
+La estrategia será incremental, con etapas de mapeo de datos, validaciones y sincronización controlada para minimizar riesgos en producción.
 
 ## Requisitos
 
@@ -176,3 +188,46 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 | Servir frontend | `python -m http.server 5173` |
 
 ¡Listo! Ya puedes gestionar las órdenes de tu sastrería y ofrecer a tus clientes un portal de consulta.
+
+
+## Historial de cambios
+
+- **0.9.4 (2026-05-02)**: Se ajustó el límite por defecto de exportación a `max_pages=200` (antes 50) y se agregó metadata de corrida (`pages_fetched`, `hit_max_pages`) para detectar truncamientos de inventario.
+- **0.9.3 (2026-05-02)**: Se añadió exportación por jobs con polling de progreso real (páginas e items procesados) y feedback en frontend durante la carga de inventario.
+- **0.9.2 (2026-05-02)**: Se mejoró la UX del frontend de migración con feedback de progreso, estados descriptivos durante exportación y controles deshabilitados mientras se procesa.
+- **0.9.1 (2026-05-02)**: Se separó el módulo Odoo de este repositorio para mantener arquitectura desacoplada (ETL/CSV aquí, staging Odoo en repo externo).
+- **0.9.0 (2026-05-02)**: Se añadió un módulo Odoo `adams_csv_import_staging` para receptar CSV de inventario/stock en staging y se actualizaron validaciones de plantillas a `adams_product_template.csv` y `adams_stock_template.csv`.
+- **0.8.0 (2026-05-02)**: Se agregó flujo de migración operable desde frontend con botones para generar CSV de productos+stock, listar corridas y descargar archivos por run (`/odoo-migration/runs/*`).
+- **0.7.1 (2026-05-02)**: Se agregó validación estricta de columnas contra la plantilla `docs/odoo_import_templates/product_product_template.csv` antes de exportar CSV de productos.
+- **0.7.0 (2026-05-02)**: Se creó el módulo separado `odoo_migration` con parser SKU ADAMS y exportación de CSV (`product_product`, `initial_stock`, `migration_errors`, `mapping_report`) desde Contífico en modo solo lectura.
+- **0.6.5 (2026-05-02)**: Se eliminó el requisito de autenticación en endpoints temporales `/temp/contifico/*` para uso operativo del migrador y se estableció `https://api.adams.com.ec` como base URL por defecto del frontend.
+- **0.6.4 (2026-05-02)**: Se eliminó el manejo de token Bearer en la vista previa del migrador para operar sin capas de autenticación adicionales, y se ajustó el mensaje de error de conectividad.
+- **0.6.3 (2026-05-02)**: Se ajustó la vista previa para usar puerto API por defecto 9000 y se retiró el flujo de login en frontend según operación actual (token manual opcional).
+- **0.6.2 (2026-05-02)**: Se añadió login directo en la vista previa de Contífico (`/auth/login`) con guardado de token, para recuperar el flujo funcional sin copiar token manual en cada prueba.
+- **0.6.1 (2026-05-02)**: Se corrigió la configuración de conexión del frontend Contífico (vista previa) para usar `window.API_BASE_URL` o detectar `http://<host>:8000`, persistir base URL en navegador y mostrar errores claros de conectividad.
+- **0.6.0 (2026-05-02)**: Se restauró el enfoque de “Contífico (vista previa)” en frontend con tarjetas funcionales para productos, categorías, producto puntual, bodegas y facturas, usando endpoints `/temp/contifico/*`.
+- **0.5.0 (2026-05-02)**: Se creó un frontend de testing de API que carga automáticamente todos los métodos desde `/openapi.json`, permite ejecutar requests con token Bearer y exportar comando cURL.
+- **0.4.0 (2026-05-02)**: Se simplificó el frontend para dejar únicamente funcionalidades relacionadas al migrador Contífico → Odoo (transformación JSON, vista previa tabular y descarga CSV).
+- **0.3.0 (2026-05-02)**: Se agregó la base del migrador Contífico → Odoo con parsing de SKU (terno/camisa), mapeo de stocks por bodega (BPU/TUR/BAT) y pruebas unitarias iniciales.
+- **0.2.0**: Reorientación documental del repositorio hacia migración Contífico → Odoo.
+
+
+## Migración Odoo (fase CSV)
+
+Se agregó el endpoint `POST /odoo-migration/products-stock/export` para generar archivos CSV revisables desde datos de Contífico (solo lectura):
+
+- `product_product.csv`
+- `initial_stock.csv`
+- `migration_errors.csv`
+- `mapping_report.csv`
+
+Los archivos se guardan en `backend/data/odoo_migration/<timestamp>/`.
+
+
+## Repositorio del módulo Odoo (separado)
+
+El módulo Odoo de staging/importación se mantiene en un repositorio independiente:
+
+- https://github.com/IlPicasso/Modulo-Odoo-A-Contifico
+
+Este repositorio (`ContificoToOdoo`) queda dedicado al pipeline de extracción y generación de CSV revisables.
