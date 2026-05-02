@@ -1,56 +1,58 @@
 <!DOCTYPE html>
 <html lang="es">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Contífico → Odoo | API Tester</title>
-    <link rel="stylesheet" href="styles.css" />
+  <head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Contífico (vista previa)</title><link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <main class="container">
-      <h1>API Tester · Contífico → Odoo</h1>
-      <p class="lead">Página para probar todos los métodos de la API usando OpenAPI automáticamente.</p>
-
+      <h1>Contífico (vista previa)</h1>
+      <p class="lead">Panel para validar productos, categorías, bodegas y facturas desde la API temporal.</p>
       <section class="card">
-        <h2>Configuración</h2>
-        <label>Base URL API</label>
-        <input id="baseUrl" value="http://localhost:8000" />
-        <label>Token Bearer (opcional)</label>
-        <input id="token" placeholder="eyJ..." />
-        <button id="loadOpenApi">Cargar métodos desde /openapi.json</button>
+        <label>Base URL API</label><input id="baseUrl" value="http://localhost:8000" />
+        <label>Token Bearer (admin)</label><input id="token" placeholder="eyJ..." />
       </section>
 
-      <section class="card">
-        <h2>Ejecutar request</h2>
-        <label>Método detectado</label>
-        <select id="endpointSelect"></select>
-        <div class="row">
-          <div>
-            <label>Método</label>
-            <input id="method" />
-          </div>
-          <div>
-            <label>Path</label>
-            <input id="path" />
-          </div>
-        </div>
-        <label>Query params (JSON)</label>
-        <textarea id="query">{}</textarea>
-        <label>Headers extra (JSON)</label>
-        <textarea id="headers">{}</textarea>
-        <label>Body (JSON)</label>
-        <textarea id="body">{}</textarea>
-        <div class="actions">
-          <button id="sendBtn">Enviar</button>
-          <button id="curlBtn" class="secondary">Copiar cURL</button>
-        </div>
-      </section>
+      <section class="grid">
+        <article class="card"><h2>Productos</h2>
+          <input id="productsPage" type="number" value="1" min="1" placeholder="Página" />
+          <input id="productsPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
+          <input id="productsCategory" placeholder="Categoría (opcional)" />
+          <button id="loadProducts">Consultar productos</button>
+          <pre id="productsOut"></pre>
+        </article>
 
-      <section class="card">
-        <h2>Respuesta</h2>
-        <p id="status" class="status"></p>
-        <pre id="response"></pre>
+        <article class="card"><h2>Categorías</h2>
+          <button id="loadCategories">Cargar categorías</button>
+          <pre id="categoriesOut"></pre>
+        </article>
+
+        <article class="card"><h2>Producto específico</h2>
+          <input id="productId" placeholder="ID o código" />
+          <button id="loadProductDetail">Consultar producto</button>
+          <pre id="productDetailOut"></pre>
+        </article>
+
+        <article class="card"><h2>Bodegas</h2>
+          <button id="loadWarehouses">Cargar bodegas</button>
+          <pre id="warehousesOut"></pre>
+        </article>
+
+        <article class="card"><h2>Facturas por cliente</h2>
+          <input id="invDoc" placeholder="Documento cliente" />
+          <input id="invPage" type="number" value="1" min="1" placeholder="Página" />
+          <input id="invPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
+          <button id="loadInvoicesByCustomer">Consultar facturas</button>
+          <pre id="invoicesByCustomerOut"></pre>
+        </article>
+
+        <article class="card"><h2>Factura por cliente y número</h2>
+          <input id="invoiceCustomer" placeholder="Documento cliente" />
+          <input id="invoiceNumber" placeholder="Número de documento" />
+          <button id="loadInvoiceByNumber">Buscar detalle</button>
+          <pre id="invoiceByNumberOut"></pre>
+        </article>
       </section>
+      <p id="status" class="status"></p>
     </main>
     <script src="app.js"></script>
   </body>

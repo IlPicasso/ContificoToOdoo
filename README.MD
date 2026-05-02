@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 0.5.0
+Versión 0.6.0
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **0.6.0 (2026-05-02)**: Se restauró el enfoque de “Contífico (vista previa)” en frontend con tarjetas funcionales para productos, categorías, producto puntual, bodegas y facturas, usando endpoints `/temp/contifico/*`.
 - **0.5.0 (2026-05-02)**: Se creó un frontend de testing de API que carga automáticamente todos los métodos desde `/openapi.json`, permite ejecutar requests con token Bearer y exportar comando cURL.
 - **0.4.0 (2026-05-02)**: Se simplificó el frontend para dejar únicamente funcionalidades relacionadas al migrador Contífico → Odoo (transformación JSON, vista previa tabular y descarga CSV).
 - **0.3.0 (2026-05-02)**: Se agregó la base del migrador Contífico → Odoo con parsing de SKU (terno/camisa), mapeo de stocks por bodega (BPU/TUR/BAT) y pruebas unitarias iniciales.
