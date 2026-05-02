@@ -18,6 +18,10 @@
         <input id="exportMaxPages" type="number" value="50" min="1" max="500" placeholder="Max pages" />
         <button id="generateMigrationCsv">Generar CSV productos+stock</button>
         <button id="loadRuns">Ver últimas corridas</button>
+        <div id="migrationProgress" class="progress hidden">
+          <div id="migrationProgressBar" class="progress-bar"></div>
+        </div>
+        <p id="migrationStatus" class="muted"></p>
         <pre id="migrationSummaryOut"></pre>
         <div id="migrationLinks"></div>
       </section>

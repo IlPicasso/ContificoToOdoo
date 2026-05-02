@@ -40,8 +40,51 @@ async function apiPost(path, params = {}) {
   statusEl.textContent = `${resp.status} ${resp.statusText}`;
   return data;
 }
+
+
+let migrationProgressTimer = null;
+
+function setMigrationStatus(message) {
+  const el = $('migrationStatus');
+  if (el) el.textContent = message || '';
+}
 function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
 function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
+
+function setProgress(visible, value = 0) {
+  const wrap = $('migrationProgress');
+  const bar = $('migrationProgressBar');
+  if (!wrap || !bar) return;
+  wrap.classList.toggle('hidden', !visible);
+  bar.style.width = `${Math.max(0, Math.min(100, value))}%`;
+}
+
+function toggleMigrationButtons(disabled) {
+  $('generateMigrationCsv').disabled = disabled;
+  $('loadRuns').disabled = disabled;
+}
+
+function startProgressSimulation() {
+  let progress = 8;
+  setProgress(true, progress);
+  setMigrationStatus('Iniciando exportación...');
+  migrationProgressTimer = window.setInterval(() => {
+    progress = Math.min(progress + 7, 92);
+    setProgress(true, progress);
+    if (progress < 35) setMigrationStatus('Extrayendo productos de Contífico...');
+    else if (progress < 70) setMigrationStatus('Procesando SKU ADAMS y validando plantilla...');
+    else setMigrationStatus('Generando archivos CSV revisables...');
+  }, 450);
+}
+
+function stopProgressSimulation(success = true) {
+  if (migrationProgressTimer) {
+    window.clearInterval(migrationProgressTimer);
+    migrationProgressTimer = null;
+  }
+  setProgress(true, success ? 100 : 0);
+  if (success) setMigrationStatus('Exportación finalizada. Revisa el resumen y descarga los archivos.');
+}
 
 $('loadProducts').addEventListener('click', async () => {
   try {
@@ -95,18 +138,29 @@ function renderMigrationLinks(files) {
 
 $('generateMigrationCsv').addEventListener('click', async () => {
   try {
+    toggleMigrationButtons(true);
+    startProgressSimulation();
     const data = await apiPost('/odoo-migration/products-stock/export', {
       page_size: $('exportPageSize').value,
       max_pages: $('exportMaxPages').value,
     });
+    stopProgressSimulation(true);
     show('migrationSummaryOut', data);
     renderMigrationLinks(data.files);
-  } catch (e) { showErr(e); }
+  } catch (e) {
+    stopProgressSimulation(false);
+    setMigrationStatus('La exportación falló. Revisa el detalle de error global.');
+    showErr(e);
+  } finally {
+    toggleMigrationButtons(false);
+  }
 });
 
 $('loadRuns').addEventListener('click', async () => {
   try {
+    setMigrationStatus('Consultando últimas corridas...');
     const data = await apiGet('/odoo-migration/runs', { limit: 20 });
     show('migrationSummaryOut', data);
+    setMigrationStatus('Corridas cargadas.');
   } catch (e) { showErr(e); }
 });

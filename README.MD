@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 0.9.1
+Versión 0.9.2
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **0.9.2 (2026-05-02)**: Se mejoró la UX del frontend de migración con feedback de progreso, estados descriptivos durante exportación y controles deshabilitados mientras se procesa.
 - **0.9.1 (2026-05-02)**: Se separó el módulo Odoo de este repositorio para mantener arquitectura desacoplada (ETL/CSV aquí, staging Odoo en repo externo).
 - **0.9.0 (2026-05-02)**: Se añadió un módulo Odoo `adams_csv_import_staging` para receptar CSV de inventario/stock en staging y se actualizaron validaciones de plantillas a `adams_product_template.csv` y `adams_stock_template.csv`.
 - **0.8.0 (2026-05-02)**: Se agregó flujo de migración operable desde frontend con botones para generar CSV de productos+stock, listar corridas y descargar archivos por run (`/odoo-migration/runs/*`).

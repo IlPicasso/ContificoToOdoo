@@ -9,3 +9,9 @@ button{background:#111827;color:#fff;cursor:pointer} pre{background:#0b1020;colo
 
 .download-link{display:block;margin:6px 0;color:#1d4ed8;text-decoration:none;font-weight:600}
 .download-link:hover{text-decoration:underline}
+
+.muted{color:#6b7280;font-size:13px}
+.hidden{display:none}
+.progress{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:10px 0}
+.progress-bar{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#10b981);transition:width .35s ease}
+button:disabled{opacity:.55;cursor:not-allowed}
