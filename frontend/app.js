@@ -1,6 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
 const BASE_URL_STORAGE_KEY = 'contifico.preview.apiBaseUrl';
+const TOKEN_STORAGE_KEY = 'contifico.preview.token';
 
 const DEFAULT_API_BASE_URL = (window.API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8000`).trim();
 
@@ -61,7 +62,34 @@ $('loadInvoiceByNumber').addEventListener('click', async () => {
 (function initBaseUrl(){
   const saved = window.localStorage.getItem(BASE_URL_STORAGE_KEY);
   $('baseUrl').value = saved || DEFAULT_API_BASE_URL;
+  const savedToken = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (savedToken) $('token').value = savedToken;
   $('baseUrl').addEventListener('change', () => {
     window.localStorage.setItem(BASE_URL_STORAGE_KEY, $('baseUrl').value.trim());
   });
+  $('token').addEventListener('change', () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, $('token').value.trim());
+  });
 })();
+
+async function loginAndStoreToken() {
+  const username = $('username').value.trim();
+  const password = $('password').value;
+  if (!username || !password) throw new Error('Debes ingresar usuario y contraseña.');
+  const resp = await fetch(`${base()}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const payload = await resp.json();
+  if (!resp.ok) throw new Error(payload?.detail || `Login falló (${resp.status})`);
+  const token = payload?.access_token || '';
+  if (!token) throw new Error('No se recibió token en /auth/login');
+  $('token').value = token;
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  statusEl.textContent = 'Login correcto. Token guardado.';
+}
+
+$('loginBtn').addEventListener('click', async () => {
+  try { await loginAndStoreToken(); } catch (e) { showErr(e); }
+});
