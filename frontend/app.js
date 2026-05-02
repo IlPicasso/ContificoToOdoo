@@ -48,6 +48,8 @@ function setMigrationStatus(message) {
   const el = $('migrationStatus');
   if (el) el.textContent = message || '';
 }
+function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
+function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
 
 function setProgress(visible, value = 0) {
   const wrap = $('migrationProgress');
