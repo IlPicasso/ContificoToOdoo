@@ -6,3 +6,6 @@ input,button{width:100%;padding:8px;border-radius:8px;border:1px solid #d1d5db;m
 button{background:#111827;color:#fff;cursor:pointer} pre{background:#0b1020;color:#d1fae5;padding:10px;border-radius:8px;max-height:220px;overflow:auto}
 .status{font-weight:600;margin-top:12px}
 @media (max-width:900px){.grid{grid-template-columns:1fr}}
+
+.download-link{display:block;margin:6px 0;color:#1d4ed8;text-decoration:none;font-weight:600}
+.download-link:hover{text-decoration:underline}

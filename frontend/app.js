@@ -27,6 +27,22 @@ async function apiGet(path, params = {}) {
 function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
 function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
 
+async function apiPost(path, params = {}) {
+  const url = new URL(`${base()}${path}`);
+  Object.entries(params).forEach(([k, v]) => { if (v !== "" && v != null) url.searchParams.set(k, String(v)); });
+  let resp;
+  try { resp = await fetch(url, { method: "POST" }); } catch (error) {
+    throw new Error(`No se pudo conectar con ${base()}. Verifica URL, puerto, CORS/SSL y que la API esté arriba.`);
+  }
+  const text = await resp.text();
+  let data; try { data = JSON.parse(text); } catch { data = text; }
+  if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === "string" ? data : JSON.stringify(data)}`);
+  statusEl.textContent = `${resp.status} ${resp.statusText}`;
+  return data;
+}
+function show(outId, data) { $(outId).textContent = JSON.stringify(data, null, 2); }
+function showErr(err) { statusEl.textContent = `Error: ${err.message}`; }
+
 $('loadProducts').addEventListener('click', async () => {
   try {
     const data = await apiGet('/temp/contifico/products', { page: $('productsPage').value, page_size: $('productsPageSize').value, category_id: $('productsCategory').value });
@@ -62,3 +78,35 @@ $('loadInvoiceByNumber').addEventListener('click', async () => {
   });
 })();
 
+
+function renderMigrationLinks(files) {
+  const container = $('migrationLinks');
+  container.innerHTML = '';
+  Object.entries(files || {}).forEach(([label, path]) => {
+    const a = document.createElement('a');
+    a.href = `${base()}${path}`;
+    a.textContent = `Descargar ${label}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.className = 'download-link';
+    container.appendChild(a);
+  });
+}
+
+$('generateMigrationCsv').addEventListener('click', async () => {
+  try {
+    const data = await apiPost('/odoo-migration/products-stock/export', {
+      page_size: $('exportPageSize').value,
+      max_pages: $('exportMaxPages').value,
+    });
+    show('migrationSummaryOut', data);
+    renderMigrationLinks(data.files);
+  } catch (e) { showErr(e); }
+});
+
+$('loadRuns').addEventListener('click', async () => {
+  try {
+    const data = await apiGet('/odoo-migration/runs', { limit: 20 });
+    show('migrationSummaryOut', data);
+  } catch (e) { showErr(e); }
+});
