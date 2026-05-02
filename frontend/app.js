@@ -1,7 +1,13 @@
 const $ = (id) => document.getElementById(id);
 const statusEl = $('status');
+const BASE_URL_STORAGE_KEY = 'contifico.preview.apiBaseUrl';
 
-function base() { return $('baseUrl').value.trim().replace(/\/$/, ''); }
+const DEFAULT_API_BASE_URL = (window.API_BASE_URL || `${window.location.protocol}//${window.location.hostname}:8000`).trim();
+
+function base() {
+  const value = $('baseUrl').value.trim() || DEFAULT_API_BASE_URL;
+  return value.replace(/\/$/, '');
+}
 function authHeaders() {
   const token = $('token').value.trim();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -9,7 +15,12 @@ function authHeaders() {
 async function apiGet(path, params = {}) {
   const url = new URL(`${base()}${path}`);
   Object.entries(params).forEach(([k, v]) => { if (v !== '' && v != null) url.searchParams.set(k, String(v)); });
-  const resp = await fetch(url, { headers: authHeaders() });
+  let resp;
+  try {
+    resp = await fetch(url, { headers: authHeaders() });
+  } catch (error) {
+    throw new Error(`No se pudo conectar con ${base()}. Verifica API_BASE_URL/puerto/CORS y que la API esté arriba.`);
+  }
   const text = await resp.text();
   let data;
   try { data = JSON.parse(text); } catch { data = text; }
@@ -45,3 +56,12 @@ $('loadInvoiceByNumber').addEventListener('click', async () => {
     show('invoiceByNumberOut', await apiGet('/temp/contifico/invoices/by-number', { customer_document: $('invoiceCustomer').value, document_number: $('invoiceNumber').value }));
   } catch (e) { showErr(e); }
 });
+
+
+(function initBaseUrl(){
+  const saved = window.localStorage.getItem(BASE_URL_STORAGE_KEY);
+  $('baseUrl').value = saved || DEFAULT_API_BASE_URL;
+  $('baseUrl').addEventListener('change', () => {
+    window.localStorage.setItem(BASE_URL_STORAGE_KEY, $('baseUrl').value.trim());
+  });
+})();
