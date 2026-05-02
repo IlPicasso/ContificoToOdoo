@@ -20,7 +20,8 @@ PRODUCT_COLUMNS = [
 ]
 STOCK_COLUMNS = ["sku","ubicacion_odoo","cantidad","costo_unitario"]
 ERROR_COLUMNS = ["sku","nombre_contifico","problema","sugerencia"]
-TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/product_product_template.csv"
+TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_product_template.csv"
+TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_stock_template.csv"
 
 MAP_COLUMNS = ["sku","nombre_contifico","producto_madre_detectado","categoria_odoo_detectada","talla_detectada","manga_detectada","marca_detectada","color_detectado","barcode","precio","costo","stock_bpu","stock_tur","stock_bat","estado"]
 
@@ -135,6 +136,12 @@ class OdooMigrationService:
             raise ValueError(
                 "Las columnas de product_product.csv no coinciden con la plantilla Odoo. "
                 f"Esperado={expected} Actual={PRODUCT_COLUMNS}"
+            )
+        expected_stock = self._read_header(TEMPLATE_STOCK_PATH)
+        if expected_stock != STOCK_COLUMNS:
+            raise ValueError(
+                "Las columnas de initial_stock.csv no coinciden con la plantilla Odoo. "
+                f"Esperado={expected_stock} Actual={STOCK_COLUMNS}"
             )
 
     def _fetch_products(self, *, page_size: int, max_pages: int) -> list[dict[str, Any]]:
