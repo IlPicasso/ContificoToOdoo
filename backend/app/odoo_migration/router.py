@@ -27,7 +27,7 @@ def _set_job(job_id: str, payload: dict):
 @router.post("/products-stock/export")
 def export_products_stock(
     page_size: int = Query(default=200, ge=1, le=500),
-    max_pages: int = Query(default=50, ge=1, le=500),
+    max_pages: int = Query(default=200, ge=1, le=1000),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     service = OdooMigrationService(contifico_client)
@@ -44,13 +44,15 @@ def export_products_stock(
         },
         "total_products": output.total_products,
         "total_errors": output.total_errors,
+        "pages_fetched": output.pages_fetched,
+        "hit_max_pages": output.hit_max_pages,
     }
 
 
 @router.post("/products-stock/export-jobs")
 def start_export_job(
     page_size: int = Query(default=200, ge=1, le=500),
-    max_pages: int = Query(default=50, ge=1, le=500),
+    max_pages: int = Query(default=200, ge=1, le=1000),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     job_id = str(uuid4())
@@ -76,6 +78,10 @@ def start_export_job(
                 },
                 "total_products": output.total_products,
                 "total_errors": output.total_errors,
+                "pages_fetched": output.pages_fetched,
+                "hit_max_pages": output.hit_max_pages,
+        "pages_fetched": output.pages_fetched,
+        "hit_max_pages": output.hit_max_pages,
             })
         except Exception as exc:  # pragma: no cover
             _set_job(job_id, {"status": "failed", "error": str(exc)})

@@ -34,6 +34,8 @@ class MigrationOutput:
     mapping_csv: Path
     total_products: int
     total_errors: int
+    pages_fetched: int
+    hit_max_pages: bool
 
 
 class OdooMigrationService:
@@ -51,7 +53,7 @@ class OdooMigrationService:
         errors_csv = folder / "migration_errors.csv"
         mapping_csv = folder / "mapping_report.csv"
 
-        products = self._fetch_products(page_size=page_size, max_pages=max_pages, progress_callback=progress_callback)
+        products, pages_fetched, hit_max_pages = self._fetch_products(page_size=page_size, max_pages=max_pages, progress_callback=progress_callback)
 
         product_rows, stock_rows, error_rows, map_rows = [], [], [], []
         seen_skus, seen_barcodes = set(), set()
@@ -124,7 +126,7 @@ class OdooMigrationService:
         self._write_csv(mapping_csv, MAP_COLUMNS, map_rows)
         if progress_callback:
             progress_callback({"stage": "completed", "processed_items": total, "total_items": total})
-        return MigrationOutput(folder, product_csv, stock_csv, errors_csv, mapping_csv, len(product_rows), len(error_rows))
+        return MigrationOutput(folder, product_csv, stock_csv, errors_csv, mapping_csv, len(product_rows), len(error_rows), pages_fetched, hit_max_pages)
 
 
     @staticmethod
@@ -149,12 +151,14 @@ class OdooMigrationService:
                 f"Esperado={expected_stock} Actual={STOCK_COLUMNS}"
             )
 
-    def _fetch_products(self, *, page_size: int, max_pages: int, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> list[dict[str, Any]]:
+    def _fetch_products(self, *, page_size: int, max_pages: int, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> tuple[list[dict[str, Any]], int, bool]:
         all_items = []
+        pages_fetched = 0
         for page in range(1, max_pages + 1):
             if progress_callback:
                 progress_callback({"stage": "fetching", "page": page, "max_pages": max_pages, "found_items": len(all_items)})
             batch = list(self.client.list_products(page=page, page_size=page_size))
+            pages_fetched = page
             if not batch:
                 break
             all_items.extend([b for b in batch if isinstance(b, dict)])
@@ -162,7 +166,8 @@ class OdooMigrationService:
                 progress_callback({"stage": "fetched_page", "page": page, "fetched": len(batch), "found_items": len(all_items)})
             if len(batch) < page_size:
                 break
-        return all_items
+        hit_max_pages = pages_fetched >= max_pages
+        return all_items, pages_fetched, hit_max_pages
 
     @staticmethod
     def _write_csv(path: Path, columns: list[str], rows: list[dict[str, Any]]) -> None:

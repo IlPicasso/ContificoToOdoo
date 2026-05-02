@@ -143,7 +143,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
         done = true;
         show('migrationSummaryOut', job);
         renderMigrationLinks(job.files);
-        setMigrationStatus('Exportación completada. Descarga los archivos generados.');
+        setMigrationStatus(job.hit_max_pages ? 'Exportación completada pero alcanzó el límite de páginas. Sube Max pages para traer más.' : 'Exportación completada. Descarga los archivos generados.');
       }
     }
   } catch (e) {
