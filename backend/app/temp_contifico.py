@@ -5,7 +5,7 @@ from fastapi.concurrency import run_in_threadpool
 
 from . import schemas
 from .contifico import ContificoAPIError, ContificoClient, ContificoTransportError
-from .dependencies import admin_required, get_contifico_client
+from .dependencies import get_contifico_client
 from .invoice_jobs import get_invoice_lookup_job_manager
 
 
@@ -234,11 +234,9 @@ def preview_contifico_products(
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     category_id: str | None = Query(default=None),
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Vista temporal de productos obtenidos desde Contífico."""
 
-    _ = current_user
     return build_product_page(
         contifico_client,
         page=page,
@@ -251,11 +249,9 @@ def preview_contifico_products(
 def preview_contifico_product_detail(
     product_id: str,
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Detalle temporal de un producto obtenido desde Contífico."""
 
-    _ = current_user
     return fetch_product_detail(contifico_client, product_id=product_id)
 
 
@@ -265,22 +261,18 @@ def preview_contifico_product_detail(
 )
 def preview_contifico_product_categories(
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Lista temporal de categorías de productos desde Contífico."""
 
-    _ = current_user
     return build_product_category_list(contifico_client)
 
 
 @router.get("/warehouses", response_model=list[schemas.ContificoWarehouse])
 def preview_contifico_warehouses(
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Vista temporal de bodegas configuradas en Contífico."""
 
-    _ = current_user
     return build_warehouse_list(contifico_client)
 
 
@@ -290,11 +282,9 @@ def preview_contifico_invoices_by_customer(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Consulta facturas filtrando por la cédula o RUC del cliente."""
 
-    _ = current_user
     normalized_document = document_id.strip()
     return build_invoice_page(
         contifico_client,
@@ -309,11 +299,9 @@ async def preview_contifico_invoice_by_number(
     document_number: str = Query(..., min_length=3, max_length=40),
     customer_document: str = Query(..., min_length=3, max_length=30),
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Busca una factura por su número de documento validando el cliente."""
 
-    _ = current_user
     normalized_number = document_number.strip()
     normalized_customer = customer_document.strip()
     return await run_in_threadpool(
@@ -332,11 +320,9 @@ async def preview_contifico_invoice_by_customer_and_number(
     customer_document: str = Query(..., min_length=3, max_length=30),
     document_number: str = Query(..., min_length=3, max_length=40),
     contifico_client: ContificoClient = Depends(get_contifico_client),
-    current_user=Depends(admin_required()),
 ):
     """Busca una factura específica combinando cliente y número de documento."""
 
-    _ = current_user
     normalized_customer = customer_document.strip()
     normalized_number = document_number.strip()
     return await run_in_threadpool(
@@ -355,11 +341,9 @@ async def preview_contifico_invoice_by_customer_and_number(
 async def start_contifico_invoice_lookup_job(
     payload: schemas.ContificoInvoiceLookupRequest,
     job_manager=Depends(get_invoice_lookup_job_manager),
-    current_user=Depends(admin_required()),
 ):
     """Inicia una búsqueda asíncrona de factura en Contífico."""
 
-    _ = current_user
     try:
         job = await job_manager.start_job(
             payload.document_number, customer_document=payload.customer_document
@@ -379,11 +363,9 @@ async def start_contifico_invoice_lookup_job(
 async def get_contifico_invoice_lookup_job(
     job_id: str,
     job_manager=Depends(get_invoice_lookup_job_manager),
-    current_user=Depends(admin_required()),
 ):
     """Recupera el estado actual de un trabajo de búsqueda de factura."""
 
-    _ = current_user
     job = await job_manager.get_job(job_id)
     if job is None:
         raise HTTPException(
@@ -401,3 +383,20 @@ __all__ = [
     "fetch_invoice_by_document_number",
     "fetch_invoice_by_customer_and_document",
 ]
+
+
+@router.get("/products/{product_id}/stock")
+def preview_contifico_product_stock(
+    product_id: str,
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+):
+    """Stock por bodega para un producto específico (requiere ID de producto Contífico)."""
+
+    try:
+        return contifico_client.get_product_stock(product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ContificoTransportError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.detail) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
