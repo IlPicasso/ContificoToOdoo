@@ -4,11 +4,12 @@ from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 
 from ..contifico import ContificoClient
 from ..dependencies import get_contifico_client
+from .rules import CATEGORY_ALIASES
 from .service import OdooMigrationService
 from .stock_worker import StockWorker
 
@@ -39,6 +40,7 @@ def _build_files(run_id: str) -> dict[str, str]:
     return {
         "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
         "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
+        "stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant.csv",
         "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
         "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
         "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
@@ -47,11 +49,79 @@ def _build_files(run_id: str) -> dict[str, str]:
     }
 
 
+def _snapshot_path() -> Path:
+    return Path(__file__).resolve().parents[3] / 'config/odoo_catalog_snapshot.json'
+
+
+@router.post('/odoo-attributes/snapshot/upload')
+async def upload_odoo_snapshot_csv(kind: str = Query(..., pattern='^(attributes|categories)$'), file: UploadFile = File(...)):
+    raw = await file.read()
+    text = raw.decode('utf-8-sig', errors='ignore')
+    values: list[str] = []
+    for line in text.splitlines():
+        value = line.strip().strip('"')
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in {'name', 'nombre', 'attribute', 'categoria', 'category'}:
+            continue
+        values.append(value)
+    if not values:
+        raise HTTPException(status_code=400, detail='CSV vacío o sin valores válidos.')
+
+    snapshot_path = _snapshot_path()
+    snapshot = {'attributes': [], 'categories': []}
+    if snapshot_path.exists():
+        snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    snapshot[kind] = sorted(list(dict.fromkeys(values)))
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding='utf-8')
+    return {'ok': True, 'kind': kind, 'count': len(snapshot[kind]), 'snapshot_path': str(snapshot_path)}
+
+
+@router.get('/odoo-attributes/precheck-offline')
+def precheck_odoo_attributes_offline():
+    snapshot_path = _snapshot_path()
+    if not snapshot_path.exists():
+        raise HTTPException(status_code=404, detail='No existe config/odoo_catalog_snapshot.json')
+    snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    current_attrs = {str(a).strip() for a in snapshot.get('attributes', []) if str(a).strip()}
+    current_cats = {str(c).strip() for c in snapshot.get('categories', []) if str(c).strip()}
+
+    expected_attrs = {'Talla', 'Manga de Camisa', 'Ancho de Corbata', 'Marca', 'Color'}
+    alias_attr = {'Ancho Corbata': 'Ancho de Corbata'}
+    normalized_current_attrs = {alias_attr.get(a, a) for a in current_attrs}
+    missing_attrs = sorted(list(expected_attrs - normalized_current_attrs))
+
+    expected_categories = sorted(set(CATEGORY_ALIASES.values()) | {
+        'Ropa / Ternos', 'Ropa / Camisas', 'Ropa / Corbatas', 'Ropa / Hombres / Zapatos', 'Ropa / Mujeres / Zapatos'
+    })
+    missing_categories = [c for c in expected_categories if c not in current_cats]
+    recommendations = []
+    if missing_attrs:
+        recommendations.append('Crear atributos faltantes en Odoo según attributes_missing.')
+    if missing_categories:
+        recommendations.append('Crear categorías faltantes en Odoo según categories_missing.')
+    if not missing_attrs and not missing_categories:
+        recommendations.append('Catálogo local completo. Puedes exportar con include_brand_color_attributes=true.')
+    return {
+        'mode': 'offline_catalog_snapshot',
+        'snapshot_path': str(snapshot_path),
+        'attributes_current_total': len(current_attrs),
+        'categories_current_total': len(current_cats),
+        'attributes_missing': missing_attrs,
+        'categories_missing': missing_categories,
+        'can_enable_brand_color_export': all(a not in missing_attrs for a in ('Marca', 'Color')),
+        'ready_for_product_import': len(missing_categories) == 0,
+        'recommendations': recommendations,
+    }
+
+
 @router.post("/products-stock/export")
 def export_products_stock(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
+    include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     service = OdooMigrationService(contifico_client)
@@ -59,6 +129,7 @@ def export_products_stock(
         page_size=page_size,
         max_pages=max_pages,
         export_stock=export_stock,
+        include_brand_color_attributes=include_brand_color_attributes,
     )
     run_id = output.folder.name
     return {
@@ -78,6 +149,7 @@ def start_export_job(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
+    include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     job_id = str(uuid4())
@@ -90,6 +162,7 @@ def start_export_job(
                 page_size=page_size,
                 max_pages=max_pages,
                 export_stock=export_stock,
+                include_brand_color_attributes=include_brand_color_attributes,
                 progress_callback=lambda p: _set_job(job_id, p),
             )
             run_id = output.folder.name
@@ -136,6 +209,7 @@ def download_file(run_id: str, filename: str):
     allowed = {
         "product_product.csv",
         "initial_stock.csv",
+        "stock_quant.csv",
         "migration_errors.csv",
         "mapping_report.csv",
         "excluded_zero_stock.csv",
