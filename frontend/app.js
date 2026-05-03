@@ -168,3 +168,41 @@ $('loadRuns').addEventListener('click', async () => {
     setMigrationStatus('Corridas cargadas.');
   } catch (e) { showErr(e); }
 });
+
+
+function activateTab(name) {
+  document.querySelectorAll('.tab-btn').forEach((b)=>b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.tab-panel').forEach((p)=>p.classList.toggle('active', p.id===`tab-${name}`));
+}
+document.querySelectorAll('.tab-btn').forEach((btn)=>btn.addEventListener('click',()=>activateTab(btn.dataset.tab)));
+
+function getRunId(){ return $('stockRunId').value.trim(); }
+function setStockStatus(msg){ const el=$('stockStatusText'); if(el) el.textContent=msg||''; }
+
+$('startStockPhase').addEventListener('click', async ()=>{
+  try{
+    const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id');
+    setStockStatus('Iniciando Fase 2...');
+    const data=await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/start`);
+    show('stockStatusOut', data); setStockStatus('Fase 2 iniciada.');
+  }catch(e){ showErr(e); }
+});
+
+$('checkStockStatus').addEventListener('click', async ()=>{
+  try{
+    const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id');
+    const data=await apiGet(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/status`);
+    show('stockStatusOut', data);
+    setStockStatus(`Progreso: ${data.done||0}/${data.total||0} · pendientes: ${data.pending||0} · fallidos: ${data.failed||0} · ${data.percent||0}%`);
+  }catch(e){ showErr(e); }
+});
+
+$('pauseStockPhase').addEventListener('click', async ()=>{
+  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/pause`)); setStockStatus('Fase 2 pausada.'); }catch(e){ showErr(e); }
+});
+$('resumeStockPhase').addEventListener('click', async ()=>{
+  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/resume`)); setStockStatus('Fase 2 reanudada.'); }catch(e){ showErr(e); }
+});
+$('retryStockFailed').addEventListener('click', async ()=>{
+  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/retry-failed`)); setStockStatus('Reintento de fallidos iniciado.'); }catch(e){ showErr(e); }
+});

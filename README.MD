@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.10
+Versión 1.0.12
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -147,6 +147,47 @@ python -m http.server 5173
 
 Luego visita `http://localhost:5173` en tu navegador. Asegúrate de que el backend esté funcionando en `http://localhost:8000`.
 
+
+### Ejecutar Fase 2 (stock por bodega) después de la Fase 1
+
+1. Ejecuta la exportación inicial (Fase 1) y guarda el `run_id` de la respuesta:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/odoo-migration/products-stock/export?export_stock=false"
+```
+
+2. Inicia el worker de stock (Fase 2) usando ese `run_id`:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/stock/start"
+```
+
+3. Monitorea progreso detallado (pendientes, completados, fallidos, porcentaje, ETA):
+
+```bash
+curl "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/stock/status"
+```
+
+4. Si necesitas pausar/reanudar:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/stock/pause"
+curl -X POST "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/stock/resume"
+```
+
+5. Si hubo fallidos, reintenta solo los errores:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/stock/retry-failed"
+```
+
+6. Descarga resultados parciales/finales:
+
+```bash
+curl -O "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/files/initial_stock.csv"
+curl -O "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/files/stock_errors.csv"
+```
+
 ## Roles disponibles
 
 - **Administrador**: crear usuarios, gestionar clientes y órdenes, consultar la bitácora y eliminar registros.
@@ -192,6 +233,8 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.12 (2026-05-03)**: Se rediseñó el frontend para operar por pestañas (Fase 1 / Fase 2 / Preview), incorporando controles directos para iniciar/monitorear/pausar/reanudar/reintentar la Fase 2 desde UI.
+- **1.0.11 (2026-05-03)**: Se documentó el procedimiento operativo para disparar la Fase 2 de stock tras la Fase 1, incluyendo endpoints `start/status/pause/resume/retry-failed` y descarga de `initial_stock.csv`/`stock_errors.csv`.
 - **1.0.10 (2026-05-03)**: Se añadió worker de stock por corrida (`stock_worker.py`) con procesamiento por lotes/concurrencia configurable (`STOCK_BATCH_SIZE`, `STOCK_MAX_CONCURRENCY`, `STOCK_RPS_LIMIT`), retries con backoff+jitter para errores 429/5xx, checkpoints por batch (`stock_state.json`, `initial_stock.csv`) y endpoints de control/estado (`start`, `status`, `retry-failed`, `pause`, `resume`) más `stock_errors.csv`.
 - **1.0.9 (2026-05-03)**: Se separó la exportación en 2 fases en `OdooMigrationService`: (1) snapshot de productos y cierre de `product_product.csv` sin bloquearse por stock por bodega, (2) enriquecimiento progresivo de stock por `id` de producto con estado persistente por item (`stock_state.json`) y snapshot intermedio (`products_snapshot.jsonl`).
 - **1.0.8 (2026-05-03)**: Se amplió `config/warehouse_catalog.json` con el cruce de códigos/nombres de bodegas Contífico hacia ubicaciones Odoo (incluyendo BSR/OFA/BMT/B2/BW/BM/BTL), y la exportación de stock ahora soporta estas ubicaciones en `initial_stock.csv`.

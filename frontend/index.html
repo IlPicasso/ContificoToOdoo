@@ -6,65 +6,86 @@
   <body>
     <main class="container">
       <h1>Contífico (vista previa)</h1>
-      <p class="lead">Panel para validar productos, categorías, bodegas y facturas desde la API temporal. Usa <code>window.API_BASE_URL</code> o usa por defecto <code>https://api.adams.com.ec</code> (configurable).</p>
+      <p class="lead">Panel para operar migración por fases y validar endpoints de Contífico.</p>
       <section class="card">
         <label>Base URL API</label><input id="baseUrl" placeholder="https://api.adams.com.ec" />
       </section>
 
-      
-      <section class="card">
-        <h2>Migración Odoo (CSV)</h2>
+      <section class="tabs">
+        <button class="tab-btn active" data-tab="phase1">Fase 1 · Snapshot</button>
+        <button class="tab-btn" data-tab="phase2">Fase 2 · Stock</button>
+        <button class="tab-btn" data-tab="preview">Preview Contífico</button>
+      </section>
+
+      <section id="tab-phase1" class="tab-panel active card">
+        <h2>Fase 1: Migración Odoo (snapshot CSV)</h2>
         <input id="exportPageSize" type="number" value="200" min="1" max="500" placeholder="Page size" />
         <input id="exportMaxPages" type="number" value="200" min="1" max="500" placeholder="Max pages" />
-        <button id="generateMigrationCsv">Generar CSV productos+stock</button>
+        <button id="generateMigrationCsv">Generar corrida Fase 1</button>
         <button id="loadRuns">Ver últimas corridas</button>
-        <div id="migrationProgress" class="progress hidden">
-          <div id="migrationProgressBar" class="progress-bar"></div>
-        </div>
+        <div id="migrationProgress" class="progress hidden"><div id="migrationProgressBar" class="progress-bar"></div></div>
         <p id="migrationStatus" class="muted"></p>
         <pre id="migrationSummaryOut"></pre>
         <div id="migrationLinks"></div>
       </section>
 
-      <section class="grid">
-        <article class="card"><h2>Productos</h2>
-          <input id="productsPage" type="number" value="1" min="1" placeholder="Página" />
-          <input id="productsPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
-          <input id="productsCategory" placeholder="Categoría (opcional)" />
-          <button id="loadProducts">Consultar productos</button>
-          <pre id="productsOut"></pre>
-        </article>
+      <section id="tab-phase2" class="tab-panel card">
+        <h2>Fase 2: Enriquecimiento de stock por bodega</h2>
+        <input id="stockRunId" placeholder="Run ID generado en Fase 1" />
+        <div class="row-btns">
+          <button id="startStockPhase">Iniciar Fase 2</button>
+          <button id="checkStockStatus">Consultar estado</button>
+        </div>
+        <div class="row-btns">
+          <button id="pauseStockPhase">Pausar</button>
+          <button id="resumeStockPhase">Reanudar</button>
+          <button id="retryStockFailed">Reintentar fallidos</button>
+        </div>
+        <p id="stockStatusText" class="muted"></p>
+        <pre id="stockStatusOut"></pre>
+      </section>
 
-        <article class="card"><h2>Categorías</h2>
-          <button id="loadCategories">Cargar categorías</button>
-          <pre id="categoriesOut"></pre>
-        </article>
+      <section id="tab-preview" class="tab-panel">
+        <section class="grid">
+          <article class="card"><h2>Productos</h2>
+            <input id="productsPage" type="number" value="1" min="1" placeholder="Página" />
+            <input id="productsPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
+            <input id="productsCategory" placeholder="Categoría (opcional)" />
+            <button id="loadProducts">Consultar productos</button>
+            <pre id="productsOut"></pre>
+          </article>
 
-        <article class="card"><h2>Producto específico</h2>
-          <input id="productId" placeholder="ID o código" />
-          <button id="loadProductDetail">Consultar producto</button>
-          <pre id="productDetailOut"></pre>
-        </article>
+          <article class="card"><h2>Categorías</h2>
+            <button id="loadCategories">Cargar categorías</button>
+            <pre id="categoriesOut"></pre>
+          </article>
 
-        <article class="card"><h2>Bodegas</h2>
-          <button id="loadWarehouses">Cargar bodegas</button>
-          <pre id="warehousesOut"></pre>
-        </article>
+          <article class="card"><h2>Producto específico</h2>
+            <input id="productId" placeholder="ID o código" />
+            <button id="loadProductDetail">Consultar producto</button>
+            <pre id="productDetailOut"></pre>
+          </article>
 
-        <article class="card"><h2>Facturas por cliente</h2>
-          <input id="invDoc" placeholder="Documento cliente" />
-          <input id="invPage" type="number" value="1" min="1" placeholder="Página" />
-          <input id="invPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
-          <button id="loadInvoicesByCustomer">Consultar facturas</button>
-          <pre id="invoicesByCustomerOut"></pre>
-        </article>
+          <article class="card"><h2>Bodegas</h2>
+            <button id="loadWarehouses">Cargar bodegas</button>
+            <pre id="warehousesOut"></pre>
+          </article>
 
-        <article class="card"><h2>Factura por cliente y número</h2>
-          <input id="invoiceCustomer" placeholder="Documento cliente" />
-          <input id="invoiceNumber" placeholder="Número de documento" />
-          <button id="loadInvoiceByNumber">Buscar detalle</button>
-          <pre id="invoiceByNumberOut"></pre>
-        </article>
+          <article class="card"><h2>Facturas por cliente</h2>
+            <input id="invDoc" placeholder="Documento cliente" />
+            <input id="invPage" type="number" value="1" min="1" placeholder="Página" />
+            <input id="invPageSize" type="number" value="25" min="1" max="200" placeholder="Filas" />
+            <button id="loadInvoicesByCustomer">Consultar facturas</button>
+            <pre id="invoicesByCustomerOut"></pre>
+          </article>
+
+          <article class="card"><h2>Factura por cliente y número</h2>
+            <input id="invoiceCustomer" placeholder="Documento cliente" />
+            <input id="invoiceNumber" placeholder="Número de documento" />
+            <button id="loadInvoiceByNumber">Buscar detalle</button>
+            <pre id="invoiceByNumberOut"></pre>
+          </article>
+        </section>
       </section>
       <p id="status" class="status"></p>
     </main>

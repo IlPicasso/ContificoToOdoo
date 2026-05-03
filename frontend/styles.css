@@ -15,3 +15,10 @@ button{background:#111827;color:#fff;cursor:pointer} pre{background:#0b1020;colo
 .progress{height:10px;background:#e5e7eb;border-radius:999px;overflow:hidden;margin:10px 0}
 .progress-bar{height:100%;width:0;background:linear-gradient(90deg,#2563eb,#10b981);transition:width .35s ease}
 button:disabled{opacity:.55;cursor:not-allowed}
+.tabs{display:flex;gap:8px;margin:12px 0}
+.tab-btn{width:auto;padding:10px 14px;background:#e5e7eb;color:#111827;border:1px solid #d1d5db}
+.tab-btn.active{background:#111827;color:#fff}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.row-btns{display:flex;gap:8px;flex-wrap:wrap}
+.row-btns button{flex:1}
