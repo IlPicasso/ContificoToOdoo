@@ -68,3 +68,14 @@ def test_warehouse_catalog_file_exists():
     data = json.loads(path.read_text(encoding="utf-8"))
     codes = {w.get("codigo") for w in data}
     assert {"BOD001", "BOD002", "BOD009", "B01LV"}.issubset(codes)
+
+
+def test_detect_gendered_categories_men_and_kids():
+    from app.odoo_migration.rules import detect_category
+    assert detect_category('CAMISA HOMBRE SLIM FIT', '') == 'Ropa / Hombres / Camisas'
+    assert detect_category('PANTALON NIÑO AZUL', '') == 'Ropa / Niños / Pantalones'
+
+
+def test_detect_category_fallback_to_sin_categoria():
+    from app.odoo_migration.rules import detect_category
+    assert detect_category('ITEM GENERICO SIN MATCH', 'OTROS SIN MAPEO') == 'Sin Categoria'

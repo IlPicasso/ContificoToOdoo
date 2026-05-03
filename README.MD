@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.19
+Versión 1.0.22
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -261,6 +261,9 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.22 (2026-05-03)**: Se agregó fallback de categoría a `Sin Categoria` cuando no existe match en reglas/aliases, para permitir importación continua y posterior reclasificación manual en Odoo.
+- **1.0.21 (2026-05-03)**: Se reforzó la detección de categorías por género (HOMBRE/MUJER/NIÑO) en el parser para priorizar rutas por género en importación, reduciendo ambigüedad en categorías genéricas.
+- **1.0.20 (2026-05-03)**: Se corrigió el precheck offline para interpretar snapshots de atributos exportados con columnas CSV (ej. `Secuencia,Atributo,...`) y para considerar equivalencias de categorías (`Ropa / Camisas|Corbatas|Ternos` vs rutas por género), evitando falsos faltantes.
 - **1.0.19 (2026-05-03)**: Se eliminó la dependencia de precheck online por API Odoo; ahora el flujo usa solo precheck offline y actualización manual de `odoo_catalog_snapshot.json` mediante carga de CSV desde frontend.
 - **1.0.18 (2026-05-03)**: Se añadió precheck offline (`/odoo-migration/odoo-attributes/precheck-offline`) usando `config/odoo_catalog_snapshot.json` para validar atributos/categorías faltantes sin conectarse a la API de Odoo.
 - **1.0.17 (2026-05-03)**: El precheck Odoo ahora reporta atributos faltantes (`attributes_missing`) y categorías faltantes (`categories_missing`) para dar feedback exacto de qué crear antes de migrar productos.

@@ -54,6 +54,27 @@ def _snapshot_path() -> Path:
     return Path(__file__).resolve().parents[3] / 'config/odoo_catalog_snapshot.json'
 
 
+def _extract_attribute_name(raw: str) -> str:
+    value = (raw or '').strip().strip('"')
+    if not value:
+        return ''
+    parts = [p.strip() for p in value.split(',')]
+    if len(parts) >= 2 and parts[0].isdigit():
+        return parts[1]
+    if value.lower() in {'secuencia,atributo,tipo de visualizacion,creacion de variantes', 'secuencia,atributo,tipo de visualización,creación de variantes'}:
+        return ''
+    return value
+
+
+def _category_present(expected: str, current_categories: set[str]) -> bool:
+    if expected in current_categories:
+        return True
+    if expected in {'Ropa / Camisas', 'Ropa / Corbatas', 'Ropa / Ternos'}:
+        leaf = expected.split('/')[-1].strip()
+        return any(c.endswith(f'/ {leaf}') for c in current_categories)
+    return False
+
+
 @router.post('/odoo-attributes/snapshot/upload')
 async def upload_odoo_snapshot_csv(kind: str = Query(..., pattern='^(attributes|categories)$'), file: UploadFile = File(...)):
     raw = await file.read()
@@ -85,7 +106,7 @@ def precheck_odoo_attributes_offline():
     if not snapshot_path.exists():
         raise HTTPException(status_code=404, detail='No existe config/odoo_catalog_snapshot.json')
     snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
-    current_attrs = {str(a).strip() for a in snapshot.get('attributes', []) if str(a).strip()}
+    current_attrs = {_extract_attribute_name(str(a)) for a in snapshot.get('attributes', []) if _extract_attribute_name(str(a))}
     current_cats = {str(c).strip() for c in snapshot.get('categories', []) if str(c).strip()}
 
     expected_attrs = {'Talla', 'Manga de Camisa', 'Ancho de Corbata', 'Marca', 'Color'}
@@ -96,7 +117,7 @@ def precheck_odoo_attributes_offline():
     expected_categories = sorted(set(CATEGORY_ALIASES.values()) | {
         'Ropa / Ternos', 'Ropa / Camisas', 'Ropa / Corbatas', 'Ropa / Hombres / Zapatos', 'Ropa / Mujeres / Zapatos'
     })
-    missing_categories = [c for c in expected_categories if c not in current_cats]
+    missing_categories = [c for c in expected_categories if not _category_present(c, current_cats)]
     recommendations = []
     if missing_attrs:
         recommendations.append('Crear atributos faltantes en Odoo según attributes_missing.')
