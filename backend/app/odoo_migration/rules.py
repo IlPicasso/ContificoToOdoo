@@ -38,8 +38,14 @@ def detect_color(nombre: str) -> str:
     return found[0] if found else ''
 
 
-def detect_category(nombre: str, categoria_raw: str = '') -> str:
+def detect_category(nombre: str, categoria_raw: str = '', sku: str = '') -> str:
     source = f"{normalize_text(categoria_raw)} {normalize_text(nombre)}"
+    sku_norm = normalize_text(sku)
+    if sku_norm.startswith("ZP-"):
+        if "MUJER" in source or "DAMA" in source:
+            return "Ropa / Mujeres / Zapatos"
+        return "Ropa / Hombres / Zapatos"
+
     woman_hint = "MUJER" in source or "DAMA" in source
     if woman_hint:
         if "PANTALON" in source:

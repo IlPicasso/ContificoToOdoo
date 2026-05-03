@@ -63,7 +63,7 @@ class OdooMigrationService:
                 mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado='',categoria_odoo_detectada='',talla_detectada='',manga_detectada='',ancho_corbata_detectado='',marca_detectada=detect_brand(marca_raw,name),color_detectado=detect_color(name),barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='excluded_zero_stock',confidence='1.00',parser_rule='exclude_zero_no_group_stock'))
                 continue
 
-            parser_rule=''; parsed={}; category=detect_category(name, categoria_id)
+            parser_rule=''; parsed={}; category=detect_category(name, categoria_id, sku=sku)
             for fn in (parse_shirt_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku):
                 parsed = fn(sku) or {}
                 if parsed: break

@@ -45,3 +45,9 @@ def test_detect_women_category_and_brands():
     assert detect_category('PANTALON DAMA NEGRO', '').startswith('Ropa / Mujeres')
     assert detect_brand('TED LAPIDUS') == "TED LAPIDUS"
     assert detect_brand('BFL') == "BFL"
+
+
+def test_detect_shoes_prefix_zp():
+    from app.odoo_migration.rules import detect_category
+    assert detect_category('H. ZAPATOS', '', sku='ZP-LOAFER-H-BRW/8.5') == 'Ropa / Hombres / Zapatos'
+    assert detect_category('ZAPATO DAMA', '', sku='ZP-ABC/38') == 'Ropa / Mujeres / Zapatos'
