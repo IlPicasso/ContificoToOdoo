@@ -125,6 +125,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
       page_size: $('exportPageSize').value,
       max_pages: $('exportMaxPages').value,
       export_stock: false,
+      include_brand_color_attributes: $('includeBrandColorAttributes').checked,
     });
     const jobId = started.job_id;
     let done = false;
@@ -157,6 +158,25 @@ $('generateMigrationCsv').addEventListener('click', async () => {
     showErr(e);
   } finally {
     toggleMigrationButtons(false);
+  }
+});
+
+$('precheckOdooAttributes').addEventListener('click', async () => {
+  try {
+    setMigrationStatus('Ejecutando precheck de atributos en Odoo...');
+    const data = await apiGet('/odoo-migration/odoo-attributes/precheck', {
+      odoo_url: $('odooUrl').value,
+      odoo_db: $('odooDb').value,
+      odoo_username: $('odooUsername').value,
+      odoo_api_key: $('odooApiKey').value,
+    });
+    show('migrationSummaryOut', data);
+    $('includeBrandColorAttributes').checked = !!data.recommended_include_brand_color_attributes;
+    const missingAttrs = (data.attributes_missing || []).length;
+    const missingCats = (data.categories_missing || []).length;
+    setMigrationStatus(`Precheck: faltan ${missingAttrs} atributos y ${missingCats} categorías en Odoo.`);
+  } catch (e) {
+    showErr(e);
   }
 });
 

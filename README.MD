@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.13
+Versión 1.0.17
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -148,6 +148,27 @@ python -m http.server 5173
 Luego visita `http://localhost:5173` en tu navegador. Asegúrate de que el backend esté funcionando en `http://localhost:8000`.
 
 
+
+### Precheck Odoo de atributos (desde frontend)
+
+Antes de generar CSV con `Marca/Color`, usa el botón **Precheck de atributos Odoo** en la pestaña **Fase 1**.
+
+Campos requeridos:
+- `odooUrl`: URL base de tu Odoo (ej. `https://miempresa.odoo.com`)
+- `odooDb`: nombre de base de datos Odoo
+- `odooUsername`: usuario con permisos de lectura sobre atributos de producto
+- `odooApiKey`: API Key del usuario
+
+El frontend llama al endpoint:
+
+```bash
+GET /odoo-migration/odoo-attributes/precheck
+```
+
+Si responde `can_enable_brand_color_export=true`, puedes marcar **Incluir Marca/Color en Product Values** y exportar.
+Además revisa `categories_missing`: esa lista indica exactamente qué categorías crear en Odoo para migrar productos sin fricción.
+Si faltan atributos o categorías, corrige primero en Odoo y vuelve a correr el precheck.
+
 ### Ejecutar Fase 2 (stock por bodega) después de la Fase 1
 
 1. Ejecuta la exportación inicial (Fase 1) y guarda el `run_id` de la respuesta:
@@ -233,6 +254,10 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.17 (2026-05-03)**: El precheck Odoo ahora reporta atributos faltantes (`attributes_missing`) y categorías faltantes (`categories_missing`) para dar feedback exacto de qué crear antes de migrar productos.
+- **1.0.16 (2026-05-03)**: Se añadió precheck por API contra Odoo (`/odoo-migration/odoo-attributes/precheck`) para validar atributos `Marca` y `Color`, con integración en frontend (Fase 1) para activar/desactivar automáticamente el modo de exportación de atributos.
+- **1.0.15 (2026-05-03)**: Se agregó parámetro `include_brand_color_attributes` (default `false`) en exportación Odoo para habilitar opcionalmente `Marca` y `Color` dentro de `Product Values` solo cuando esos atributos existan en la base destino; modo seguro por defecto evita `KeyError` en importación.
+- **1.0.14 (2026-05-03)**: Se removió la exportación de atributos `Marca` y `Color` dentro de `Product Values` para evitar errores `KeyError` en importación de productos Odoo cuando esos atributos no existen en la base destino; se mantiene SKU como llave operativa para producto/stock.
 - **1.0.13 (2026-05-03)**: Se migró la validación de plantillas a los templates oficiales de Odoo (`product_product_template.csv` y `stock_quant.csv`), se añadió salida `stock_quant.csv` para inventario físico y se reforzó el resumen final con métricas de consistencia SKU↔stock por `Internal Reference`.
 - **1.0.12 (2026-05-03)**: Se rediseñó el frontend para operar por pestañas (Fase 1 / Fase 2 / Preview), incorporando controles directos para iniciar/monitorear/pausar/reanudar/reintentar la Fase 2 desde UI.
 - **1.0.11 (2026-05-03)**: Se documentó el procedimiento operativo para disparar la Fase 2 de stock tras la Fase 1, incluyendo endpoints `start/status/pause/resume/retry-failed` y descarga de `initial_stock.csv`/`stock_errors.csv`.
