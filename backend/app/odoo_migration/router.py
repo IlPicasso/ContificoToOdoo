@@ -1,12 +1,12 @@
 from pathlib import Path
-from uuid import uuid4
 from threading import Lock, Thread
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
-from ..dependencies import get_contifico_client
 from ..contifico import ContificoClient
+from ..dependencies import get_contifico_client
 from .service import OdooMigrationService
 
 router = APIRouter(prefix="/odoo-migration", tags=["Odoo Migration"])
@@ -19,9 +19,21 @@ def _output_root() -> Path:
     return Path("backend/data/odoo_migration")
 
 
-def _set_job(job_id: str, payload: dict):
+def _set_job(job_id: str, payload: dict) -> None:
     with EXPORT_LOCK:
         EXPORT_JOBS[job_id] = {**EXPORT_JOBS.get(job_id, {}), **payload}
+
+
+def _build_files(run_id: str) -> dict[str, str]:
+    return {
+        "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
+        "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
+        "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
+        "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
+        "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
+        "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
+        "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+    }
 
 
 @router.post("/products-stock/export")
@@ -29,35 +41,24 @@ def export_products_stock(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
-    export_stock: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     service = OdooMigrationService(contifico_client)
-    output = service.generate_products_and_stock_csv(page_size=page_size, max_pages=max_pages, export_stock=export_stock)
+    output = service.generate_products_and_stock_csv(
+        page_size=page_size,
+        max_pages=max_pages,
+        export_stock=export_stock,
+    )
     run_id = output.folder.name
     return {
         "run_id": run_id,
         "folder": str(output.folder),
-        "files": {
-            "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
-            "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
-            "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
-            "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
-                    "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
-            "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
-            "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
-                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-        },
+        "files": _build_files(run_id),
         "total_products": output.total_products,
         "total_errors": output.total_errors,
-                "summary": output.summary,
         "summary": output.summary,
         "pages_fetched": output.pages_fetched,
         "hit_max_pages": output.hit_max_pages,
-        "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
-                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
     }
 
 
@@ -71,7 +72,7 @@ def start_export_job(
     job_id = str(uuid4())
     _set_job(job_id, {"status": "running", "stage": "queued", "found_items": 0, "processed_items": 0})
 
-    def worker():
+    def worker() -> None:
         try:
             service = OdooMigrationService(contifico_client)
             output = service.generate_products_and_stock_csv(
@@ -81,32 +82,19 @@ def start_export_job(
                 progress_callback=lambda p: _set_job(job_id, p),
             )
             run_id = output.folder.name
-            _set_job(job_id, {
-                "status": "completed",
-                "run_id": run_id,
-                "files": {
-                    "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
-                    "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
-                    "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
-                    "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
-                    "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
-            "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
-                    "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
-                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-            "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
-                    "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-            "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+            _set_job(
+                job_id,
+                {
+                    "status": "completed",
+                    "run_id": run_id,
+                    "files": _build_files(run_id),
+                    "total_products": output.total_products,
+                    "total_errors": output.total_errors,
+                    "summary": output.summary,
+                    "pages_fetched": output.pages_fetched,
+                    "hit_max_pages": output.hit_max_pages,
                 },
-                "total_products": output.total_products,
-                "total_errors": output.total_errors,
-                "summary": output.summary,
-        "summary": output.summary,
-                "pages_fetched": output.pages_fetched,
-                "hit_max_pages": output.hit_max_pages,
-        "pages_fetched": output.pages_fetched,
-        "hit_max_pages": output.hit_max_pages,
-            })
+            )
         except Exception as exc:  # pragma: no cover
             _set_job(job_id, {"status": "failed", "error": str(exc)})
 
@@ -134,10 +122,19 @@ def list_runs(limit: int = Query(default=10, ge=1, le=100)):
 
 @router.get("/runs/{run_id}/files/{filename}")
 def download_file(run_id: str, filename: str):
-    allowed = {"product_product.csv", "initial_stock.csv", "migration_errors.csv", "mapping_report.csv", "excluded_zero_stock.csv", "debug.log", "raw.log"}
+    allowed = {
+        "product_product.csv",
+        "initial_stock.csv",
+        "migration_errors.csv",
+        "mapping_report.csv",
+        "excluded_zero_stock.csv",
+        "debug.log",
+        "raw.log",
+    }
     if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
     file_path = _output_root() / run_id / filename
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    return FileResponse(path=file_path, filename=filename, media_type="text/csv")
+    media_type = "text/plain" if filename.endswith('.log') else "text/csv"
+    return FileResponse(path=file_path, filename=filename, media_type=media_type)
