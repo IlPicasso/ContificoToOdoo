@@ -26,6 +26,7 @@ from .temp_contifico import (
     router as contifico_preview_router,
 )
 from .migrations import apply_schema_upgrades
+from .odoo_migration.router import router as odoo_migration_router
 
 settings = get_settings()
 
@@ -68,6 +69,7 @@ app.add_middleware(
 )
 
 app.include_router(contifico_preview_router)
+app.include_router(odoo_migration_router)
 
 def _validate_assigned_tailor(
     db: Session, assigned_tailor_id: Optional[int]
