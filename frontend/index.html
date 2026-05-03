@@ -21,6 +21,13 @@
         <h2>Fase 1: Migración Odoo (snapshot CSV)</h2>
         <input id="exportPageSize" type="number" value="200" min="1" max="500" placeholder="Page size" />
         <input id="exportMaxPages" type="number" value="200" min="1" max="500" placeholder="Max pages" />
+        <h3>Precheck Odoo (Atributos Marca/Color)</h3>
+        <input id="odooUrl" placeholder="https://tuinstancia.odoo.com" />
+        <input id="odooDb" placeholder="Base de datos Odoo" />
+        <input id="odooUsername" placeholder="Usuario Odoo" />
+        <input id="odooApiKey" type="password" placeholder="API Key Odoo" />
+        <label><input id="includeBrandColorAttributes" type="checkbox" /> Incluir Marca/Color en Product Values</label>
+        <button id="precheckOdooAttributes">Precheck de atributos Odoo</button>
         <button id="generateMigrationCsv">Generar corrida Fase 1</button>
         <button id="loadRuns">Ver últimas corridas</button>
         <div id="migrationProgress" class="progress hidden"><div id="migrationProgressBar" class="progress-bar"></div></div>

@@ -1,4 +1,5 @@
 import json
+import xmlrpc.client
 from datetime import datetime
 from pathlib import Path
 from threading import Lock, Thread
@@ -9,6 +10,7 @@ from fastapi.responses import FileResponse
 
 from ..contifico import ContificoClient
 from ..dependencies import get_contifico_client
+from .rules import CATEGORY_ALIASES
 from .service import OdooMigrationService
 from .stock_worker import StockWorker
 
@@ -39,6 +41,7 @@ def _build_files(run_id: str) -> dict[str, str]:
     return {
         "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
         "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
+        "stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant.csv",
         "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
         "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
         "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
@@ -47,11 +50,72 @@ def _build_files(run_id: str) -> dict[str, str]:
     }
 
 
+@router.get('/odoo-attributes/precheck')
+def precheck_odoo_attributes(
+    odoo_url: str = Query(..., description='Base URL Odoo, e.g. https://mycompany.odoo.com'),
+    odoo_db: str = Query(...),
+    odoo_username: str = Query(...),
+    odoo_api_key: str = Query(...),
+):
+    base_url = odoo_url.rstrip('/')
+    common = xmlrpc.client.ServerProxy(f"{base_url}/xmlrpc/2/common")
+    uid = common.authenticate(odoo_db, odoo_username, odoo_api_key, {})
+    if not uid:
+        raise HTTPException(status_code=400, detail='No fue posible autenticar en Odoo (db/usuario/api key).')
+    models = xmlrpc.client.ServerProxy(f"{base_url}/xmlrpc/2/object")
+
+    attr_names = ['Talla', 'Manga de Camisa', 'Ancho de Corbata', 'Marca', 'Color']
+    attrs = models.execute_kw(
+        odoo_db, uid, odoo_api_key,
+        'product.attribute', 'search_read',
+        [[('name', 'in', attr_names)]],
+        {'fields': ['id', 'name']}
+    )
+    by_name = {a.get('name'): a for a in attrs}
+    missing = [n for n in attr_names if n not in by_name]
+
+    expected_categories = sorted(set(CATEGORY_ALIASES.values()) | {
+        'Ropa / Ternos', 'Ropa / Camisas', 'Ropa / Corbatas', 'Ropa / Hombres / Zapatos', 'Ropa / Mujeres / Zapatos'
+    })
+    cat_rows = models.execute_kw(
+        odoo_db, uid, odoo_api_key,
+        'product.category', 'search_read',
+        [[]],
+        {'fields': ['name', 'complete_name'], 'limit': 2000}
+    )
+    existing_categories = {str(c.get('name') or '').strip() for c in cat_rows if c.get('name')}
+    existing_complete = {str(c.get('complete_name') or '').strip() for c in cat_rows if c.get('complete_name')}
+    missing_categories = [c for c in expected_categories if c not in existing_categories and c not in existing_complete]
+    recommendations = []
+    if missing:
+        recommendations.append('Crear atributos faltantes en Odoo > Inventario > Configuración > Atributos.')
+    if missing_categories:
+        recommendations.append('Crear categorías faltantes en Odoo > Inventario > Configuración > Categorías de producto.')
+    if missing:
+        recommendations.append('Mientras no existan atributos, exportar con include_brand_color_attributes=false.')
+    if not missing and not missing_categories:
+        recommendations.append('Atributos listos. Puedes exportar con include_brand_color_attributes=true.')
+    return {
+        'connected': True,
+        'odoo_url': base_url,
+        'odoo_db': odoo_db,
+        'attributes_found': sorted(list(by_name.keys())),
+        'attributes_missing': missing,
+        'categories_missing': missing_categories,
+        'total_categories_expected': len(expected_categories),
+        'can_enable_brand_color_export': len([a for a in ['Marca', 'Color'] if a in missing]) == 0,
+        'ready_for_product_import': len(missing_categories) == 0,
+        'recommended_include_brand_color_attributes': len([a for a in ['Marca', 'Color'] if a in missing]) == 0,
+        'recommendations': recommendations,
+    }
+
+
 @router.post("/products-stock/export")
 def export_products_stock(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
+    include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     service = OdooMigrationService(contifico_client)
@@ -59,6 +123,7 @@ def export_products_stock(
         page_size=page_size,
         max_pages=max_pages,
         export_stock=export_stock,
+        include_brand_color_attributes=include_brand_color_attributes,
     )
     run_id = output.folder.name
     return {
@@ -78,6 +143,7 @@ def start_export_job(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
+    include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
     job_id = str(uuid4())
@@ -90,6 +156,7 @@ def start_export_job(
                 page_size=page_size,
                 max_pages=max_pages,
                 export_stock=export_stock,
+                include_brand_color_attributes=include_brand_color_attributes,
                 progress_callback=lambda p: _set_job(job_id, p),
             )
             run_id = output.folder.name
@@ -136,6 +203,7 @@ def download_file(run_id: str, filename: str):
     allowed = {
         "product_product.csv",
         "initial_stock.csv",
+        "stock_quant.csv",
         "migration_errors.csv",
         "mapping_report.csv",
         "excluded_zero_stock.csv",
