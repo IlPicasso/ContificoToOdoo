@@ -39,6 +39,7 @@ def _build_files(run_id: str) -> dict[str, str]:
     return {
         "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
         "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
+        "stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant.csv",
         "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
         "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
         "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
@@ -136,6 +137,7 @@ def download_file(run_id: str, filename: str):
     allowed = {
         "product_product.csv",
         "initial_stock.csv",
+        "stock_quant.csv",
         "migration_errors.csv",
         "mapping_report.csv",
         "excluded_zero_stock.csv",
