@@ -14,7 +14,7 @@ from .rules import (
     build_error_row, build_zero_stock_exclusion_row, normalize_sku_for_group,
 )
 
-WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BAT": "BAT/Existencias"}
+WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BAT": "BAT/Existencias", "BSR": "BSR/Existencias", "OFA": "OFA/Existencias", "BMT": "BMT/Existencias", "B2": "B2/Existencias", "BW": "BW/Existencias", "BM": "BM/Existencias", "BTL": "BTL/Existencias"}
 WAREHOUSE_MAP_CONFIG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_mapping.json").read_text(encoding="utf-8"))
 WAREHOUSE_CATALOG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_catalog.json").read_text(encoding="utf-8"))
 PRODUCT_COLUMNS = ["External ID","Name","Product Type","Product Category","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
@@ -128,7 +128,7 @@ class OdooMigrationService:
         return items, pages, pages>=max_pages
 
     def _extract_stock_by_warehouse(self, item: dict[str, Any]):
-        result={"BPU":0.0,"TUR":0.0,"BAT":0.0}
+        result={key:0.0 for key in WAREHOUSE_TO_LOCATION}
 
         def map_entry(raw_code: str, raw_name: str, raw_id: str, qty: float) -> None:
             mapped = None

@@ -66,4 +66,5 @@ def test_warehouse_catalog_file_exists():
     import json
     path = Path(__file__).resolve().parents[2] / "config/warehouse_catalog.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    assert any(w.get("codigo") == "BOD001" for w in data)
+    codes = {w.get("codigo") for w in data}
+    assert {"BOD001", "BOD002", "BOD009", "B01LV"}.issubset(codes)

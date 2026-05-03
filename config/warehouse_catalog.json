@@ -1,20 +1,12 @@
 [
-  {
-    "id": "OjZdy9VLUNKJdJ4m",
-    "codigo": "BOD001",
-    "nombre": "Almacenes",
-    "odoo_key": "TUR"
-  },
-  {
-    "id": "XPnaz7WLSREnbO2y",
-    "codigo": "BOD002",
-    "nombre": "Bodegas Principales",
-    "odoo_key": "BPU"
-  },
-  {
-    "id": "DKVeZBLkiMAxe8Py",
-    "codigo": "BOD009",
-    "nombre": "BODEGAS BATAN",
-    "odoo_key": "BAT"
-  }
+  {"id": "OjZdy9VLUNKJdJ4m", "codigo": "BOD001", "nombre": "Almacenes", "odoo_key": "TUR"},
+  {"id": "XPnaz7WLSREnbO2y", "codigo": "BOD002", "nombre": "Bodegas Principales", "odoo_key": "BPU"},
+  {"id": "91qdGMBGUJEqaN8j", "codigo": "BOD003", "nombre": "Bodegas Showroom", "odoo_key": "BSR"},
+  {"id": "1mBdJN0VT8lyd0J6", "codigo": "BOD004", "nombre": "Oficina Adams", "odoo_key": "OFA"},
+  {"id": "Q9jaKLJKCqP9bk5K", "codigo": "BOD006", "nombre": "Bodega Mercaderia en Transito", "odoo_key": "BMT"},
+  {"id": "DkPbk6VncnA4a5Y9", "codigo": "BOD007", "nombre": "Bodega 2", "odoo_key": "B2"},
+  {"id": "4pzb8zjYijWQeEwN", "codigo": "BOD008", "nombre": "Bodega Web", "odoo_key": "BW"},
+  {"id": "DKVeZBLkiMAxe8Py", "codigo": "BOD009", "nombre": "BODEGAS BATAN", "odoo_key": "BAT"},
+  {"id": "grRbDMj8sBwMd6L2", "codigo": "B010", "nombre": "Bodegas Muestras", "odoo_key": "BM"},
+  {"id": "ZxgepYYJWTzqya1p", "codigo": "B01LV", "nombre": "BODEGAS TEMPORALES LAVANDERIA", "odoo_key": "BTL"}
 ]
