@@ -17,13 +17,14 @@ from .rules import (
 WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BAT": "BAT/Existencias", "BSR": "BSR/Existencias", "OFA": "OFA/Existencias", "BMT": "BMT/Existencias", "B2": "B2/Existencias", "BW": "BW/Existencias", "BM": "BM/Existencias", "BTL": "BTL/Existencias"}
 WAREHOUSE_MAP_CONFIG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_mapping.json").read_text(encoding="utf-8"))
 WAREHOUSE_CATALOG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_catalog.json").read_text(encoding="utf-8"))
-PRODUCT_COLUMNS = ["External ID","Name","Product Type","Product Category","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
+PRODUCT_COLUMNS = ["External ID","Name","Product Type","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
 STOCK_COLUMNS = ["sku","ubicacion_odoo","cantidad","costo_unitario"]
+STOCK_QUANT_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
 MAP_COLUMNS = ["sku","nombre_contifico","producto_madre_detectado","categoria_odoo_detectada","talla_detectada","manga_detectada","ancho_corbata_detectado","marca_detectada","color_detectado","barcode","precio","costo","stock_bpu","stock_tur","stock_bat","stock_total_contifico","estado","confidence","parser_rule"]
 ERROR_COLUMNS = ["sku","nombre_contifico","problema","sugerencia","raw_categoria_id","raw_marca_nombre","raw_codigo_barra"]
 EXCLUDED_ZERO_COLUMNS = ["sku","nombre_contifico","codigo_barra","categoria_id","marca_nombre","pvp1","costo","stock_total_contifico","estado_contifico","motivo_exclusion"]
-TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_products_template.csv"
-TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_stock_template.csv"
+TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/product_product_template.csv"
+TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/stock_quant.csv"
 
 
 @dataclass
@@ -42,7 +43,7 @@ class OdooMigrationService:
     def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
         ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
-        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
+        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
         products,pages_fetched,hit_max_pages=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
@@ -50,9 +51,10 @@ class OdooMigrationService:
         phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, progress_callback=progress_callback)
         self._write_stock_state(state_path, phase1['stock_state'])
         self._write_csv(stock_csv, STOCK_COLUMNS, [])
+        self._write_csv(stock_quant_csv, STOCK_QUANT_COLUMNS, [])
 
         if export_stock:
-            self._phase2_enrich_stock(snapshot_path=snapshot_path, state_path=state_path, stock_csv=stock_csv, progress_callback=progress_callback)
+            self._phase2_enrich_stock(snapshot_path=snapshot_path, state_path=state_path, stock_csv=stock_csv, stock_quant_csv=stock_quant_csv, phase1_errors=phase1['erows'], progress_callback=progress_callback)
 
         self._write_csv(errors_csv, ERROR_COLUMNS, phase1['erows'])
         self._write_csv(mapping_csv, MAP_COLUMNS, phase1['mrows'])
@@ -61,7 +63,20 @@ class OdooMigrationService:
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
-        summary={"total_extracted":len(products),"total_stock_gt_zero":len(products)-len(phase1['zrows']),"total_excluded_zero_stock":len(phase1['zrows']),"total_ok":counts['ok'],"total_manual_review":counts['manual_review'],"total_error":counts['error'],"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock}
+        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock}
+        if export_stock:
+            stock_rows = self._read_csv_rows(stock_csv)
+            stock_quant_rows = self._read_csv_rows(stock_quant_csv)
+            stock_skus = {r.get('sku') for r in stock_rows if r.get('sku')}
+            product_skus = {r.get('Internal Reference') for r in phase1['prows'] if r.get('Internal Reference')}
+            summary.update({
+                "total_lineas_initial_stock": len(stock_rows),
+                "total_lineas_stock_quant": len(stock_quant_rows),
+                "total_skus_stock_match_producto": len(stock_skus & product_skus),
+                "total_skus_stock_no_match_producto": len(stock_skus - product_skus),
+                "total_ubicaciones_mapeadas": len([r for r in stock_rows if r.get('ubicacion_odoo')]),
+                "total_ubicaciones_no_mapeadas": 0,
+            })
         return MigrationOutput(folder,product_csv,stock_csv,errors_csv,mapping_csv,excluded_zero_csv,len(phase1['prows']),len(phase1['erows']),pages_fetched,hit_max_pages,debug_log,raw_log,summary)
 
     def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, progress_callback=None) -> dict[str, Any]:
@@ -110,7 +125,7 @@ class OdooMigrationService:
                     erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='Código de barras duplicado',sugerencia='Depurar barcode',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
                 seen_sku.add(sku); seen_barcode.add(barcode)
                 pvalues=build_product_values(talla=talla,manga=manga,ancho_corbata=ancho,marca=brand,color=color)
-                prows.append({"External ID": build_external_id(sku),"Name": prod_name,"Product Type":"Goods","Product Category": category, "Internal Reference":sku,"Barcode":barcode,"Sales Price":f"{price:.2f}","Cost":f"{cost:.2f}","Weight":"0.0","Sales Description":"","Product Values":pvalues})
+                prows.append({"External ID": build_external_id(sku),"Name": prod_name,"Product Type":"Goods", "Internal Reference":sku,"Barcode":barcode,"Sales Price":f"{price:.2f}","Cost":f"{cost:.2f}","Weight":"0.0","Sales Description":f"Categoría sugerida: {category}","Product Values":pvalues})
                 mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado=prod_name,categoria_odoo_detectada=category,talla_detectada=talla,manga_detectada=manga,ancho_corbata_detectado=ancho,marca_detectada=brand,color_detectado=color,barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado=state,confidence=confidence,parser_rule=parser_rule or 'generic'))
                 payload = {"id": str(item.get('id') or ''), "sku": sku, "cost": cost, "stock_map": stock_map}
                 snap.write(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -120,10 +135,10 @@ class OdooMigrationService:
         self._write_csv(product_csv, PRODUCT_COLUMNS, prows)
         return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state}
 
-    def _phase2_enrich_stock(self, *, snapshot_path: Path, state_path: Path, stock_csv: Path, progress_callback=None) -> None:
+    def _phase2_enrich_stock(self, *, snapshot_path: Path, state_path: Path, stock_csv: Path, stock_quant_csv: Path, phase1_errors: list[dict[str, Any]], progress_callback=None) -> None:
         state = self._read_stock_state(state_path)
         by_sku = {r.get("sku"): r for r in state}
-        rows=[]; processed=0
+        rows=[]; stock_quant_rows=[]; processed=0
         for line in snapshot_path.read_text(encoding='utf-8').splitlines():
             item = json.loads(line)
             sku = item.get("sku") or ""
@@ -140,11 +155,13 @@ class OdooMigrationService:
                     qty=float(stock_map.get(wh,0) or 0)
                     if qty > 0:
                         rows.append({"sku": sku, "ubicacion_odoo": loc, "cantidad": f"{qty:.2f}", "costo_unitario": f"{float(item.get('cost') or 0):.2f}"})
+                        stock_quant_rows.append({"Product": f"[{sku}]", "Lot/Serial Number": "", "Quantity": f"{qty:.2f}", "Counted Quantity": f"{qty:.2f}", "Difference": "0", "Scheduled Date": "", "Assigned To": ""})
                 st["status"] = "done"; st["last_error"] = ""
             except Exception as exc:
                 st["status"] = "error"; st["retry_count"] = int(st.get("retry_count") or 0) + 1; st["last_error"] = str(exc)
             processed += 1
             self._write_csv(stock_csv, STOCK_COLUMNS, rows)
+            self._write_csv(stock_quant_csv, STOCK_QUANT_COLUMNS, stock_quant_rows)
             self._write_stock_state(state_path, state)
             if progress_callback and (processed % 25 == 0):
                 progress_callback({"stage":"phase_2_stock", "processed_items": processed, "total_items": len(state)})
@@ -193,7 +210,7 @@ class OdooMigrationService:
 
     def _validate_templates(self):
         if self._read_header(TEMPLATE_PRODUCT_PATH) != PRODUCT_COLUMNS: raise ValueError('Plantilla producto no coincide')
-        if self._read_header(TEMPLATE_STOCK_PATH) != STOCK_COLUMNS: raise ValueError('Plantilla stock no coincide')
+        if self._read_header(TEMPLATE_STOCK_PATH) != STOCK_QUANT_COLUMNS: raise ValueError('Plantilla stock no coincide')
 
     @staticmethod
     def _read_header(path: Path):
@@ -235,3 +252,10 @@ class OdooMigrationService:
     def _read_stock_state(path: Path) -> list[dict[str, Any]]:
         if not path.exists(): return []
         return json.loads(path.read_text(encoding='utf-8'))
+
+    @staticmethod
+    def _read_csv_rows(path: Path) -> list[dict[str, str]]:
+        if not path.exists():
+            return []
+        with path.open('r', newline='', encoding='utf-8') as f:
+            return list(csv.DictReader(f))

@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.12
+Versión 1.0.13
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -233,6 +233,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.13 (2026-05-03)**: Se migró la validación de plantillas a los templates oficiales de Odoo (`product_product_template.csv` y `stock_quant.csv`), se añadió salida `stock_quant.csv` para inventario físico y se reforzó el resumen final con métricas de consistencia SKU↔stock por `Internal Reference`.
 - **1.0.12 (2026-05-03)**: Se rediseñó el frontend para operar por pestañas (Fase 1 / Fase 2 / Preview), incorporando controles directos para iniciar/monitorear/pausar/reanudar/reintentar la Fase 2 desde UI.
 - **1.0.11 (2026-05-03)**: Se documentó el procedimiento operativo para disparar la Fase 2 de stock tras la Fase 1, incluyendo endpoints `start/status/pause/resume/retry-failed` y descarga de `initial_stock.csv`/`stock_errors.csv`.
 - **1.0.10 (2026-05-03)**: Se añadió worker de stock por corrida (`stock_worker.py`) con procesamiento por lotes/concurrencia configurable (`STOCK_BATCH_SIZE`, `STOCK_MAX_CONCURRENCY`, `STOCK_RPS_LIMIT`), retries con backoff+jitter para errores 429/5xx, checkpoints por batch (`stock_state.json`, `initial_stock.csv`) y endpoints de control/estado (`start`, `status`, `retry-failed`, `pause`, `resume`) más `stock_errors.csv`.
