@@ -1,4 +1,4 @@
-# Portal de Sastrería
+# Migrador ContificoToOdoo
 
 Versión 1.0.12
 
