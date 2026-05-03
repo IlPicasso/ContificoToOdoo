@@ -13,5 +13,11 @@
   "BLUSA": "Ropa / Mujeres / Blusas",
   "VESTIDO": "Ropa / Mujeres / Vestidos",
   "TOP": "Ropa / Mujeres / Tops",
-  "FALDA": "Ropa / Mujeres / Faldas"
+  "FALDA": "Ropa / Mujeres / Faldas",
+  "DAMA PANTALON": "Ropa / Mujeres / Pantalones",
+  "MUJER PANTALON": "Ropa / Mujeres / Pantalones",
+  "DAMA ZAPATO": "Ropa / Mujeres / Zapatos",
+  "MUJER ZAPATO": "Ropa / Mujeres / Zapatos",
+  "MUJER": "Ropa / Mujeres",
+  "DAMA": "Ropa / Mujeres"
 }

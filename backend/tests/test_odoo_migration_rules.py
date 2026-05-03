@@ -36,3 +36,12 @@ def test_stock_fallback_from_cantidad_stock():
     from app.odoo_migration.service import OdooMigrationService
     stock = OdooMigrationService._extract_stock_by_warehouse({'cantidad_stock':'1.0'})
     assert stock['BPU'] == 1.0
+
+
+from app.odoo_migration.rules import detect_category, detect_brand
+
+
+def test_detect_women_category_and_brands():
+    assert detect_category('PANTALON DAMA NEGRO', '').startswith('Ropa / Mujeres')
+    assert detect_brand('TED LAPIDUS') == "TED LAPIDUS"
+    assert detect_brand('BFL') == "BFL"

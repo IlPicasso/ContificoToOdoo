@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.3
+Versión 1.0.4
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.4 (2026-05-03)**: Se incorporó plantilla `adams_products_template.csv` con columna de categoría, mejora de detección Hombre/Mujer y ajuste de regla de stock 0 para excluir productos cuando todas las variantes del código madre tienen stock 0.
 - **1.0.3 (2026-05-02)**: Se corrigió `router.py` para eliminar argumentos/keys duplicadas en endpoints de export y estabilizar el arranque en producción (fix de SyntaxError).
 - **1.0.2 (2026-05-02)**: Se dejó la exportación enfocada en productos con `export_stock=false` por defecto, manteniendo `initial_stock.csv` para fase posterior cuando se complete el mapeo de bodegas Contífico→Odoo.
 - **1.0.1 (2026-05-02)**: Se corrigió cálculo de stock usando fallback `cantidad_stock` cuando no hay detalle por bodega y se aplicó regla de grupo: incluir variantes de un código madre si alguna variante tiene stock > 0.

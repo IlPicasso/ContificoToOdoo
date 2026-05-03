@@ -15,12 +15,12 @@ from .rules import (
 )
 
 WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BAT": "BAT/Existencias"}
-PRODUCT_COLUMNS = ["External ID","Name","Product Type","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
+PRODUCT_COLUMNS = ["External ID","Name","Product Type","Product Category","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
 STOCK_COLUMNS = ["sku","ubicacion_odoo","cantidad","costo_unitario"]
 MAP_COLUMNS = ["sku","nombre_contifico","producto_madre_detectado","categoria_odoo_detectada","talla_detectada","manga_detectada","ancho_corbata_detectado","marca_detectada","color_detectado","barcode","precio","costo","stock_bpu","stock_tur","stock_bat","stock_total_contifico","estado","confidence","parser_rule"]
 ERROR_COLUMNS = ["sku","nombre_contifico","problema","sugerencia","raw_categoria_id","raw_marca_nombre","raw_codigo_barra"]
 EXCLUDED_ZERO_COLUMNS = ["sku","nombre_contifico","codigo_barra","categoria_id","marca_nombre","pvp1","costo","stock_total_contifico","estado_contifico","motivo_exclusion"]
-TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_product_template.csv"
+TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_products_template.csv"
 TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/adams_stock_template.csv"
 
 @dataclass
@@ -57,7 +57,7 @@ class OdooMigrationService:
             marca_raw=str(item.get('marca_nombre') or item.get('marca') or '')
             price=float(item.get('pvp1') or 0); cost=float(item.get('costo_maximo') or item.get('costo_promedio') or item.get('costo') or 0)
             include_by_group = group_totals.get(base_key, 0.0) > 0
-            if export_stock and should_exclude_zero_stock(stock_total) and not include_by_group:
+            if should_exclude_zero_stock(stock_total) and not include_by_group:
                 zrows.append(build_zero_stock_exclusion_row(sku=sku,nombre_contifico=name,codigo_barra=barcode,categoria_id=categoria_id,marca_nombre=marca_raw,pvp1=f"{price:.2f}",costo=f"{cost:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado_contifico=str(item.get('estado') or '')))
                 counts['excluded_zero_stock'] += 1
                 mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado='',categoria_odoo_detectada='',talla_detectada='',manga_detectada='',ancho_corbata_detectado='',marca_detectada=detect_brand(marca_raw,name),color_detectado=detect_color(name),barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='excluded_zero_stock',confidence='1.00',parser_rule='exclude_zero_no_group_stock'))
@@ -86,7 +86,7 @@ class OdooMigrationService:
                 erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='Código de barras duplicado',sugerencia='Depurar barcode',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
             seen_sku.add(sku); seen_barcode.add(barcode)
             pvalues=build_product_values(talla=talla,manga=manga,ancho_corbata=ancho,marca=brand,color=color)
-            prows.append({"External ID": build_external_id(sku),"Name": prod_name,"Product Type":"Goods","Internal Reference":sku,"Barcode":barcode,"Sales Price":f"{price:.2f}","Cost":f"{cost:.2f}","Weight":"0.0","Sales Description":"","Product Values":pvalues})
+            prows.append({"External ID": build_external_id(sku),"Name": prod_name,"Product Type":"Goods","Product Category": category, "Internal Reference":sku,"Barcode":barcode,"Sales Price":f"{price:.2f}","Cost":f"{cost:.2f}","Weight":"0.0","Sales Description":"","Product Values":pvalues})
             if export_stock:
                 for wh,loc in WAREHOUSE_TO_LOCATION.items():
                     qty=float(stock_map.get(wh,0) or 0)

@@ -40,6 +40,19 @@ def detect_color(nombre: str) -> str:
 
 def detect_category(nombre: str, categoria_raw: str = '') -> str:
     source = f"{normalize_text(categoria_raw)} {normalize_text(nombre)}"
+    woman_hint = "MUJER" in source or "DAMA" in source
+    if woman_hint:
+        if "PANTALON" in source:
+            return "Ropa / Mujeres / Pantalones"
+        if "JEANS" in source:
+            return "Ropa / Mujeres / Jeans"
+        if "ZAPATO" in source:
+            return "Ropa / Mujeres / Zapatos"
+        if "BERMUDA" in source:
+            return "Ropa / Mujeres / Bermudas"
+        for key, cat in CATEGORY_ALIASES.items():
+            if key in source and cat.startswith("Ropa / Mujeres"):
+                return cat
     for key, cat in CATEGORY_ALIASES.items():
         if key in source:
             return cat
