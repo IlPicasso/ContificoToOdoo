@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.17
+Versión 1.0.19
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -154,15 +154,22 @@ Luego visita `http://localhost:5173` en tu navegador. Asegúrate de que el backe
 Antes de generar CSV con `Marca/Color`, usa el botón **Precheck de atributos Odoo** en la pestaña **Fase 1**.
 
 Campos requeridos:
-- `odooUrl`: URL base de tu Odoo (ej. `https://miempresa.odoo.com`)
-- `odooDb`: nombre de base de datos Odoo
-- `odooUsername`: usuario con permisos de lectura sobre atributos de producto
-- `odooApiKey`: API Key del usuario
+- `config/odoo_catalog_snapshot.json`: snapshot local de categorías y atributos actuales en Odoo para precheck offline sin API.
 
-El frontend llama al endpoint:
+Flujo recomendado (sin API Odoo):
+
+1. Exporta desde Odoo dos CSV manuales (una columna con nombre por fila):
+   - atributos
+   - categorías
+2. En frontend (Fase 1), usa:
+   - **Actualizar snapshot atributos (CSV)**
+   - **Actualizar snapshot categorías (CSV)**
+3. El frontend llama:
 
 ```bash
-GET /odoo-migration/odoo-attributes/precheck
+POST /odoo-migration/odoo-attributes/snapshot/upload?kind=attributes
+POST /odoo-migration/odoo-attributes/snapshot/upload?kind=categories
+GET /odoo-migration/odoo-attributes/precheck-offline
 ```
 
 Si responde `can_enable_brand_color_export=true`, puedes marcar **Incluir Marca/Color en Product Values** y exportar.
@@ -254,6 +261,8 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.19 (2026-05-03)**: Se eliminó la dependencia de precheck online por API Odoo; ahora el flujo usa solo precheck offline y actualización manual de `odoo_catalog_snapshot.json` mediante carga de CSV desde frontend.
+- **1.0.18 (2026-05-03)**: Se añadió precheck offline (`/odoo-migration/odoo-attributes/precheck-offline`) usando `config/odoo_catalog_snapshot.json` para validar atributos/categorías faltantes sin conectarse a la API de Odoo.
 - **1.0.17 (2026-05-03)**: El precheck Odoo ahora reporta atributos faltantes (`attributes_missing`) y categorías faltantes (`categories_missing`) para dar feedback exacto de qué crear antes de migrar productos.
 - **1.0.16 (2026-05-03)**: Se añadió precheck por API contra Odoo (`/odoo-migration/odoo-attributes/precheck`) para validar atributos `Marca` y `Color`, con integración en frontend (Fase 1) para activar/desactivar automáticamente el modo de exportación de atributos.
 - **1.0.15 (2026-05-03)**: Se agregó parámetro `include_brand_color_attributes` (default `false`) en exportación Odoo para habilitar opcionalmente `Marca` y `Color` dentro de `Product Values` solo cuando esos atributos existan en la base destino; modo seguro por defecto evita `KeyError` en importación.

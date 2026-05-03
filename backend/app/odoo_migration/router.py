@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import FileResponse
 
 from ..contifico import ContificoClient
@@ -50,62 +50,69 @@ def _build_files(run_id: str) -> dict[str, str]:
     }
 
 
-@router.get('/odoo-attributes/precheck')
-def precheck_odoo_attributes(
-    odoo_url: str = Query(..., description='Base URL Odoo, e.g. https://mycompany.odoo.com'),
-    odoo_db: str = Query(...),
-    odoo_username: str = Query(...),
-    odoo_api_key: str = Query(...),
-):
-    base_url = odoo_url.rstrip('/')
-    common = xmlrpc.client.ServerProxy(f"{base_url}/xmlrpc/2/common")
-    uid = common.authenticate(odoo_db, odoo_username, odoo_api_key, {})
-    if not uid:
-        raise HTTPException(status_code=400, detail='No fue posible autenticar en Odoo (db/usuario/api key).')
-    models = xmlrpc.client.ServerProxy(f"{base_url}/xmlrpc/2/object")
+def _snapshot_path() -> Path:
+    return Path(__file__).resolve().parents[3] / 'config/odoo_catalog_snapshot.json'
 
-    attr_names = ['Talla', 'Manga de Camisa', 'Ancho de Corbata', 'Marca', 'Color']
-    attrs = models.execute_kw(
-        odoo_db, uid, odoo_api_key,
-        'product.attribute', 'search_read',
-        [[('name', 'in', attr_names)]],
-        {'fields': ['id', 'name']}
-    )
-    by_name = {a.get('name'): a for a in attrs}
-    missing = [n for n in attr_names if n not in by_name]
+
+@router.post('/odoo-attributes/snapshot/upload')
+async def upload_odoo_snapshot_csv(kind: str = Query(..., pattern='^(attributes|categories)$'), file: UploadFile = File(...)):
+    raw = await file.read()
+    text = raw.decode('utf-8-sig', errors='ignore')
+    values: list[str] = []
+    for line in text.splitlines():
+        value = line.strip().strip('"')
+        if not value:
+            continue
+        lowered = value.lower()
+        if lowered in {'name', 'nombre', 'attribute', 'categoria', 'category'}:
+            continue
+        values.append(value)
+    if not values:
+        raise HTTPException(status_code=400, detail='CSV vacío o sin valores válidos.')
+
+    snapshot_path = _snapshot_path()
+    snapshot = {'attributes': [], 'categories': []}
+    if snapshot_path.exists():
+        snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    snapshot[kind] = sorted(list(dict.fromkeys(values)))
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding='utf-8')
+    return {'ok': True, 'kind': kind, 'count': len(snapshot[kind]), 'snapshot_path': str(snapshot_path)}
+
+
+@router.get('/odoo-attributes/precheck-offline')
+def precheck_odoo_attributes_offline():
+    snapshot_path = _snapshot_path()
+    if not snapshot_path.exists():
+        raise HTTPException(status_code=404, detail='No existe config/odoo_catalog_snapshot.json')
+    snapshot = json.loads(snapshot_path.read_text(encoding='utf-8'))
+    current_attrs = {str(a).strip() for a in snapshot.get('attributes', []) if str(a).strip()}
+    current_cats = {str(c).strip() for c in snapshot.get('categories', []) if str(c).strip()}
+
+    expected_attrs = {'Talla', 'Manga de Camisa', 'Ancho de Corbata', 'Marca', 'Color'}
+    alias_attr = {'Ancho Corbata': 'Ancho de Corbata'}
+    normalized_current_attrs = {alias_attr.get(a, a) for a in current_attrs}
+    missing_attrs = sorted(list(expected_attrs - normalized_current_attrs))
 
     expected_categories = sorted(set(CATEGORY_ALIASES.values()) | {
         'Ropa / Ternos', 'Ropa / Camisas', 'Ropa / Corbatas', 'Ropa / Hombres / Zapatos', 'Ropa / Mujeres / Zapatos'
     })
-    cat_rows = models.execute_kw(
-        odoo_db, uid, odoo_api_key,
-        'product.category', 'search_read',
-        [[]],
-        {'fields': ['name', 'complete_name'], 'limit': 2000}
-    )
-    existing_categories = {str(c.get('name') or '').strip() for c in cat_rows if c.get('name')}
-    existing_complete = {str(c.get('complete_name') or '').strip() for c in cat_rows if c.get('complete_name')}
-    missing_categories = [c for c in expected_categories if c not in existing_categories and c not in existing_complete]
+    missing_categories = [c for c in expected_categories if c not in current_cats]
     recommendations = []
-    if missing:
-        recommendations.append('Crear atributos faltantes en Odoo > Inventario > Configuración > Atributos.')
+    if missing_attrs:
+        recommendations.append('Crear atributos faltantes en Odoo según attributes_missing.')
     if missing_categories:
-        recommendations.append('Crear categorías faltantes en Odoo > Inventario > Configuración > Categorías de producto.')
-    if missing:
-        recommendations.append('Mientras no existan atributos, exportar con include_brand_color_attributes=false.')
-    if not missing and not missing_categories:
-        recommendations.append('Atributos listos. Puedes exportar con include_brand_color_attributes=true.')
+        recommendations.append('Crear categorías faltantes en Odoo según categories_missing.')
+    if not missing_attrs and not missing_categories:
+        recommendations.append('Catálogo local completo. Puedes exportar con include_brand_color_attributes=true.')
     return {
-        'connected': True,
-        'odoo_url': base_url,
-        'odoo_db': odoo_db,
-        'attributes_found': sorted(list(by_name.keys())),
-        'attributes_missing': missing,
+        'mode': 'offline_catalog_snapshot',
+        'snapshot_path': str(snapshot_path),
+        'attributes_current_total': len(current_attrs),
+        'categories_current_total': len(current_cats),
+        'attributes_missing': missing_attrs,
         'categories_missing': missing_categories,
-        'total_categories_expected': len(expected_categories),
-        'can_enable_brand_color_export': len([a for a in ['Marca', 'Color'] if a in missing]) == 0,
+        'can_enable_brand_color_export': all(a not in missing_attrs for a in ('Marca', 'Color')),
         'ready_for_product_import': len(missing_categories) == 0,
-        'recommended_include_brand_color_attributes': len([a for a in ['Marca', 'Color'] if a in missing]) == 0,
         'recommendations': recommendations,
     }
 
