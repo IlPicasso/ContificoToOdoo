@@ -1,3 +1,5 @@
+import json
+from datetime import datetime
 from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
@@ -8,11 +10,20 @@ from fastapi.responses import FileResponse
 from ..contifico import ContificoClient
 from ..dependencies import get_contifico_client
 from .service import OdooMigrationService
+from .stock_worker import StockWorker
 
 router = APIRouter(prefix="/odoo-migration", tags=["Odoo Migration"])
 
 EXPORT_JOBS: dict[str, dict] = {}
 EXPORT_LOCK = Lock()
+
+STOCK_JOBS: dict[str, dict] = {}
+STOCK_WORKERS: dict[str, StockWorker] = {}
+
+
+def _stock_status(run_id: str) -> dict:
+    return STOCK_JOBS.get(run_id, {"status": "idle", "run_id": run_id})
+
 
 
 def _output_root() -> Path:
@@ -130,6 +141,7 @@ def download_file(run_id: str, filename: str):
         "excluded_zero_stock.csv",
         "debug.log",
         "raw.log",
+        "stock_errors.csv",
     }
     if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
@@ -138,3 +150,76 @@ def download_file(run_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     media_type = "text/plain" if filename.endswith('.log') else "text/csv"
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
+
+
+@router.post('/runs/{run_id}/stock/start')
+def start_stock_worker(run_id: str, contifico_client: ContificoClient = Depends(get_contifico_client)):
+    root = _output_root(); run_folder = root / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail='Run no encontrado')
+    if _stock_status(run_id).get('status') == 'running':
+        return _stock_status(run_id)
+
+    worker = StockWorker(run_id, contifico_client, root)
+    STOCK_WORKERS[run_id] = worker
+    STOCK_JOBS[run_id] = {"status": "running", "run_id": run_id, "started_at": datetime.utcnow().isoformat()+'Z'}
+
+    def _run() -> None:
+        try:
+            metrics = worker.run(retry_failed=False)
+            STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), **metrics, "status": "completed", "updated_at": datetime.utcnow().isoformat()+'Z'}
+        except Exception as exc:  # pragma: no cover
+            STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), "status": "failed", "error": str(exc), "updated_at": datetime.utcnow().isoformat()+'Z'}
+
+    Thread(target=_run, daemon=True).start()
+    return STOCK_JOBS[run_id]
+
+
+@router.get('/runs/{run_id}/stock/status')
+def stock_status(run_id: str):
+    root = _output_root(); state_path = root / run_id / 'stock_state.json'
+    if not state_path.exists():
+        raise HTTPException(status_code=404, detail='Run sin estado de stock')
+    data = json.loads(state_path.read_text(encoding='utf-8'))
+    total = len(data); done = len([r for r in data if r.get('status')=='done']); failed = len([r for r in data if r.get('status')=='error']); pending = len([r for r in data if r.get('status')=='pending'])
+    pct = (done/total*100) if total else 0.0
+    payload = {"run_id": run_id, "total": total, "done": done, "failed": failed, "pending": pending, "percent": round(pct,2)}
+    return {**payload, **_stock_status(run_id)}
+
+
+@router.post('/runs/{run_id}/stock/retry-failed')
+def retry_failed_stock(run_id: str, contifico_client: ContificoClient = Depends(get_contifico_client)):
+    root = _output_root(); run_folder = root / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail='Run no encontrado')
+    worker = StockWorker(run_id, contifico_client, root)
+    STOCK_WORKERS[run_id] = worker
+    STOCK_JOBS[run_id] = {"status": "running", "run_id": run_id, "mode": "retry_failed", "started_at": datetime.utcnow().isoformat()+'Z'}
+
+    def _run() -> None:
+        try:
+            metrics = worker.run(retry_failed=True)
+            STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), **metrics, "status": "completed", "updated_at": datetime.utcnow().isoformat()+'Z'}
+        except Exception as exc:  # pragma: no cover
+            STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), "status": "failed", "error": str(exc), "updated_at": datetime.utcnow().isoformat()+'Z'}
+
+    Thread(target=_run, daemon=True).start()
+    return STOCK_JOBS[run_id]
+
+
+@router.post('/runs/{run_id}/stock/pause')
+def pause_stock(run_id: str):
+    w = STOCK_WORKERS.get(run_id)
+    if not w:
+        raise HTTPException(status_code=404, detail='Worker no encontrado')
+    w.pause(); STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), 'status': 'paused'}
+    return STOCK_JOBS[run_id]
+
+
+@router.post('/runs/{run_id}/stock/resume')
+def resume_stock(run_id: str):
+    w = STOCK_WORKERS.get(run_id)
+    if not w:
+        raise HTTPException(status_code=404, detail='Worker no encontrado')
+    w.resume(); STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), 'status': 'running'}
+    return STOCK_JOBS[run_id]

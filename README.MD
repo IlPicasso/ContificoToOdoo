@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.8
+Versión 1.0.10
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -192,6 +192,8 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.10 (2026-05-03)**: Se añadió worker de stock por corrida (`stock_worker.py`) con procesamiento por lotes/concurrencia configurable (`STOCK_BATCH_SIZE`, `STOCK_MAX_CONCURRENCY`, `STOCK_RPS_LIMIT`), retries con backoff+jitter para errores 429/5xx, checkpoints por batch (`stock_state.json`, `initial_stock.csv`) y endpoints de control/estado (`start`, `status`, `retry-failed`, `pause`, `resume`) más `stock_errors.csv`.
+- **1.0.9 (2026-05-03)**: Se separó la exportación en 2 fases en `OdooMigrationService`: (1) snapshot de productos y cierre de `product_product.csv` sin bloquearse por stock por bodega, (2) enriquecimiento progresivo de stock por `id` de producto con estado persistente por item (`stock_state.json`) y snapshot intermedio (`products_snapshot.jsonl`).
 - **1.0.8 (2026-05-03)**: Se amplió `config/warehouse_catalog.json` con el cruce de códigos/nombres de bodegas Contífico hacia ubicaciones Odoo (incluyendo BSR/OFA/BMT/B2/BW/BM/BTL), y la exportación de stock ahora soporta estas ubicaciones en `initial_stock.csv`.
 - **1.0.7 (2026-05-03)**: Se añadió catálogo de bodegas por ID de Contífico (`config/warehouse_catalog.json`) y mapeo de stock por `bodega_id`/nombre/código con fallback a endpoint `/producto/<ID>/stock/` para mayor precisión.
 - **1.0.6 (2026-05-03)**: Se añadió regla de agrupación BIG SIZE (`BG`) para variantes del mismo código madre, alias de marca `ANTONY MORATO/MORATO`, endpoint de stock por ID (`/temp/contifico/products/{id}/stock`) y mapping configurable de bodegas Contífico→Odoo (`config/warehouse_mapping.json`).
