@@ -383,3 +383,20 @@ __all__ = [
     "fetch_invoice_by_document_number",
     "fetch_invoice_by_customer_and_document",
 ]
+
+
+@router.get("/products/{product_id}/stock")
+def preview_contifico_product_stock(
+    product_id: str,
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+):
+    """Stock por bodega para un producto específico (requiere ID de producto Contífico)."""
+
+    try:
+        return contifico_client.get_product_stock(product_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except ContificoTransportError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=exc.detail) from exc
+    except ContificoAPIError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc

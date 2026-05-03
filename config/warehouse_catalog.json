@@ -1,0 +1,20 @@
+[
+  {
+    "id": "OjZdy9VLUNKJdJ4m",
+    "codigo": "BOD001",
+    "nombre": "Almacenes",
+    "odoo_key": "TUR"
+  },
+  {
+    "id": "XPnaz7WLSREnbO2y",
+    "codigo": "BOD002",
+    "nombre": "Bodegas Principales",
+    "odoo_key": "BPU"
+  },
+  {
+    "id": "DKVeZBLkiMAxe8Py",
+    "codigo": "BOD009",
+    "nombre": "BODEGAS BATAN",
+    "odoo_key": "BAT"
+  }
+]

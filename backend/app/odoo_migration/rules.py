@@ -150,3 +150,8 @@ def build_error_row(**kwargs):
 def build_zero_stock_exclusion_row(**kwargs):
     kwargs['motivo_exclusion'] = 'stock_total_0'
     return kwargs
+
+
+def normalize_sku_for_group(sku: str) -> str:
+    normalized = normalize_text(sku).replace(' ', '')
+    return normalized.replace('BG', '')

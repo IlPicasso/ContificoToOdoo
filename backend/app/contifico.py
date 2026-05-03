@@ -635,6 +635,24 @@ class ContificoClient:
             payload=data,
         )
 
+
+    def get_product_stock(self, product_id: str | int) -> list[Dict[str, Any]]:
+        """Obtiene stock por bodega de un producto por ID (endpoint /producto/<ID>/stock/)."""
+
+        normalized_id = str(product_id).strip()
+        if not normalized_id:
+            raise ValueError("El identificador del producto es obligatorio para consultar stock.")
+        data = self._request("GET", f"producto/{normalized_id}/stock/")
+        if data is None:
+            return []
+        if isinstance(data, list):
+            return data
+        raise ContificoAPIError(
+            status_code=200,
+            detail="El formato de respuesta para stock por producto no es el esperado.",
+            payload=data,
+        )
+
     def list_warehouses(self) -> Iterable[Dict[str, Any]]:
         """Lista las bodegas configuradas en Contífico."""
 

@@ -34,7 +34,8 @@ def test_group_stock_rule_base_key():
 
 def test_stock_fallback_from_cantidad_stock():
     from app.odoo_migration.service import OdooMigrationService
-    stock = OdooMigrationService._extract_stock_by_warehouse({'cantidad_stock':'1.0'})
+    service = OdooMigrationService(client=None)
+    stock = service._extract_stock_by_warehouse({'cantidad_stock':'1.0'})
     assert stock['BPU'] == 1.0
 
 
@@ -51,3 +52,18 @@ def test_detect_shoes_prefix_zp():
     from app.odoo_migration.rules import detect_category
     assert detect_category('H. ZAPATOS', '', sku='ZP-LOAFER-H-BRW/8.5') == 'Ropa / Hombres / Zapatos'
     assert detect_category('ZAPATO DAMA', '', sku='ZP-ABC/38') == 'Ropa / Mujeres / Zapatos'
+
+
+def test_bg_group_normalization():
+    from app.odoo_migration.rules import normalize_sku_for_group
+    from app.odoo_migration.service import OdooMigrationService
+    assert normalize_sku_for_group('210001BG/46') == '210001/46'
+    assert OdooMigrationService._base_group_key('210001BG/46','') == '210001'
+
+
+def test_warehouse_catalog_file_exists():
+    from pathlib import Path
+    import json
+    path = Path(__file__).resolve().parents[2] / "config/warehouse_catalog.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert any(w.get("codigo") == "BOD001" for w in data)

@@ -11,10 +11,12 @@ from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
     parse_shirt_sku, parse_suit_sku, parse_blazer_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku,
     parse_generic_size, build_product_values, build_external_id, build_mapping_report_row,
-    build_error_row, build_zero_stock_exclusion_row,
+    build_error_row, build_zero_stock_exclusion_row, normalize_sku_for_group,
 )
 
 WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BAT": "BAT/Existencias"}
+WAREHOUSE_MAP_CONFIG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_mapping.json").read_text(encoding="utf-8"))
+WAREHOUSE_CATALOG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_catalog.json").read_text(encoding="utf-8"))
 PRODUCT_COLUMNS = ["External ID","Name","Product Type","Product Category","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
 STOCK_COLUMNS = ["sku","ubicacion_odoo","cantidad","costo_unitario"]
 MAP_COLUMNS = ["sku","nombre_contifico","producto_madre_detectado","categoria_odoo_detectada","talla_detectada","manga_detectada","ancho_corbata_detectado","marca_detectada","color_detectado","barcode","precio","costo","stock_bpu","stock_tur","stock_bat","stock_total_contifico","estado","confidence","parser_rule"]
@@ -31,6 +33,9 @@ class MigrationOutput:
 class OdooMigrationService:
     def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration"):
         self.client = client; self.output_root = Path(output_root)
+        self._warehouse_by_id = {w.get("id"): w for w in WAREHOUSE_CATALOG if w.get("id")}
+        self._warehouse_by_code = {str(w.get("codigo","")).upper(): w for w in WAREHOUSE_CATALOG}
+        self._warehouse_by_name = {str(w.get("nombre","")).upper(): w for w in WAREHOUSE_CATALOG}
 
     def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
@@ -122,9 +127,20 @@ class OdooMigrationService:
             if len(batch)<page_size: break
         return items, pages, pages>=max_pages
 
-    @staticmethod
-    def _extract_stock_by_warehouse(item: dict[str, Any]):
+    def _extract_stock_by_warehouse(self, item: dict[str, Any]):
         result={"BPU":0.0,"TUR":0.0,"BAT":0.0}
+
+        def map_entry(raw_code: str, raw_name: str, raw_id: str, qty: float) -> None:
+            mapped = None
+            if raw_id and raw_id in self._warehouse_by_id:
+                mapped = self._warehouse_by_id[raw_id].get('odoo_key')
+            if not mapped and raw_code:
+                mapped = WAREHOUSE_MAP_CONFIG.get(raw_code) or self._warehouse_by_code.get(raw_code, {}).get('odoo_key')
+            if not mapped and raw_name:
+                mapped = WAREHOUSE_MAP_CONFIG.get(raw_name) or self._warehouse_by_name.get(raw_name, {}).get('odoo_key')
+            if mapped in result:
+                result[mapped] += qty
+
         raw=item.get('bodegas') or item.get('stock_por_bodega') or []
         if isinstance(raw,dict):
             for k in result:
@@ -132,15 +148,31 @@ class OdooMigrationService:
             if sum(result.values()) <= 0:
                 result['BPU'] = float(item.get('cantidad_stock') or 0)
             return result
+
         if isinstance(raw,list):
             for e in raw:
                 if not isinstance(e,dict):
                     continue
-                code=str(e.get('codigo') or e.get('siglas') or e.get('bodega') or '').upper()
+                raw_code=str(e.get('codigo') or e.get('siglas') or e.get('bodega_codigo') or '').upper()
+                raw_name=str(e.get('bodega_nombre') or e.get('bodega') or '').upper()
+                raw_id=str(e.get('bodega_id') or e.get('id') or '')
                 qty=float(e.get('cantidad') or e.get('stock') or 0)
-                for key in result:
-                    if key in code:
-                        result[key]=qty
+                map_entry(raw_code, raw_name, raw_id, qty)
+
+        # If no per-warehouse detail, try endpoint by product id
+        if sum(result.values()) <= 0 and item.get('id'):
+            try:
+                stock_detail = self.client.get_product_stock(str(item.get('id')))
+                for e in stock_detail:
+                    if not isinstance(e, dict):
+                        continue
+                    raw_name = str(e.get('bodega_nombre') or '').upper()
+                    raw_id = str(e.get('bodega_id') or '')
+                    qty = float(e.get('cantidad') or 0)
+                    map_entry('', raw_name, raw_id, qty)
+            except Exception:
+                pass
+
         if sum(result.values()) <= 0:
             result['BPU'] = float(item.get('cantidad_stock') or 0)
         return result
@@ -149,8 +181,11 @@ class OdooMigrationService:
     def _base_group_key(sku: str, name: str) -> str:
         if '-' in sku and sku.endswith(('-CO', '-FJ')):
             return sku[:-3]
-        if '/' in sku:
-            return sku.rsplit('/', 1)[0]
+        normalized = normalize_sku_for_group(sku)
+        if '-' in normalized and normalized.endswith(('-CO', '-FJ')):
+            return normalized[:-3]
+        if '/' in normalized:
+            return normalized.rsplit('/', 1)[0]
         if '-' in sku:
             return sku.rsplit('-', 1)[0]
         return sku or name

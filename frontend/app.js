@@ -71,7 +71,12 @@ $('loadCategories').addEventListener('click', async () => {
   try { show('categoriesOut', await apiGet('/temp/contifico/product-categories')); } catch (e) { showErr(e); }
 });
 $('loadProductDetail').addEventListener('click', async () => {
-  try { show('productDetailOut', await apiGet(`/temp/contifico/products/${encodeURIComponent($('productId').value.trim())}`)); } catch (e) { showErr(e); }
+  try {
+    const id = $('productId').value.trim();
+    const detail = await apiGet(`/temp/contifico/products/${encodeURIComponent(id)}`);
+    let stock = [];
+    try { stock = await apiGet(`/temp/contifico/products/${encodeURIComponent(id)}/stock`); } catch (_) {}
+    show('productDetailOut', { detail, stock }); } catch (e) { showErr(e); }
 });
 $('loadWarehouses').addEventListener('click', async () => {
   try { show('warehousesOut', await apiGet('/temp/contifico/warehouses')); } catch (e) { showErr(e); }
