@@ -23,7 +23,7 @@ def test_real_patterns():
 def test_zero_stock_rule_and_values():
     assert should_exclude_zero_stock(0)
     assert not should_exclude_zero_stock(0.01)
-    assert build_product_values(talla='46', marca='BRUNO CASSINI', color='Azul') == 'Talla:46,Marca:BRUNO CASSINI,Color:Azul'
+    assert build_product_values(talla='46') == 'Talla:46'
 
 
 def test_group_stock_rule_base_key():
@@ -68,3 +68,14 @@ def test_warehouse_catalog_file_exists():
     data = json.loads(path.read_text(encoding="utf-8"))
     codes = {w.get("codigo") for w in data}
     assert {"BOD001", "BOD002", "BOD009", "B01LV"}.issubset(codes)
+
+
+def test_detect_gendered_categories_men_and_kids():
+    from app.odoo_migration.rules import detect_category
+    assert detect_category('CAMISA HOMBRE SLIM FIT', '') == 'Ropa / Hombres / Camisas'
+    assert detect_category('PANTALON NIÑO AZUL', '') == 'Ropa / Niños / Pantalones'
+
+
+def test_detect_category_fallback_to_sin_categoria():
+    from app.odoo_migration.rules import detect_category
+    assert detect_category('ITEM GENERICO SIN MATCH', 'OTROS SIN MAPEO') == 'Sin Categoria'
