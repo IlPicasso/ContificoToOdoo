@@ -55,10 +55,38 @@ class Settings(BaseSettings):
         default="https://api.contifico.com/sistema/api/v1",
         description="URL base para la API de Contífico.",
     )
+    contifico_products_api_base_url: str | None = Field(
+        default=None,
+        description=(
+            "URL base opcional para catálogo de productos (por ejemplo API v2). "
+            "Si no se define, se usa contifico_api_base_url."
+        ),
+    )
     contifico_timeout_seconds: float = Field(
         default=30.0,
         ge=1.0,
         description="Tiempo máximo de espera (en segundos) para peticiones a Contífico.",
+    )
+    contifico_products_page_delay_seconds: float = Field(
+        default=1.0,
+        ge=0.0,
+        description="Pausa entre páginas al descargar productos (útil para evitar throttling).",
+    )
+    contifico_products_page_retry_attempts: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+        description="Intentos máximos por página de productos ante errores transitorios.",
+    )
+    contifico_products_page_retry_backoff_base_seconds: float = Field(
+        default=1.5,
+        ge=0.1,
+        description="Base del backoff exponencial para reintentos de páginas de productos.",
+    )
+    contifico_products_page_retry_jitter_seconds: float = Field(
+        default=0.4,
+        ge=0.0,
+        description="Jitter aleatorio agregado al backoff de reintentos de páginas.",
     )
     contifico_invoice_cache_path: str | None = Field(
         default="./data/contifico_invoice_cache.json",
