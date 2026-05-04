@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.27
+Versión 1.0.28
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -261,6 +261,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.28 (2026-05-04)**: Se añadieron reintentos automáticos con backoff para `ReadTimeout` en llamadas HTTP a Contífico, reduciendo fallas transitorias al fetchear catálogos/productos.
 - **1.0.27 (2026-05-04)**: Se reforzó el comportamiento por fases: en Fase 1 (`export_stock=false`) no se hace procesamiento de stock por producto ni exclusión por stock 0; la lógica/filas de stock quedan para Fase 2 (`export_stock=true`).
 - **1.0.26 (2026-05-04)**: Las salidas de importación de variantes ahora se generan dentro de cada `run` (descargables al final desde la API) en vez de escribirse en `docs/odoo_import_outputs`, evitando confusión y manteniendo todos los artefactos por corrida en un solo lugar.
 - **1.0.25 (2026-05-04)**: Se estandarizó el nombre del atributo de corbata a `Ancho Corbata` (sin "de") en precheck y salidas de variantes para que coincida con el nombre real en Odoo.
