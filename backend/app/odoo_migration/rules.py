@@ -47,6 +47,18 @@ def detect_category(nombre: str, categoria_raw: str = '', sku: str = '') -> str:
         return "Ropa / Hombres / Zapatos"
 
     woman_hint = "MUJER" in source or "DAMA" in source
+    men_hint = "HOMBRE" in source or "HOMBRES" in source
+    kid_hint = "NINO" in source or "NINOS" in source or "NINA" in source or "NINAS" in source
+
+    if kid_hint:
+        if "ZAPATO" in source:
+            return "Ropa / Niños / Zapatos"
+        if "CAMISA" in source:
+            return "Ropa / Niños / Camisas"
+        if "PANTALON" in source:
+            return "Ropa / Niños / Pantalones"
+        return "Ropa / Niños"
+
     if woman_hint:
         if "PANTALON" in source:
             return "Ropa / Mujeres / Pantalones"
@@ -59,10 +71,21 @@ def detect_category(nombre: str, categoria_raw: str = '', sku: str = '') -> str:
         for key, cat in CATEGORY_ALIASES.items():
             if key in source and cat.startswith("Ropa / Mujeres"):
                 return cat
+    if men_hint:
+        if "PANTALON" in source:
+            return "Ropa / Hombres / Pantalones"
+        if "JEANS" in source:
+            return "Ropa / Hombres / Jeans"
+        if "CAMISA" in source:
+            return "Ropa / Hombres / Camisas"
+        if "ZAPATO" in source:
+            return "Ropa / Hombres / Zapatos"
+        if "CORBATA" in source:
+            return "Ropa / Hombres / Corbatas"
     for key, cat in CATEGORY_ALIASES.items():
         if key in source:
             return cat
-    return ''
+    return 'Sin Categoria'
 
 
 def calculate_total_stock(stock_map: dict[str, float]) -> float:
@@ -129,7 +152,7 @@ def build_product_values(*, talla='', manga='', ancho_corbata='', marca='', colo
     parts = []
     if talla: parts.append(f'Talla:{talla}')
     if manga: parts.append(f'Manga de Camisa:{manga}')
-    if ancho_corbata: parts.append(f'Ancho de Corbata:{ancho_corbata}')
+    if ancho_corbata: parts.append(f'Ancho Corbata:{ancho_corbata}')
     if marca: parts.append(f'Marca:{marca}')
     if color: parts.append(f'Color:{color}')
     return ','.join(parts)
