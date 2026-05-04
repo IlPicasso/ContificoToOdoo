@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.25
+Versión 1.0.26
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -261,6 +261,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.26 (2026-05-04)**: Las salidas de importación de variantes ahora se generan dentro de cada `run` (descargables al final desde la API) en vez de escribirse en `docs/odoo_import_outputs`, evitando confusión y manteniendo todos los artefactos por corrida en un solo lugar.
 - **1.0.25 (2026-05-04)**: Se estandarizó el nombre del atributo de corbata a `Ancho Corbata` (sin "de") en precheck y salidas de variantes para que coincida con el nombre real en Odoo.
 - **1.0.24 (2026-05-03)**: Se añadió exportación orientada a productos madre+variantes hacia `docs/odoo_import_outputs` con archivos `01_product_templates_with_existing_attributes.csv`, `02_variant_update_map.csv`, `03_stock_quant_by_variant.csv`, `04_missing_attribute_values_report.csv` y reporte `import_products_and_variants_report.md`.
 - **1.0.23 (2026-05-03)**: Se generalizó el control de atributos opcionales en frontend/backend con `include_additional_attributes` (manteniendo compatibilidad con `include_brand_color_attributes`) para reflejar que el flujo contempla más atributos y no solo un check aislado de Marca/Color.

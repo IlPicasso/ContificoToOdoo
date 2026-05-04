@@ -26,7 +26,6 @@ ERROR_COLUMNS = ["sku","nombre_contifico","problema","sugerencia","raw_categoria
 EXCLUDED_ZERO_COLUMNS = ["sku","nombre_contifico","codigo_barra","categoria_id","marca_nombre","pvp1","costo","stock_total_contifico","estado_contifico","motivo_exclusion"]
 TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/product_product_template.csv"
 TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/stock_quant.csv"
-ODOO_OUTPUTS_DIR = Path(__file__).resolve().parents[3] / "docs/odoo_import_outputs"
 TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost","Weight","Sales Description","Product Attributes / Attribute","Product Attributes / Values"]
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
@@ -65,7 +64,7 @@ class OdooMigrationService:
         self._write_csv(errors_csv, ERROR_COLUMNS, phase1['erows'])
         self._write_csv(mapping_csv, MAP_COLUMNS, phase1['mrows'])
         self._write_csv(excluded_zero_csv, EXCLUDED_ZERO_COLUMNS, phase1['zrows'])
-        self._write_variant_import_outputs(phase1.get("variant_rows", []))
+        self._write_variant_import_outputs(folder, phase1.get("variant_rows", []))
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
@@ -147,8 +146,7 @@ class OdooMigrationService:
         self._write_csv(product_csv, PRODUCT_COLUMNS, prows)
         return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state, "variant_rows": variant_rows}
 
-    def _write_variant_import_outputs(self, variant_rows: list[dict[str, Any]]) -> None:
-        ODOO_OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    def _write_variant_import_outputs(self, run_folder: Path, variant_rows: list[dict[str, Any]]) -> None:
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in variant_rows:
             key = self._slugify(row.get("name") or row.get("sku") or "")
@@ -200,10 +198,10 @@ class OdooMigrationService:
             if ghost > 0 and len(examples) < 10:
                 examples.append((tmpl_ext, first["name"], len(rows), ghost))
 
-        self._write_csv(ODOO_OUTPUTS_DIR / "01_product_templates_with_existing_attributes.csv", TEMPLATE_ATTR_COLUMNS, template_rows)
-        self._write_csv(ODOO_OUTPUTS_DIR / "02_variant_update_map.csv", VARIANT_MAP_COLUMNS, variant_map_rows)
-        self._write_csv(ODOO_OUTPUTS_DIR / "03_stock_quant_by_variant.csv", STOCK_BY_VARIANT_COLUMNS, stock_rows)
-        self._write_csv(ODOO_OUTPUTS_DIR / "04_missing_attribute_values_report.csv", MISSING_ATTR_COLUMNS, missing_rows)
+        self._write_csv(run_folder / "01_product_templates_with_existing_attributes.csv", TEMPLATE_ATTR_COLUMNS, template_rows)
+        self._write_csv(run_folder / "02_variant_update_map.csv", VARIANT_MAP_COLUMNS, variant_map_rows)
+        self._write_csv(run_folder / "03_stock_quant_by_variant.csv", STOCK_BY_VARIANT_COLUMNS, stock_rows)
+        self._write_csv(run_folder / "04_missing_attribute_values_report.csv", MISSING_ATTR_COLUMNS, missing_rows)
         report = [
             "# import_products_and_variants_report",
             f"- Total SKUs de origen: {len(variant_rows)}",
@@ -222,7 +220,7 @@ class OdooMigrationService:
             report.append("- Ejemplos con posibles combinaciones fantasma:")
             for e in examples:
                 report.append(f"  - {e[0]} | {e[1]} | variantes reales={e[2]} | combinaciones fantasma≈{e[3]}")
-        (ODOO_OUTPUTS_DIR / "import_products_and_variants_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+        (run_folder / "import_products_and_variants_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 
     @staticmethod
     def _slugify(text: str) -> str:
