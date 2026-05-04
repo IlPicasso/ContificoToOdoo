@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,11 @@ ERROR_COLUMNS = ["sku","nombre_contifico","problema","sugerencia","raw_categoria
 EXCLUDED_ZERO_COLUMNS = ["sku","nombre_contifico","codigo_barra","categoria_id","marca_nombre","pvp1","costo","stock_total_contifico","estado_contifico","motivo_exclusion"]
 TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/product_product_template.csv"
 TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/stock_quant.csv"
+ODOO_OUTPUTS_DIR = Path(__file__).resolve().parents[3] / "docs/odoo_import_outputs"
+TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost","Weight","Sales Description","Product Attributes / Attribute","Product Attributes / Values"]
+VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
+STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
+MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
 
 
 @dataclass
@@ -40,7 +46,7 @@ class OdooMigrationService:
         self._warehouse_by_code = {str(w.get("codigo","")).upper(): w for w in WAREHOUSE_CATALOG}
         self._warehouse_by_name = {str(w.get("nombre","")).upper(): w for w in WAREHOUSE_CATALOG}
 
-    def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, include_brand_color_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
+    def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, include_additional_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
         ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
         product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
@@ -48,7 +54,7 @@ class OdooMigrationService:
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
         products,pages_fetched,hit_max_pages=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
 
-        phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_brand_color_attributes=include_brand_color_attributes, progress_callback=progress_callback)
+        phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, progress_callback=progress_callback)
         self._write_stock_state(state_path, phase1['stock_state'])
         self._write_csv(stock_csv, STOCK_COLUMNS, [])
         self._write_csv(stock_quant_csv, STOCK_QUANT_COLUMNS, [])
@@ -59,11 +65,12 @@ class OdooMigrationService:
         self._write_csv(errors_csv, ERROR_COLUMNS, phase1['erows'])
         self._write_csv(mapping_csv, MAP_COLUMNS, phase1['mrows'])
         self._write_csv(excluded_zero_csv, EXCLUDED_ZERO_COLUMNS, phase1['zrows'])
+        self._write_variant_import_outputs(phase1.get("variant_rows", []))
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
-        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_brand_color_attributes": include_brand_color_attributes}
+        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes}
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
@@ -79,8 +86,8 @@ class OdooMigrationService:
             })
         return MigrationOutput(folder,product_csv,stock_csv,errors_csv,mapping_csv,excluded_zero_csv,len(phase1['prows']),len(phase1['erows']),pages_fetched,hit_max_pages,debug_log,raw_log,summary)
 
-    def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, include_brand_color_attributes: bool = False, progress_callback=None) -> dict[str, Any]:
-        prows=[]; mrows=[]; erows=[]; zrows=[]
+    def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, include_additional_attributes: bool = False, progress_callback=None) -> dict[str, Any]:
+        prows=[]; mrows=[]; erows=[]; zrows=[]; variant_rows=[]
         seen_sku=set(); seen_barcode=set(); counts={"ok":0,"manual_review":0,"error":0,"excluded_zero_stock":0}
         group_totals = {}; prepared=[]; stock_state=[]
         for item in products:
@@ -124,16 +131,103 @@ class OdooMigrationService:
                 if barcode and barcode in seen_barcode:
                     erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='Código de barras duplicado',sugerencia='Depurar barcode',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
                 seen_sku.add(sku); seen_barcode.add(barcode)
-                pvalues=build_product_values(talla=talla,manga=manga,ancho_corbata=ancho,marca=brand if include_brand_color_attributes else '',color=color if include_brand_color_attributes else '')
+                pvalues=build_product_values(talla=talla,manga=manga,ancho_corbata=ancho,marca=brand if include_additional_attributes else '',color=color if include_additional_attributes else '')
                 prows.append({"External ID": build_external_id(sku),"Name": prod_name,"Product Type":"Goods", "Internal Reference":sku,"Barcode":barcode,"Sales Price":f"{price:.2f}","Cost":f"{cost:.2f}","Weight":"0.0","Sales Description":f"Categoría sugerida: {category}","Product Values":pvalues})
                 mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado=prod_name,categoria_odoo_detectada=category,talla_detectada=talla,manga_detectada=manga,ancho_corbata_detectado=ancho,marca_detectada=brand,color_detectado=color,barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado=state,confidence=confidence,parser_rule=parser_rule or 'generic'))
+                variant_rows.append({
+                    "sku": sku, "name": prod_name, "barcode": barcode, "price": f"{price:.2f}", "cost": f"{cost:.2f}",
+                    "weight": "0.0", "category": category, "stock_map": stock_map,
+                    "attrs": {"Marca": brand, "Color": color, "Talla": talla, "Manga de Camisa": manga, "Ancho de Corbata": ancho}
+                })
                 payload = {"id": str(item.get('id') or ''), "sku": sku, "cost": cost, "stock_map": stock_map}
                 snap.write(json.dumps(payload, ensure_ascii=False) + "\n")
                 stock_state.append({"product_id": payload["id"], "sku": sku, "status": "pending", "retry_count": 0, "last_error": ""})
                 if progress_callback and (i % 25 == 0 or i == len(prepared)): progress_callback({"stage":"phase_1_processing","processed_items":i,"total_items":len(prepared),"found_items":len(products)})
 
         self._write_csv(product_csv, PRODUCT_COLUMNS, prows)
-        return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state}
+        return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state, "variant_rows": variant_rows}
+
+    def _write_variant_import_outputs(self, variant_rows: list[dict[str, Any]]) -> None:
+        ODOO_OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+        grouped: dict[str, list[dict[str, Any]]] = {}
+        for row in variant_rows:
+            key = self._slugify(row.get("name") or row.get("sku") or "")
+            grouped.setdefault(key, []).append(row)
+
+        used_templates: dict[str, int] = {}
+        template_rows, variant_map_rows, stock_rows, missing_rows = [], [], [], []
+        examples = []
+        for key, rows in grouped.items():
+            base_ext = f"adams_tmpl_{key}" if key else "adams_tmpl_producto"
+            n = used_templates.get(base_ext, 0) + 1
+            used_templates[base_ext] = n
+            tmpl_ext = base_ext if n == 1 else f"{base_ext}_dup_{n}"
+            first = rows[0]
+            attr_values: dict[str, set[str]] = {}
+            real_combos = set()
+            for r in rows:
+                attrs = {k: v for k, v in (r.get("attrs") or {}).items() if v}
+                for a, v in attrs.items():
+                    attr_values.setdefault(a, set()).add(v)
+                combo = "|".join([f"{k}={attrs[k]}" for k in sorted(attrs.keys())])
+                real_combos.add(combo)
+                source_ext = build_external_id(r["sku"])
+                variant_map_rows.append({
+                    "Template External ID": tmpl_ext, "Template Name": first["name"], "Source Variant External ID": source_ext,
+                    "Variant Attributes Key": combo, "Internal Reference": r["sku"], "Barcode": r.get("barcode",""),
+                    "Sales Price": r["price"], "Cost": r["cost"], "Weight": r["weight"],
+                    "Original Product Values": build_product_values(talla=attrs.get("Talla",""), manga=attrs.get("Manga de Camisa",""), ancho_corbata=attrs.get("Ancho de Corbata",""), marca=attrs.get("Marca",""), color=attrs.get("Color",""))
+                })
+                for wh, loc in WAREHOUSE_TO_LOCATION.items():
+                    qty = float((r.get("stock_map") or {}).get(wh, 0) or 0)
+                    if qty > 0:
+                        stock_rows.append({"Product External ID": source_ext, "Location": loc, "Quantity": f"{qty:.2f}"})
+            for attr, values in sorted(attr_values.items()):
+                values_csv = ",".join(sorted(values))
+                template_rows.append({
+                    "External ID": tmpl_ext, "Name": first["name"], "Product Type": "Goods", "Sales Price": first["price"],
+                    "Cost": first["cost"], "Weight": first["weight"], "Sales Description": f"Categoría sugerida: {first['category']}",
+                    "Product Attributes / Attribute": attr, "Product Attributes / Values": values_csv
+                })
+                for v in sorted(values):
+                    missing_rows.append({"Attribute": attr, "Value": v, "Product Count": str(sum(1 for rr in rows if (rr.get('attrs') or {}).get(attr)==v)), "Example Product": first["name"], "Example Internal Reference": rows[0]["sku"]})
+            # combinaciones fantasma
+            axes = [sorted(vs) for vs in attr_values.values() if vs]
+            theoretical = 1
+            for axis in axes:
+                theoretical *= max(1, len(axis))
+            ghost = theoretical - len(real_combos)
+            if ghost > 0 and len(examples) < 10:
+                examples.append((tmpl_ext, first["name"], len(rows), ghost))
+
+        self._write_csv(ODOO_OUTPUTS_DIR / "01_product_templates_with_existing_attributes.csv", TEMPLATE_ATTR_COLUMNS, template_rows)
+        self._write_csv(ODOO_OUTPUTS_DIR / "02_variant_update_map.csv", VARIANT_MAP_COLUMNS, variant_map_rows)
+        self._write_csv(ODOO_OUTPUTS_DIR / "03_stock_quant_by_variant.csv", STOCK_BY_VARIANT_COLUMNS, stock_rows)
+        self._write_csv(ODOO_OUTPUTS_DIR / "04_missing_attribute_values_report.csv", MISSING_ATTR_COLUMNS, missing_rows)
+        report = [
+            "# import_products_and_variants_report",
+            f"- Total SKUs de origen: {len(variant_rows)}",
+            f"- Total productos madre generados: {len({r['External ID'] for r in template_rows})}",
+            f"- Total variantes/subproductos reales: {len(variant_map_rows)}",
+            f"- Total productos con Marca: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Marca'))}",
+            f"- Total productos con Color: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Color'))}",
+            f"- Total productos con Talla: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Talla'))}",
+            f"- Total productos con Ancho de Corbata: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Ancho de Corbata'))}",
+            f"- Total productos con Manga de Camisa: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Manga de Camisa'))}",
+            f"- Productos sin barcode: {sum(1 for r in variant_rows if not r.get('barcode'))}",
+            f"- Productos sin Internal Reference: {sum(1 for r in variant_rows if not r.get('sku'))}",
+            f"- Confirmación: NO se crean atributos/categorías de variante, solo se usan atributos existentes."
+        ]
+        if examples:
+            report.append("- Ejemplos con posibles combinaciones fantasma:")
+            for e in examples:
+                report.append(f"  - {e[0]} | {e[1]} | variantes reales={e[2]} | combinaciones fantasma≈{e[3]}")
+        (ODOO_OUTPUTS_DIR / "import_products_and_variants_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def _slugify(text: str) -> str:
+        slug = re.sub(r"[^a-z0-9]+", "_", (text or "").lower()).strip("_")
+        return slug[:80]
 
     def _phase2_enrich_stock(self, *, snapshot_path: Path, state_path: Path, stock_csv: Path, stock_quant_csv: Path, phase1_errors: list[dict[str, Any]], progress_callback=None) -> None:
         state = self._read_stock_state(state_path)

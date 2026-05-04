@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.22
+Versión 1.0.24
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -151,7 +151,7 @@ Luego visita `http://localhost:5173` en tu navegador. Asegúrate de que el backe
 
 ### Precheck Odoo de atributos (desde frontend)
 
-Antes de generar CSV con `Marca/Color`, usa el botón **Precheck de atributos Odoo** en la pestaña **Fase 1**.
+Antes de generar CSV con atributos adicionales, usa el botón **Precheck de atributos Odoo** en la pestaña **Fase 1**.
 
 Campos requeridos:
 - `config/odoo_catalog_snapshot.json`: snapshot local de categorías y atributos actuales en Odoo para precheck offline sin API.
@@ -172,7 +172,7 @@ POST /odoo-migration/odoo-attributes/snapshot/upload?kind=categories
 GET /odoo-migration/odoo-attributes/precheck-offline
 ```
 
-Si responde `can_enable_brand_color_export=true`, puedes marcar **Incluir Marca/Color en Product Values** y exportar.
+Si responde `can_enable_brand_color_export=true`, puedes marcar **Incluir atributos adicionales (Marca/Color) en Product Values** y exportar.
 Además revisa `categories_missing`: esa lista indica exactamente qué categorías crear en Odoo para migrar productos sin fricción.
 Si faltan atributos o categorías, corrige primero en Odoo y vuelve a correr el precheck.
 
@@ -261,6 +261,8 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.24 (2026-05-03)**: Se añadió exportación orientada a productos madre+variantes hacia `docs/odoo_import_outputs` con archivos `01_product_templates_with_existing_attributes.csv`, `02_variant_update_map.csv`, `03_stock_quant_by_variant.csv`, `04_missing_attribute_values_report.csv` y reporte `import_products_and_variants_report.md`.
+- **1.0.23 (2026-05-03)**: Se generalizó el control de atributos opcionales en frontend/backend con `include_additional_attributes` (manteniendo compatibilidad con `include_brand_color_attributes`) para reflejar que el flujo contempla más atributos y no solo un check aislado de Marca/Color.
 - **1.0.22 (2026-05-03)**: Se agregó fallback de categoría a `Sin Categoria` cuando no existe match en reglas/aliases, para permitir importación continua y posterior reclasificación manual en Odoo.
 - **1.0.21 (2026-05-03)**: Se reforzó la detección de categorías por género (HOMBRE/MUJER/NIÑO) en el parser para priorizar rutas por género en importación, reduciendo ambigüedad en categorías genéricas.
 - **1.0.20 (2026-05-03)**: Se corrigió el precheck offline para interpretar snapshots de atributos exportados con columnas CSV (ej. `Secuencia,Atributo,...`) y para considerar equivalencias de categorías (`Ropa / Camisas|Corbatas|Ternos` vs rutas por género), evitando falsos faltantes.

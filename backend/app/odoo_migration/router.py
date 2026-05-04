@@ -124,7 +124,7 @@ def precheck_odoo_attributes_offline():
     if missing_categories:
         recommendations.append('Crear categorías faltantes en Odoo según categories_missing.')
     if not missing_attrs and not missing_categories:
-        recommendations.append('Catálogo local completo. Puedes exportar con include_brand_color_attributes=true.')
+        recommendations.append('Catálogo local completo. Puedes exportar con include_additional_attributes=true.')
     return {
         'mode': 'offline_catalog_snapshot',
         'snapshot_path': str(snapshot_path),
@@ -143,6 +143,7 @@ def export_products_stock(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
+    include_additional_attributes: bool = Query(default=False),
     include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
@@ -151,7 +152,7 @@ def export_products_stock(
         page_size=page_size,
         max_pages=max_pages,
         export_stock=export_stock,
-        include_brand_color_attributes=include_brand_color_attributes,
+        include_additional_attributes=(include_additional_attributes or include_brand_color_attributes),
     )
     run_id = output.folder.name
     return {
@@ -171,6 +172,7 @@ def start_export_job(
     page_size: int = Query(default=200, ge=1, le=500),
     max_pages: int = Query(default=200, ge=1, le=1000),
     export_stock: bool = Query(default=False),
+    include_additional_attributes: bool = Query(default=False),
     include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
@@ -184,7 +186,7 @@ def start_export_job(
                 page_size=page_size,
                 max_pages=max_pages,
                 export_stock=export_stock,
-                include_brand_color_attributes=include_brand_color_attributes,
+                include_additional_attributes=(include_additional_attributes or include_brand_color_attributes),
                 progress_callback=lambda p: _set_job(job_id, p),
             )
             run_id = output.folder.name

@@ -140,7 +140,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
       page_size: $('exportPageSize').value,
       max_pages: $('exportMaxPages').value,
       export_stock: false,
-      include_brand_color_attributes: $('includeBrandColorAttributes').checked,
+      include_additional_attributes: $('includeAdditionalAttributes').checked,
     });
     const jobId = started.job_id;
     let done = false;
@@ -197,7 +197,7 @@ $('precheckOdooOffline').addEventListener('click', async () => {
     setMigrationStatus('Ejecutando precheck offline (sin API Odoo)...');
     const data = await apiGet('/odoo-migration/odoo-attributes/precheck-offline');
     show('migrationSummaryOut', data);
-    $('includeBrandColorAttributes').checked = !!data.can_enable_brand_color_export;
+    $('includeAdditionalAttributes').checked = !!data.can_enable_brand_color_export;
     const missingAttrs = (data.attributes_missing || []).length;
     const missingCats = (data.categories_missing || []).length;
     setMigrationStatus(`Precheck offline: faltan ${missingAttrs} atributos y ${missingCats} categorías.`);
