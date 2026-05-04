@@ -344,6 +344,7 @@ class OdooMigrationService:
             max_pages=max_pages,
         )
         pages = start_page - 1
+        products_v2_mode = "/api/v2" in str(getattr(self.client, "products_base_url", "")).lower()
         for page in range(start_page, max_pages + 1):
             if progress_callback: progress_callback({"stage":"fetching","page":page,"max_pages":max_pages,"found_items":len(items)})
             batch, effective_page_size = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
@@ -361,7 +362,8 @@ class OdooMigrationService:
                 page_items=page_items,
             )
             if progress_callback: progress_callback({"stage":"fetched_page","page":page,"fetched":len(batch),"found_items":len(items)})
-            if len(batch)<effective_page_size: break
+            if (not products_v2_mode) and len(batch) < effective_page_size:
+                break
         self._clear_fetch_resume_state(resume_state_path=resume_state_path, resume_items_path=resume_items_path)
         return items, pages, pages>=max_pages
 

@@ -119,3 +119,27 @@ def test_fetch_products_page_does_not_change_page_size_on_retries(monkeypatch):
         raise AssertionError("Expected ContificoTransportError")
 
     assert client.calls == [(4, 200), (4, 200), (4, 200)]
+
+
+def test_fetch_products_v2_does_not_stop_on_first_short_page(tmp_path):
+    class V2Client:
+        products_base_url = "https://api.contifico.com/sistema/api/v2"
+
+        def __init__(self):
+            self.calls = []
+
+        def list_products(self, *, page: int, page_size: int):
+            self.calls.append((page, page_size))
+            if page == 1:
+                return [{"id": "P-1"}] * 100
+            if page == 2:
+                return [{"id": "P-2"}] * 100
+            return []
+
+    service = OdooMigrationService(client=V2Client(), output_root=tmp_path / "odoo_migration")
+
+    items, pages, hit_max = service._fetch_products(page_size=200, max_pages=10)
+
+    assert len(items) == 200
+    assert pages == 3
+    assert hit_max is False
