@@ -571,13 +571,17 @@ class ContificoClient:
     ) -> Iterable[Dict[str, Any]]:
         """Devuelve un lote de productos desde Contífico."""
 
-        params: Dict[str, Any] = {
-            "page": page,
-            "page_size": page_size,
-            # Algunos entornos aún utilizan los parámetros históricos de paginación.
-            "result_page": page,
-            "result_size": page_size,
-        }
+        is_products_v2 = "/api/v2" in self.products_base_url.lower()
+        params: Dict[str, Any] = {"page": page}
+        if not is_products_v2:
+            params.update(
+                {
+                    "page_size": page_size,
+                    # Algunos entornos aún utilizan los parámetros históricos de paginación.
+                    "result_page": page,
+                    "result_size": page_size,
+                }
+            )
         if category_id is not None:
             category_value = str(category_id).strip()
             if not category_value:
@@ -593,6 +597,10 @@ class ContificoClient:
             return []
         if isinstance(data, list):
             return data
+        if isinstance(data, dict):
+            results = data.get("results")
+            if isinstance(results, list):
+                return results
         raise ContificoAPIError(
             status_code=200,
             detail="El formato de respuesta para productos no es el esperado.",
