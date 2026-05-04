@@ -60,6 +60,21 @@ async function apiPost(path, params = {}) {
   return data;
 }
 
+async function apiUpload(path, fileInputId, params = {}) {
+  const input = $(fileInputId);
+  const file = input?.files?.[0];
+  if (!file) throw new Error('Debes seleccionar un archivo CSV.');
+  const url = new URL(`${base()}${path}`);
+  Object.entries(params).forEach(([k, v]) => { if (v !== '' && v != null) url.searchParams.set(k, String(v)); });
+  const form = new FormData();
+  form.append('file', file);
+  const resp = await fetch(url, { method: 'POST', body: form });
+  const text = await resp.text();
+  let data; try { data = JSON.parse(text); } catch { data = text; }
+  if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+  return data;
+}
+
 
 $('loadProducts').addEventListener('click', async () => {
   try {
@@ -125,6 +140,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
       page_size: $('exportPageSize').value,
       max_pages: $('exportMaxPages').value,
       export_stock: false,
+      include_additional_attributes: $('includeAdditionalAttributes').checked,
     });
     const jobId = started.job_id;
     let done = false;
@@ -158,6 +174,48 @@ $('generateMigrationCsv').addEventListener('click', async () => {
   } finally {
     toggleMigrationButtons(false);
   }
+});
+
+$('uploadSnapshotAttributes').addEventListener('click', async () => {
+  try {
+    const data = await apiUpload('/odoo-migration/odoo-attributes/snapshot/upload', 'snapshotAttributesCsv', { kind: 'attributes' });
+    show('migrationSummaryOut', data);
+    setMigrationStatus(`Snapshot de atributos actualizado (${data.count} registros).`);
+  } catch (e) { showErr(e); }
+});
+
+$('uploadSnapshotCategories').addEventListener('click', async () => {
+  try {
+    const data = await apiUpload('/odoo-migration/odoo-attributes/snapshot/upload', 'snapshotCategoriesCsv', { kind: 'categories' });
+    show('migrationSummaryOut', data);
+    setMigrationStatus(`Snapshot de categorías actualizado (${data.count} registros).`);
+  } catch (e) { showErr(e); }
+});
+
+$('precheckOdooOffline').addEventListener('click', async () => {
+  try {
+    setMigrationStatus('Ejecutando precheck offline (sin API Odoo)...');
+    const data = await apiGet('/odoo-migration/odoo-attributes/precheck-offline');
+    show('migrationSummaryOut', data);
+    $('includeAdditionalAttributes').checked = !!data.can_enable_brand_color_export;
+    const missingAttrs = (data.attributes_missing || []).length;
+    const missingCats = (data.categories_missing || []).length;
+    setMigrationStatus(`Precheck offline: faltan ${missingAttrs} atributos y ${missingCats} categorías.`);
+  } catch (e) {
+    showErr(e);
+  }
+});
+
+$('processRawJson').addEventListener('click', async () => {
+  try {
+    const data = await apiUpload('/odoo-migration/products-stock/process-raw-upload', 'rawJsonFile', {
+      include_additional_attributes: $('includeAdditionalAttributes').checked,
+      export_stock: false,
+    });
+    show('migrationSummaryOut', data);
+    renderMigrationLinks(data.files);
+    setMigrationStatus(`Archivo procesado. Productos detectados: ${data.detected_products}.`);
+  } catch (e) { showErr(e); }
 });
 
 $('loadRuns').addEventListener('click', async () => {
