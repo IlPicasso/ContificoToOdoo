@@ -181,10 +181,25 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             "Sales Description": "",
             "Customer Taxes": "IVA 0%",
         }
+        attr_values: dict[str, list[str]] = {}
         if sizes:
-            result.append({**common, "Product Attributes / Attribute": "Talla", "Product Attributes / Values": ",".join(sizes)})
-        else:
-            result.append({**common, "Product Attributes / Attribute": "", "Product Attributes / Values": ""})
+            attr_values["Talla"] = sizes
+        brand_values = brand_values
         if brand_values:
-            result.append({**common, "Product Attributes / Attribute": "Marca", "Product Attributes / Values": brand_values[0]})
+            attr_values["Marca"] = [brand_values[0]]
+        color_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Color") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Color") or ""))}, key=_natural_key)
+        if color_values:
+            attr_values["Color"] = color_values
+        manga_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Manga de Camisa") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Manga de Camisa") or ""))}, key=_natural_key)
+        if manga_values:
+            attr_values["Manga de Camisa"] = manga_values
+        ancho_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or ""))}, key=_natural_key)
+        if ancho_values:
+            attr_values["Ancho Corbata"] = ancho_values
+
+        if not attr_values:
+            result.append({**common, "Product Attributes / Attribute": "", "Product Attributes / Values": ""})
+        else:
+            for attr_name, values in attr_values.items():
+                result.append({**common, "Product Attributes / Attribute": attr_name, "Product Attributes / Values": ",".join(values)})
     return result
