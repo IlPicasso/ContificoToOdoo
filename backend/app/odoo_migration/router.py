@@ -42,7 +42,10 @@ def _build_files(run_id: str) -> dict[str, str]:
     return {
         "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
         "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
-        "stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant.csv",
+        "stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant_legacy.csv",
+        "attributes_values_csv": f"/odoo-migration/runs/{run_id}/files/attributes_values.csv",
+        "products_with_variants_csv": f"/odoo-migration/runs/{run_id}/files/products_with_variants.csv",
+        "stock_quant_odoo19_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant.csv",
         "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
         "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
         "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",

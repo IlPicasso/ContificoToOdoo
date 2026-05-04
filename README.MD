@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.45
+Versión 1.0.47
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -366,3 +366,16 @@ El módulo Odoo de staging/importación se mantiene en un repositorio independie
 - https://github.com/IlPicasso/Modulo-Odoo-A-Contifico
 
 Este repositorio (`ContificoToOdoo`) queda dedicado al pipeline de extracción y generación de CSV revisables.
+
+
+## Exportación Odoo 19 (productos con variantes)
+
+Desde la versión 1.0.46 se generan adicionalmente tres CSV en cada RUN:
+1. `attributes_values.csv`
+2. `products_with_variants.csv`
+3. `stock_quant.csv`
+
+Orden de importación recomendado en Odoo:
+1) Attributes/Values, 2) Products with variants, 3) Stock por ajuste físico.
+
+Nota: si necesitas controlar SKU/barcode/precio estrictamente por variante en Odoo, puede requerirse una cuarta importación futura específica de variantes.
