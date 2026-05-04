@@ -203,3 +203,35 @@ def test_fetch_products_tracks_expected_total_from_v2_count(tmp_path):
     assert pages == 3
     assert hit_max is False
     assert expected_min == 24605
+
+
+def test_fetch_products_page_out_of_range_is_treated_as_end_of_pagination():
+    class OutOfRangeClient:
+        def list_products(self, *, page: int, page_size: int):
+            raise ContificoAPIError(
+                400,
+                'Error: {"code":"400","error":"Pagina fuera del rango"}',
+                payload={"code": "400", "error": "Pagina fuera del rango"},
+            )
+
+    service = OdooMigrationService(client=OutOfRangeClient())
+    rows, effective_size = service._fetch_products_page_with_fallback(page=999, page_size=200)
+
+    assert rows == []
+    assert effective_size == 200
+
+
+def test_fetch_products_page_out_of_range_404_payload_400_is_treated_as_end_of_pagination():
+    class OutOfRangeClient404:
+        def list_products(self, *, page: int, page_size: int):
+            raise ContificoAPIError(
+                404,
+                "not found",
+                payload={"code": "400", "error": "Pagina fuera del rango"},
+            )
+
+    service = OdooMigrationService(client=OutOfRangeClient404())
+    rows, effective_size = service._fetch_products_page_with_fallback(page=248, page_size=200)
+
+    assert rows == []
+    assert effective_size == 200

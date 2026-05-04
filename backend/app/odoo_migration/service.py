@@ -436,6 +436,8 @@ class OdooMigrationService:
                 except ContificoTransportError as exc:
                     last_exc = exc
                 except ContificoAPIError as exc:
+                    if self._is_page_out_of_range_error(exc):
+                        return [], size
                     if exc.status_code not in {429, 500, 502, 503, 504}:
                         raise
                     last_exc = exc
@@ -448,6 +450,27 @@ class OdooMigrationService:
         if last_exc:
             raise last_exc
         return [], page_size
+
+    @staticmethod
+    def _is_page_out_of_range_error(exc: ContificoAPIError) -> bool:
+        status_code = int(getattr(exc, "status_code", 0) or 0)
+        if status_code not in {400, 404}:
+            return False
+        payload = getattr(exc, "payload", None)
+        message = str(getattr(exc, "detail", "") or "")
+        if isinstance(payload, dict):
+            for key in ("error", "mensaje", "message", "detail"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    message = f"{message} {value}".strip()
+                    break
+            code_value = str(payload.get("code") or "").strip()
+            if code_value and code_value != "400":
+                return False
+        elif status_code == 404:
+            return False
+        normalized = message.lower()
+        return "pagina fuera del rango" in normalized or "página fuera del rango" in normalized
 
     @staticmethod
     def _base_group_key(sku: str, name: str) -> str:
