@@ -136,6 +136,7 @@ class ContificoClient:
             if invoice_catalog_stop_on_first_match is None
             else bool(invoice_catalog_stop_on_first_match)
         )
+        self.last_products_total_count: int | None = None
 
         self._load_persistent_cache()
 
@@ -596,8 +597,11 @@ class ContificoClient:
         if data is None:
             return []
         if isinstance(data, list):
+            self.last_products_total_count = None
             return data
         if isinstance(data, dict):
+            total = data.get("count")
+            self.last_products_total_count = int(total) if isinstance(total, int) else None
             results = data.get("results")
             if isinstance(results, list):
                 return results
