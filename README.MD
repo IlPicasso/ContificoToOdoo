@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.31
+Versión 1.0.33
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
