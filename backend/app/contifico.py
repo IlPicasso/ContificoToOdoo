@@ -76,6 +76,7 @@ class ContificoClient:
     }
     REQUEST_MAX_RETRIES = 3
     REQUEST_RETRY_BACKOFF_BASE = 0.8
+    REQUEST_TIMEOUT_RETRY_BACKOFF_BASE = 2.0
 
     def __init__(
         self,
@@ -83,6 +84,7 @@ class ContificoClient:
         api_token: str,
         *,
         base_url: str | None = None,
+        products_base_url: str | None = None,
         timeout: float = 30.0,
         transport: httpx.BaseTransport | None = None,
         invoice_cache_path: str | Path | None = None,
@@ -102,6 +104,7 @@ class ContificoClient:
         self.api_key = api_key.strip()
         self.api_token = api_token.strip()
         self.base_url = (base_url or self.DEFAULT_BASE_URL).rstrip("/")
+        self.products_base_url = (products_base_url or self.base_url).rstrip("/")
         self.timeout = timeout
         self._transport = transport
         self._cache_path: Path | None = (
@@ -141,10 +144,12 @@ class ContificoClient:
         method: str,
         endpoint: str,
         *,
+        base_url: str | None = None,
         params: Optional[Dict[str, Any]] = None,
         json: Optional[Any] = None,
     ) -> Any:
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        request_base_url = (base_url or self.base_url).rstrip("/")
+        url = f"{request_base_url}/{endpoint.lstrip('/')}"
         headers = {
             "Authorization": self.api_key,
             "X-Api-Token": self.api_token,
@@ -183,7 +188,7 @@ class ContificoClient:
                     raise ContificoTransportError(
                         f"Timeout leyendo respuesta de Contífico tras {attempts} intentos: {exc}"
                     ) from exc
-                backoff = self.REQUEST_RETRY_BACKOFF_BASE * (2 ** (attempts - 1))
+                backoff = self.REQUEST_TIMEOUT_RETRY_BACKOFF_BASE * (2 ** (attempts - 1))
                 logger.warning(
                     "Contifico read timeout %s %s intento=%s/%s. Reintentando en %.2fs",
                     method, url, attempts, self.REQUEST_MAX_RETRIES, backoff,
@@ -578,7 +583,12 @@ class ContificoClient:
             if not category_value:
                 raise ValueError("El identificador de la categoría no puede estar vacío.")
             params["categoria_id"] = category_value
-        data = self._request("GET", "producto/", params=params)
+        data = self._request(
+            "GET",
+            "producto/",
+            base_url=self.products_base_url,
+            params=params,
+        )
         if data is None:
             return []
         if isinstance(data, list):

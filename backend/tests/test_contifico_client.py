@@ -1776,3 +1776,40 @@ def test_fetch_customer_by_document_falls_back_between_variants(monkeypatch) -> 
 
     assert result == {"identificacion": "0919957423001", "nombre": "Cliente"}
     assert attempts == ["0919957423", "0919957423001"]
+
+
+def test_list_products_uses_products_base_url_when_provided() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[])
+
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com/v1",
+        products_base_url="https://api.example.com/v2",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert list(client.list_products(page=1, page_size=5)) == []
+    assert str(captured["url"]).startswith("https://api.example.com/v2/producto/")
+
+
+def test_list_products_falls_back_to_main_base_url_when_products_base_url_missing() -> None:
+    captured: dict[str, object] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["url"] = str(request.url)
+        return httpx.Response(200, json=[])
+
+    client = ContificoClient(
+        "key123",
+        "token-xyz",
+        base_url="https://api.example.com/v1",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert list(client.list_products(page=1, page_size=5)) == []
+    assert str(captured["url"]).startswith("https://api.example.com/v1/producto/")

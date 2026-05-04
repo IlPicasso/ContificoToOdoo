@@ -46,6 +46,7 @@ def get_contifico_client() -> ContificoClient:
             settings.contifico_api_key,
             settings.contifico_api_token,
             base_url=settings.contifico_api_base_url,
+            products_base_url=settings.contifico_products_api_base_url,
             timeout=settings.contifico_timeout_seconds,
             invoice_cache_path=settings.contifico_invoice_cache_path,
             invoice_catalog_page_size=settings.contifico_invoice_catalog_page_size,
