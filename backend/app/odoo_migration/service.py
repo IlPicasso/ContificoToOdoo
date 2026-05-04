@@ -11,6 +11,14 @@ import json
 import time
 
 from ..contifico import ContificoAPIError, ContificoClient, ContificoTransportError
+from .odoo19_variants import (
+    ATTR_COLUMNS as O19_ATTR_COLUMNS,
+    PRODUCTS_COLUMNS as O19_PRODUCTS_COLUMNS,
+    STOCK_COLUMNS as O19_STOCK_COLUMNS,
+    build_attributes_values,
+    build_products_with_variants,
+    build_stock_quant,
+)
 from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
     parse_shirt_sku, parse_suit_sku, parse_blazer_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku,
@@ -61,7 +69,7 @@ class OdooMigrationService:
     def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, include_additional_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
         ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
-        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; unmapped_categories_csv=folder/'unmapped_categories.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
+        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant_legacy.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; unmapped_categories_csv=folder/'unmapped_categories.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
         started_at = datetime.utcnow()
@@ -84,7 +92,7 @@ class OdooMigrationService:
         )
 
     def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, expected_min_items: int | None, started_at: datetime, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
-        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; unmapped_categories_csv=folder/'unmapped_categories.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
+        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant_legacy.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; unmapped_categories_csv=folder/'unmapped_categories.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, export_stock=export_stock, progress_callback=progress_callback)
         self._write_stock_state(state_path, phase1['stock_state'])
@@ -98,7 +106,15 @@ class OdooMigrationService:
         self._write_csv(mapping_csv, MAP_COLUMNS, phase1['mrows'])
         self._write_csv(excluded_zero_csv, EXCLUDED_ZERO_COLUMNS, phase1['zrows'])
         self._write_csv(unmapped_categories_csv, UNMAPPED_CATEGORY_COLUMNS, phase1['unmapped_category_rows'])
+
         self._write_variant_import_outputs(folder, phase1.get("variant_rows", []), include_stock=export_stock)
+        o19_warnings: list[str] = []
+        o19_attr_rows = build_attributes_values(products)
+        o19_product_rows = build_products_with_variants(products, warnings=o19_warnings)
+        o19_stock_rows = build_stock_quant(products)
+        self._write_csv(folder / "attributes_values.csv", O19_ATTR_COLUMNS, o19_attr_rows)
+        self._write_csv(folder / "products_with_variants.csv", O19_PRODUCTS_COLUMNS, o19_product_rows)
+        self._write_csv(folder / "stock_quant.csv", O19_STOCK_COLUMNS, o19_stock_rows)
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
