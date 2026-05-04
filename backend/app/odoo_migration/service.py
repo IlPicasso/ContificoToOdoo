@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import random
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -7,7 +8,9 @@ from pathlib import Path
 from typing import Any, Callable
 import json
 
-from ..contifico import ContificoClient, ContificoTransportError
+import time
+
+from ..contifico import ContificoAPIError, ContificoClient, ContificoTransportError
 from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
     parse_shirt_sku, parse_suit_sku, parse_blazer_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku,
@@ -39,8 +42,15 @@ class MigrationOutput:
 
 
 class OdooMigrationService:
-    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration"):
+    PRODUCT_PAGE_SERVER_RETRIES = 3
+    PRODUCT_PAGE_RETRY_BACKOFF_BASE_SECONDS = 0.8
+
+    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration", *, page_delay_seconds: float = 1.0, page_retry_attempts: int | None = None, page_retry_backoff_base_seconds: float | None = None, page_retry_jitter_seconds: float = 0.4):
         self.client = client; self.output_root = Path(output_root)
+        self.page_delay_seconds = max(0.0, float(page_delay_seconds))
+        self.page_retry_attempts = int(page_retry_attempts or self.PRODUCT_PAGE_SERVER_RETRIES)
+        self.page_retry_backoff_base_seconds = float(page_retry_backoff_base_seconds or self.PRODUCT_PAGE_RETRY_BACKOFF_BASE_SECONDS)
+        self.page_retry_jitter_seconds = max(0.0, float(page_retry_jitter_seconds))
         self._warehouse_by_id = {w.get("id"): w for w in WAREHOUSE_CATALOG if w.get("id")}
         self._warehouse_by_code = {str(w.get("codigo","")).upper(): w for w in WAREHOUSE_CATALOG}
         self._warehouse_by_name = {str(w.get("nombre","")).upper(): w for w in WAREHOUSE_CATALOG}
@@ -330,33 +340,95 @@ class OdooMigrationService:
         return [c.strip() for c in line.split(',') if c.strip()]
 
     def _fetch_products(self, *, page_size:int, max_pages:int, progress_callback=None, debug_lines=None, raw_lines=None):
-        items=[]; pages=0
-        for page in range(1,max_pages+1):
+        resume_state_path = self.output_root / "products_fetch_resume_state.json"
+        resume_items_path = self.output_root / "products_fetch_resume_items.jsonl"
+        items, start_page = self._load_fetch_resume_state(
+            resume_state_path=resume_state_path,
+            resume_items_path=resume_items_path,
+            page_size=page_size,
+            max_pages=max_pages,
+        )
+        pages = start_page - 1
+        products_v2_mode = "/api/v2" in str(getattr(self.client, "products_base_url", "")).lower()
+        for page in range(start_page, max_pages + 1):
             if progress_callback: progress_callback({"stage":"fetching","page":page,"max_pages":max_pages,"found_items":len(items)})
             batch, effective_page_size = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
             if debug_lines is not None: debug_lines.append(f"fetch page={page} items={len(batch)}")
             if raw_lines is not None: raw_lines.append(json.dumps({"page":page,"response":batch}, ensure_ascii=False))
             if not batch: break
-            items.extend([b for b in batch if isinstance(b,dict)])
+            page_items = [b for b in batch if isinstance(b,dict)]
+            items.extend(page_items)
+            self._save_fetch_resume_state(
+                resume_state_path=resume_state_path,
+                resume_items_path=resume_items_path,
+                page=page,
+                page_size=page_size,
+                max_pages=max_pages,
+                page_items=page_items,
+            )
             if progress_callback: progress_callback({"stage":"fetched_page","page":page,"fetched":len(batch),"found_items":len(items)})
-            if len(batch)<effective_page_size: break
+            if (not products_v2_mode) and len(batch) < effective_page_size:
+                break
+            if self.page_delay_seconds > 0:
+                time.sleep(self.page_delay_seconds)
+        self._clear_fetch_resume_state(resume_state_path=resume_state_path, resume_items_path=resume_items_path)
         return items, pages, pages>=max_pages
 
+    def _load_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page_size: int, max_pages: int) -> tuple[list[dict[str, Any]], int]:
+        if not resume_state_path.exists() or not resume_items_path.exists():
+            return [], 1
+        try:
+            state = json.loads(resume_state_path.read_text(encoding="utf-8"))
+            if int(state.get("page_size") or 0) != int(page_size) or int(state.get("max_pages") or 0) != int(max_pages):
+                return [], 1
+            last_page = int(state.get("last_successful_page") or 0)
+            items = []
+            for line in resume_items_path.read_text(encoding="utf-8").splitlines():
+                payload = json.loads(line)
+                if isinstance(payload, dict):
+                    items.append(payload)
+            return items, max(1, last_page + 1)
+        except Exception:
+            return [], 1
+
+    def _save_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page: int, page_size: int, max_pages: int, page_items: list[dict[str, Any]]) -> None:
+        resume_state_path.parent.mkdir(parents=True, exist_ok=True)
+        with resume_items_path.open("a", encoding="utf-8") as fh:
+            for item in page_items:
+                fh.write(json.dumps(item, ensure_ascii=False) + "\n")
+        resume_state_path.write_text(
+            json.dumps({"last_successful_page": page, "page_size": page_size, "max_pages": max_pages}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _clear_fetch_resume_state(*, resume_state_path: Path, resume_items_path: Path) -> None:
+        if resume_state_path.exists():
+            resume_state_path.unlink()
+        if resume_items_path.exists():
+            resume_items_path.unlink()
+
     def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
+        # Importante: no degradar page_size entre reintentos porque el número de página
+        # representa offsets distintos para cada tamaño y puede crear huecos/duplicados.
         sizes = [page_size]
-        if page_size > 100:
-            sizes.extend([100, 50, 25])
-        elif page_size > 50:
-            sizes.extend([50, 25])
-        elif page_size > 25:
-            sizes.append(25)
         last_exc: Exception | None = None
         for size in sizes:
-            try:
-                return list(self.client.list_products(page=page, page_size=size)), size
-            except ContificoTransportError as exc:
-                last_exc = exc
-                continue
+            for attempt in range(1, self.page_retry_attempts + 1):
+                try:
+                    return list(self.client.list_products(page=page, page_size=size)), size
+                except ContificoTransportError as exc:
+                    last_exc = exc
+                except ContificoAPIError as exc:
+                    if exc.status_code not in {429, 500, 502, 503, 504}:
+                        raise
+                    last_exc = exc
+
+                if attempt < self.page_retry_attempts:
+                    base = self.page_retry_backoff_base_seconds * (2 ** (attempt - 1))
+                    jitter = random.uniform(0.0, self.page_retry_jitter_seconds) if self.page_retry_jitter_seconds > 0 else 0.0
+                    time.sleep(base + jitter)
+            continue
         if last_exc:
             raise last_exc
         return [], page_size

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 
 from ..contifico import ContificoClient
 from ..dependencies import get_contifico_client
+from ..config import get_settings
 from .rules import CATEGORY_ALIASES
 from .service import OdooMigrationService
 from .stock_worker import StockWorker
@@ -53,6 +54,17 @@ def _build_files(run_id: str) -> dict[str, str]:
         "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
         "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
     }
+
+
+def _build_service(contifico_client: ContificoClient) -> OdooMigrationService:
+    settings = get_settings()
+    return OdooMigrationService(
+        contifico_client,
+        page_delay_seconds=settings.contifico_products_page_delay_seconds,
+        page_retry_attempts=settings.contifico_products_page_retry_attempts,
+        page_retry_backoff_base_seconds=settings.contifico_products_page_retry_backoff_base_seconds,
+        page_retry_jitter_seconds=settings.contifico_products_page_retry_jitter_seconds,
+    )
 
 
 def _snapshot_path() -> Path:
@@ -152,7 +164,7 @@ def export_products_stock(
     include_brand_color_attributes: bool = Query(default=False),
     contifico_client: ContificoClient = Depends(get_contifico_client),
 ):
-    service = OdooMigrationService(contifico_client)
+    service = _build_service(contifico_client)
     output = service.generate_products_and_stock_csv(
         page_size=page_size,
         max_pages=max_pages,
@@ -198,7 +210,7 @@ async def process_raw_upload(
             products.append(payload)
     if not products:
         raise HTTPException(status_code=400, detail="No se detectaron productos válidos en el archivo.")
-    service = OdooMigrationService(contifico_client)
+    service = _build_service(contifico_client)
     output = service.generate_products_and_stock_csv_from_items(
         products=products,
         export_stock=export_stock,
@@ -233,7 +245,7 @@ def start_export_job(
 
     def worker() -> None:
         try:
-            service = OdooMigrationService(contifico_client)
+            service = _build_service(contifico_client)
             output = service.generate_products_and_stock_csv(
                 page_size=page_size,
                 max_pages=max_pages,
