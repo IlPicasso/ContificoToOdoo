@@ -95,3 +95,27 @@ def test_fetch_products_resumes_from_last_successful_page(tmp_path):
     assert pages == 3
     assert not state_path.exists()
     assert not items_path.exists()
+
+
+def test_fetch_products_page_does_not_change_page_size_on_retries(monkeypatch):
+    monkeypatch.setattr("app.odoo_migration.service.time.sleep", lambda _s: None)
+
+    class SameSizeOnlyClient:
+        def __init__(self):
+            self.calls = []
+
+        def list_products(self, *, page: int, page_size: int):
+            self.calls.append((page, page_size))
+            raise ContificoTransportError("network down")
+
+    client = SameSizeOnlyClient()
+    service = OdooMigrationService(client=client)
+
+    try:
+        service._fetch_products_page_with_fallback(page=4, page_size=200)
+    except ContificoTransportError:
+        pass
+    else:  # pragma: no cover - defensive
+        raise AssertionError("Expected ContificoTransportError")
+
+    assert client.calls == [(4, 200), (4, 200), (4, 200)]

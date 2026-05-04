@@ -400,13 +400,9 @@ class OdooMigrationService:
             resume_items_path.unlink()
 
     def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
+        # Importante: no degradar page_size entre reintentos porque el número de página
+        # representa offsets distintos para cada tamaño y puede crear huecos/duplicados.
         sizes = [page_size]
-        if page_size > 100:
-            sizes.extend([100, 50, 25])
-        elif page_size > 50:
-            sizes.extend([50, 25])
-        elif page_size > 25:
-            sizes.append(25)
         last_exc: Exception | None = None
         for size in sizes:
             for attempt in range(1, self.PRODUCT_PAGE_SERVER_RETRIES + 1):
