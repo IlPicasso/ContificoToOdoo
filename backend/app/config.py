@@ -55,6 +55,13 @@ class Settings(BaseSettings):
         default="https://api.contifico.com/sistema/api/v1",
         description="URL base para la API de Contífico.",
     )
+    contifico_products_api_base_url: str | None = Field(
+        default=None,
+        description=(
+            "URL base opcional para catálogo de productos (por ejemplo API v2). "
+            "Si no se define, se usa contifico_api_base_url."
+        ),
+    )
     contifico_timeout_seconds: float = Field(
         default=30.0,
         ge=1.0,
