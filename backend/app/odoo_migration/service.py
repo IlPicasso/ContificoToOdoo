@@ -16,7 +16,7 @@ from .odoo19_variants import (
     PRODUCTS_COLUMNS as O19_PRODUCTS_COLUMNS,
     STOCK_COLUMNS as O19_STOCK_COLUMNS,
     build_attributes_values,
-    build_products_with_variants,
+    build_products_with_variants_from_variant_rows,
     build_stock_quant,
 )
 from .rules import (
@@ -110,7 +110,7 @@ class OdooMigrationService:
         self._write_variant_import_outputs(folder, phase1.get("variant_rows", []), include_stock=export_stock)
         o19_warnings: list[str] = []
         o19_attr_rows = build_attributes_values(products)
-        o19_product_rows = build_products_with_variants(products, warnings=o19_warnings)
+        o19_product_rows = build_products_with_variants_from_variant_rows(phase1.get("variant_rows", []), warnings=o19_warnings)
         o19_stock_rows = build_stock_quant(products)
         self._write_csv(folder / "attributes_values.csv", O19_ATTR_COLUMNS, o19_attr_rows)
         self._write_csv(folder / "products_with_variants.csv", O19_PRODUCTS_COLUMNS, o19_product_rows)

@@ -135,3 +135,56 @@ def build_stock_quant(products: list[dict[str, Any]], scheduled_date: str | None
         label = f"[{code}] {name} ({variant})" if variant else f"[{base}] {name}"
         rows.append({"Product": label, "Lot/Serial Number": "", "Quantity": qty, "Counted Quantity": qty, "Difference": "0", "Scheduled Date": date_value, "Assigned To": ""})
     return rows
+
+
+def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, Any]], warnings: list[str] | None = None) -> list[dict[str, str]]:
+    """Build Odoo19 template rows using normalized phase1 rows (category/brand already resolved)."""
+    warnings = warnings if warnings is not None else []
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in variant_rows:
+        sku = str(row.get("sku") or "").strip()
+        if not sku:
+            warnings.append("Producto sin codigo")
+            continue
+        base, _ = parse_base_code_and_variant(sku)
+        grouped.setdefault(base or sku, []).append(row)
+
+    result: list[dict[str, str]] = []
+    for base, items in grouped.items():
+        names = [normalize_product_name(str(i.get("name") or "")) for i in items if str(i.get("name") or "").strip()]
+        if not names:
+            warnings.append(f"Producto sin nombre: {base}")
+            continue
+        name = Counter(names).most_common(1)[0][0]
+        prices = [normalize_price(i.get("price")) for i in items]
+        if len(set(prices)) > 1:
+            warnings.append(f"Precios distintos en variantes: {base}")
+        price = min(prices, key=lambda x: float(x or 0)) if prices else "0.00"
+        category = normalize_product_name(str(items[0].get("category") or "All / ADAMS / Sin categoría"))
+        brand_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Marca") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Marca") or ""))}, key=_natural_key)
+        if len(brand_values) > 1:
+            warnings.append(f"Marcas distintas en mismo base: {base}")
+        sizes = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Talla") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Talla") or ""))}, key=_natural_key)
+        barcode = "" if sizes else str(items[0].get("barcode") or "")
+        common = {
+            "External ID": normalize_external_id(base, "product_template"),
+            "Name": name,
+            "Product Type": "Goods",
+            "Product Category": category,
+            "Sales Price": price,
+            "Cost": normalize_price(items[0].get("cost")),
+            "Can be Sold": "True",
+            "Can be Purchased": "True",
+            "Available in POS": "True",
+            "Internal Reference": base,
+            "Barcode": barcode,
+            "Sales Description": "",
+            "Customer Taxes": "IVA 0%",
+        }
+        if sizes:
+            result.append({**common, "Product Attributes / Attribute": "Talla", "Product Attributes / Values": ",".join(sizes)})
+        else:
+            result.append({**common, "Product Attributes / Attribute": "", "Product Attributes / Values": ""})
+        if brand_values:
+            result.append({**common, "Product Attributes / Attribute": "Marca", "Product Attributes / Values": brand_values[0]})
+    return result
