@@ -1876,3 +1876,18 @@ def test_list_products_returns_empty_when_page_is_out_of_range(monkeypatch: pyte
     monkeypatch.setattr(client, "_request", fake_request)
 
     assert list(client.list_products(page=999, page_size=100)) == []
+
+
+def test_list_products_returns_empty_when_page_is_out_of_range_status_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = ContificoClient("key123", "token-xyz", base_url="https://api.example.com")
+
+    def fake_request(method, endpoint, *, base_url=None, params=None, json=None):
+        raise ContificoAPIError(
+            404,
+            'not found',
+            payload={"code": "400", "error": "Pagina fuera del rango"},
+        )
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    assert list(client.list_products(page=248, page_size=100)) == []

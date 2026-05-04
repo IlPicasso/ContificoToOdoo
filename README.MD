@@ -287,6 +287,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.34 (2026-05-04)**: Se corrigió el caso real de Contífico donde la respuesta HTTP puede venir con `status=404` pero body `{"code":"400","error":"Pagina fuera del rango"}`; ahora también se interpreta como fin de paginación para no cancelar la exportación.
 - **1.0.33 (2026-05-04)**: Se robusteció el manejo de paginación agotada de Contífico también en `ContificoClient.list_products` (no solo en el servicio de migración), interpretando el `400` con `Pagina fuera del rango` como lista vacía para evitar abortos en exportaciones.
 - **1.0.32 (2026-05-04)**: El fetch paginado de productos ahora interpreta el 400 de Contífico `{"code":"400","error":"Pagina fuera del rango"}` como fin de paginación (no como error fatal), evitando cancelar corridas cuando se solicita una página inexistente.
 - **1.0.31 (2026-05-04)**: Se corrigió el corte prematuro del fetch paginado cuando entraba fallback de `page_size`; ahora la condición de fin usa el tamaño efectivo de página y evita truncar resultados (ej. alrededor de ~6600 ítems).

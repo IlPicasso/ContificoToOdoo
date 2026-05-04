@@ -219,3 +219,19 @@ def test_fetch_products_page_out_of_range_is_treated_as_end_of_pagination():
 
     assert rows == []
     assert effective_size == 200
+
+
+def test_fetch_products_page_out_of_range_404_payload_400_is_treated_as_end_of_pagination():
+    class OutOfRangeClient404:
+        def list_products(self, *, page: int, page_size: int):
+            raise ContificoAPIError(
+                404,
+                "not found",
+                payload={"code": "400", "error": "Pagina fuera del rango"},
+            )
+
+    service = OdooMigrationService(client=OutOfRangeClient404())
+    rows, effective_size = service._fetch_products_page_with_fallback(page=248, page_size=200)
+
+    assert rows == []
+    assert effective_size == 200

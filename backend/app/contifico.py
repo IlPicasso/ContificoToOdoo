@@ -565,7 +565,8 @@ class ContificoClient:
 
     @staticmethod
     def _is_page_out_of_range_error(exc: ContificoAPIError) -> bool:
-        if int(getattr(exc, "status_code", 0) or 0) != 400:
+        status_code = int(getattr(exc, "status_code", 0) or 0)
+        if status_code not in {400, 404}:
             return False
         payload = getattr(exc, "payload", None)
         message_parts: list[str] = [str(getattr(exc, "detail", "") or "")]
@@ -577,6 +578,8 @@ class ContificoClient:
             code_value = str(payload.get("code") or "").strip()
             if code_value and code_value != "400":
                 return False
+        elif status_code == 404:
+            return False
         message = " ".join(message_parts).lower()
         return "fuera del rango" in message and "pagina" in message.replace("á", "a")
 
