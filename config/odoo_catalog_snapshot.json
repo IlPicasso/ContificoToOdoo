@@ -21,7 +21,7 @@
     "Ropa / Hombres / Levas",
     "Ropa / Hombres / Medias",
     "Ropa / Hombres / Pantalones",
-    "Ropa / Hombres / Panuelos",
+    "Ropa / Hombres / Pañuelos",
     "Ropa / Hombres / Polos",
     "Ropa / Hombres / Ternos",
     "Ropa / Hombres / Zapatos",
@@ -37,7 +37,10 @@
     "Ropa / Mujeres / Vestidos",
     "Ropa / Mujeres / Vestidos de Fiesta",
     "Ropa / Mujeres / Zapatos",
-    "Ropa / Ninos",
+    "Ropa / Niños",
+    "Ropa / Niños / Levas",
+    "Ropa / Niños / Pantalones",
+    "Ropa / Niños / Ternos",
     "Servicios",
     "Servicios / Sastreria"
   ]
