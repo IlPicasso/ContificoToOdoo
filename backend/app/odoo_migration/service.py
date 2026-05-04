@@ -21,12 +21,15 @@ from .rules import (
 WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BAT": "BAT/Existencias", "BSR": "BSR/Existencias", "OFA": "OFA/Existencias", "BMT": "BMT/Existencias", "B2": "B2/Existencias", "BW": "BW/Existencias", "BM": "BM/Existencias", "BTL": "BTL/Existencias"}
 WAREHOUSE_MAP_CONFIG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_mapping.json").read_text(encoding="utf-8"))
 WAREHOUSE_CATALOG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_catalog.json").read_text(encoding="utf-8"))
+CONTIFICO_CATEGORY_ID_MAP = json.loads((Path(__file__).resolve().parents[3] / "config/contifico_category_id_map.json").read_text(encoding="utf-8"))
+CONTIFICO_CATEGORY_TO_ODOO = json.loads((Path(__file__).resolve().parents[3] / "config/contifico_category_to_odoo.json").read_text(encoding="utf-8"))
 PRODUCT_COLUMNS = ["External ID","Name","Product Type","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
 STOCK_COLUMNS = ["sku","ubicacion_odoo","cantidad","costo_unitario"]
 STOCK_QUANT_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
 MAP_COLUMNS = ["sku","nombre_contifico","producto_madre_detectado","categoria_odoo_detectada","talla_detectada","manga_detectada","ancho_corbata_detectado","marca_detectada","color_detectado","barcode","precio","costo","stock_bpu","stock_tur","stock_bat","stock_total_contifico","estado","confidence","parser_rule"]
 ERROR_COLUMNS = ["sku","nombre_contifico","problema","sugerencia","raw_categoria_id","raw_marca_nombre","raw_codigo_barra"]
 EXCLUDED_ZERO_COLUMNS = ["sku","nombre_contifico","codigo_barra","categoria_id","marca_nombre","pvp1","costo","stock_total_contifico","estado_contifico","motivo_exclusion"]
+UNMAPPED_CATEGORY_COLUMNS = ["categoria_id","categoria_nombre_resuelta","productos_detectados"]
 TEMPLATE_PRODUCT_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/product_product_template.csv"
 TEMPLATE_STOCK_PATH = Path(__file__).resolve().parents[3] / "docs/odoo_import_templates/stock_quant.csv"
 TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost","Weight","Sales Description","Product Attributes / Attribute","Product Attributes / Values"]
@@ -58,7 +61,7 @@ class OdooMigrationService:
     def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, include_additional_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
         ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
-        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
+        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; unmapped_categories_csv=folder/'unmapped_categories.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
         started_at = datetime.utcnow()
@@ -81,7 +84,7 @@ class OdooMigrationService:
         )
 
     def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, expected_min_items: int | None, started_at: datetime, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
-        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
+        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; unmapped_categories_csv=folder/'unmapped_categories.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, export_stock=export_stock, progress_callback=progress_callback)
         self._write_stock_state(state_path, phase1['stock_state'])
@@ -94,13 +97,14 @@ class OdooMigrationService:
         self._write_csv(errors_csv, ERROR_COLUMNS, phase1['erows'])
         self._write_csv(mapping_csv, MAP_COLUMNS, phase1['mrows'])
         self._write_csv(excluded_zero_csv, EXCLUDED_ZERO_COLUMNS, phase1['zrows'])
+        self._write_csv(unmapped_categories_csv, UNMAPPED_CATEGORY_COLUMNS, phase1['unmapped_category_rows'])
         self._write_variant_import_outputs(folder, phase1.get("variant_rows", []), include_stock=export_stock)
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
         duration_seconds = round((datetime.utcnow() - started_at).total_seconds(), 2)
-        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds}
+        summary={"total_products":len(phase1['prows']),"total_categorias_no_mapeadas":len(phase1['unmapped_category_rows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds}
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
@@ -118,12 +122,12 @@ class OdooMigrationService:
         return MigrationOutput(folder,product_csv,stock_csv,errors_csv,mapping_csv,excluded_zero_csv,len(phase1['prows']),len(phase1['erows']),pages_fetched,hit_max_pages,debug_log,raw_log,summary)
 
     def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, include_additional_attributes: bool = False, export_stock: bool = False, progress_callback=None) -> dict[str, Any]:
-        prows=[]; mrows=[]; erows=[]; zrows=[]; variant_rows=[]
+        prows=[]; mrows=[]; erows=[]; zrows=[]; variant_rows=[]; unmapped_categories={} 
         seen_sku=set(); seen_barcode=set(); counts={"ok":0,"manual_review":0,"error":0,"excluded_zero_stock":0}
         group_totals = {}; prepared=[]; stock_state=[]
         for item in products:
             sku=str(item.get('codigo') or '').strip(); name=str(item.get('nombre') or '')
-            stock_map=self._extract_stock_from_item(item) if export_stock else {k: 0.0 for k in WAREHOUSE_TO_LOCATION}
+            stock_map=self._extract_stock_from_item(item)
             stock_total=calculate_total_stock(stock_map)
             base_key = self._base_group_key(sku, name)
             group_totals[base_key] = group_totals.get(base_key, 0.0) + stock_total
@@ -135,13 +139,14 @@ class OdooMigrationService:
                 marca_raw=str(item.get('marca_nombre') or item.get('marca') or '')
                 price=float(item.get('pvp1') or 0); cost=float(item.get('costo_maximo') or item.get('costo_promedio') or item.get('costo') or 0)
                 include_by_group = group_totals.get(base_key, 0.0) > 0
-                if export_stock and should_exclude_zero_stock(stock_total) and not include_by_group:
+                if should_exclude_zero_stock(stock_total) and not include_by_group:
                     zrows.append(build_zero_stock_exclusion_row(sku=sku,nombre_contifico=name,codigo_barra=barcode,categoria_id=categoria_id,marca_nombre=marca_raw,pvp1=f"{price:.2f}",costo=f"{cost:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado_contifico=str(item.get('estado') or '')))
                     counts['excluded_zero_stock'] += 1
                     mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado='',categoria_odoo_detectada='',talla_detectada='',manga_detectada='',ancho_corbata_detectado='',marca_detectada=detect_brand(marca_raw,name),color_detectado=detect_color(name),barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='excluded_zero_stock',confidence='1.00',parser_rule='exclude_zero_no_group_stock'))
                     continue
 
-                parser_rule=''; parsed={}; category=detect_category(name, categoria_id, sku=sku)
+                parser_rule=''; parsed={}; resolved_categoria = CONTIFICO_CATEGORY_ID_MAP.get(categoria_id, categoria_id)
+                category=CONTIFICO_CATEGORY_TO_ODOO.get(categoria_id) or detect_category(name, categoria_id, sku=sku)
                 for fn in (parse_shirt_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku):
                     parsed = fn(sku) or {}
                     if parsed: break
@@ -155,6 +160,8 @@ class OdooMigrationService:
                 if not sku:
                     erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='SKU obligatorio',sugerencia='Revisar codigo',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
                 state='ok'; confidence='0.95'
+                if categoria_id and categoria_id not in CONTIFICO_CATEGORY_TO_ODOO:
+                    unmapped_categories[categoria_id] = {"categoria_id": categoria_id, "categoria_nombre_resuelta": resolved_categoria or "", "productos_detectados": int(unmapped_categories.get(categoria_id, {}).get("productos_detectados", 0)) + 1}
                 if not category or not talla and not ancho and not manga:
                     state='manual_review'; confidence='0.65'; counts['manual_review'] += 1
                 else: counts['ok'] += 1
@@ -177,7 +184,7 @@ class OdooMigrationService:
                 if progress_callback and (i % 25 == 0 or i == len(prepared)): progress_callback({"stage":"phase_1_processing","processed_items":i,"total_items":len(prepared),"found_items":len(products)})
 
         self._write_csv(product_csv, PRODUCT_COLUMNS, prows)
-        return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state, "variant_rows": variant_rows}
+        return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state, "variant_rows": variant_rows, "unmapped_category_rows": list(unmapped_categories.values())}
 
     def _write_variant_import_outputs(self, run_folder: Path, variant_rows: list[dict[str, Any]], include_stock: bool = False) -> None:
         grouped: dict[str, list[dict[str, Any]]] = {}
