@@ -12,6 +12,7 @@ def _load_json(path: str) -> dict:
 
 CATEGORY_ALIASES = _load_json('config/category_aliases.json')
 CONTIFICO_CATEGORY_ID_MAP = _load_json('config/contifico_category_id_map.json')
+CONTIFICO_CATEGORY_TO_ODOO = _load_json('config/contifico_category_to_odoo.json')
 BRAND_ALIASES = _load_json('config/brand_aliases.json')
 COLOR_ALIASES = _load_json('config/color_aliases.json')
 PATTERNS = {k: re.compile(v) for k, v in _load_json('config/sku_patterns.json').items()}
@@ -41,6 +42,8 @@ def detect_color(nombre: str) -> str:
 
 def detect_category(nombre: str, categoria_raw: str = '', sku: str = '') -> str:
     categoria_value = str(categoria_raw or '').strip()
+    if categoria_value and categoria_value in CONTIFICO_CATEGORY_TO_ODOO:
+        return CONTIFICO_CATEGORY_TO_ODOO[categoria_value]
     categoria_name = CONTIFICO_CATEGORY_ID_MAP.get(categoria_value, categoria_value)
     source = f"{normalize_text(categoria_name)} {normalize_text(nombre)}"
     sku_norm = normalize_text(sku)

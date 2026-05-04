@@ -22,6 +22,7 @@ WAREHOUSE_TO_LOCATION = {"BPU": "BPU/Existencias", "TUR": "TUR/Existencias", "BA
 WAREHOUSE_MAP_CONFIG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_mapping.json").read_text(encoding="utf-8"))
 WAREHOUSE_CATALOG = json.loads((Path(__file__).resolve().parents[3] / "config/warehouse_catalog.json").read_text(encoding="utf-8"))
 CONTIFICO_CATEGORY_ID_MAP = json.loads((Path(__file__).resolve().parents[3] / "config/contifico_category_id_map.json").read_text(encoding="utf-8"))
+CONTIFICO_CATEGORY_TO_ODOO = json.loads((Path(__file__).resolve().parents[3] / "config/contifico_category_to_odoo.json").read_text(encoding="utf-8"))
 PRODUCT_COLUMNS = ["External ID","Name","Product Type","Internal Reference","Barcode","Sales Price","Cost","Weight","Sales Description","Product Values"]
 STOCK_COLUMNS = ["sku","ubicacion_odoo","cantidad","costo_unitario"]
 STOCK_QUANT_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
@@ -126,7 +127,7 @@ class OdooMigrationService:
         group_totals = {}; prepared=[]; stock_state=[]
         for item in products:
             sku=str(item.get('codigo') or '').strip(); name=str(item.get('nombre') or '')
-            stock_map=self._extract_stock_from_item(item) if export_stock else {k: 0.0 for k in WAREHOUSE_TO_LOCATION}
+            stock_map=self._extract_stock_from_item(item)
             stock_total=calculate_total_stock(stock_map)
             base_key = self._base_group_key(sku, name)
             group_totals[base_key] = group_totals.get(base_key, 0.0) + stock_total
@@ -138,14 +139,14 @@ class OdooMigrationService:
                 marca_raw=str(item.get('marca_nombre') or item.get('marca') or '')
                 price=float(item.get('pvp1') or 0); cost=float(item.get('costo_maximo') or item.get('costo_promedio') or item.get('costo') or 0)
                 include_by_group = group_totals.get(base_key, 0.0) > 0
-                if export_stock and should_exclude_zero_stock(stock_total) and not include_by_group:
+                if should_exclude_zero_stock(stock_total) and not include_by_group:
                     zrows.append(build_zero_stock_exclusion_row(sku=sku,nombre_contifico=name,codigo_barra=barcode,categoria_id=categoria_id,marca_nombre=marca_raw,pvp1=f"{price:.2f}",costo=f"{cost:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado_contifico=str(item.get('estado') or '')))
                     counts['excluded_zero_stock'] += 1
                     mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado='',categoria_odoo_detectada='',talla_detectada='',manga_detectada='',ancho_corbata_detectado='',marca_detectada=detect_brand(marca_raw,name),color_detectado=detect_color(name),barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='excluded_zero_stock',confidence='1.00',parser_rule='exclude_zero_no_group_stock'))
                     continue
 
                 parser_rule=''; parsed={}; resolved_categoria = CONTIFICO_CATEGORY_ID_MAP.get(categoria_id, categoria_id)
-                category=detect_category(name, resolved_categoria, sku=sku)
+                category=CONTIFICO_CATEGORY_TO_ODOO.get(categoria_id) or detect_category(name, categoria_id, sku=sku)
                 for fn in (parse_shirt_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku):
                     parsed = fn(sku) or {}
                     if parsed: break
@@ -159,7 +160,7 @@ class OdooMigrationService:
                 if not sku:
                     erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='SKU obligatorio',sugerencia='Revisar codigo',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
                 state='ok'; confidence='0.95'
-                if categoria_id and categoria_id not in CONTIFICO_CATEGORY_ID_MAP:
+                if categoria_id and categoria_id not in CONTIFICO_CATEGORY_TO_ODOO:
                     unmapped_categories[categoria_id] = {"categoria_id": categoria_id, "categoria_nombre_resuelta": resolved_categoria or "", "productos_detectados": int(unmapped_categories.get(categoria_id, {}).get("productos_detectados", 0)) + 1}
                 if not category or not talla and not ancho and not manga:
                     state='manual_review'; confidence='0.65'; counts['manual_review'] += 1
