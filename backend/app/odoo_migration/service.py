@@ -333,16 +333,16 @@ class OdooMigrationService:
         items=[]; pages=0
         for page in range(1,max_pages+1):
             if progress_callback: progress_callback({"stage":"fetching","page":page,"max_pages":max_pages,"found_items":len(items)})
-            batch = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
+            batch, effective_page_size = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
             if debug_lines is not None: debug_lines.append(f"fetch page={page} items={len(batch)}")
             if raw_lines is not None: raw_lines.append(json.dumps({"page":page,"response":batch}, ensure_ascii=False))
             if not batch: break
             items.extend([b for b in batch if isinstance(b,dict)])
             if progress_callback: progress_callback({"stage":"fetched_page","page":page,"fetched":len(batch),"found_items":len(items)})
-            if len(batch)<page_size: break
+            if len(batch)<effective_page_size: break
         return items, pages, pages>=max_pages
 
-    def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> list[dict[str, Any]]:
+    def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
         sizes = [page_size]
         if page_size > 100:
             sizes.extend([100, 50, 25])
@@ -353,13 +353,13 @@ class OdooMigrationService:
         last_exc: Exception | None = None
         for size in sizes:
             try:
-                return list(self.client.list_products(page=page, page_size=size))
+                return list(self.client.list_products(page=page, page_size=size)), size
             except ContificoTransportError as exc:
                 last_exc = exc
                 continue
         if last_exc:
             raise last_exc
-        return []
+        return [], page_size
 
     @staticmethod
     def _base_group_key(sku: str, name: str) -> str:
