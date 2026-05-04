@@ -74,6 +74,8 @@ class ContificoClient:
         HTTPStatus.NOT_FOUND,
         HTTPStatus.METHOD_NOT_ALLOWED,
     }
+    REQUEST_MAX_RETRIES = 3
+    REQUEST_RETRY_BACKOFF_BASE = 0.8
 
     def __init__(
         self,
@@ -159,26 +161,45 @@ class ContificoClient:
             params,
             json,
         )
-        try:
-            with httpx.Client(**client_kwargs) as client:
-                response = client.request(
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                with httpx.Client(**client_kwargs) as client:
+                    response = client.request(
+                        method,
+                        url,
+                        headers=headers,
+                        params=params,
+                        json=json,
+                    )
+                break
+            except httpx.ReadTimeout as exc:  # pragma: no cover - error path
+                if attempts >= self.REQUEST_MAX_RETRIES:
+                    logger.exception(
+                        "Contifico read timeout agotado %s %s intentos=%s params=%r json=%r",
+                        method, url, attempts, params, json,
+                    )
+                    raise ContificoTransportError(
+                        f"Timeout leyendo respuesta de Contífico tras {attempts} intentos: {exc}"
+                    ) from exc
+                backoff = self.REQUEST_RETRY_BACKOFF_BASE * (2 ** (attempts - 1))
+                logger.warning(
+                    "Contifico read timeout %s %s intento=%s/%s. Reintentando en %.2fs",
+                    method, url, attempts, self.REQUEST_MAX_RETRIES, backoff,
+                )
+                time.sleep(backoff)
+            except httpx.RequestError as exc:  # pragma: no cover - error path
+                logger.exception(
+                    "Contifico transport error %s %s params=%r json=%r",
                     method,
                     url,
-                    headers=headers,
-                    params=params,
-                    json=json,
+                    params,
+                    json,
                 )
-        except httpx.RequestError as exc:  # pragma: no cover - error path
-            logger.exception(
-                "Contifico transport error %s %s params=%r json=%r",
-                method,
-                url,
-                params,
-                json,
-            )
-            raise ContificoTransportError(
-                f"No se pudo conectar con Contífico: {exc}".rstrip()
-            ) from exc
+                raise ContificoTransportError(
+                    f"No se pudo conectar con Contífico: {exc}".rstrip()
+                ) from exc
 
         logger.info(
             "Contifico response %s %s status=%s headers=%r body=%r",
@@ -1593,4 +1614,3 @@ class ContificoClient:
                 self._cache_path,
                 exc,
             )
-
