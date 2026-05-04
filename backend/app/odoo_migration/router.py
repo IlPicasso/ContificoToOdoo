@@ -172,6 +172,53 @@ def export_products_stock(
     }
 
 
+@router.post("/products-stock/process-raw-upload")
+async def process_raw_upload(
+    file: UploadFile = File(...),
+    include_additional_attributes: bool = Query(default=False),
+    export_stock: bool = Query(default=False),
+    contifico_client: ContificoClient = Depends(get_contifico_client),
+):
+    raw = await file.read()
+    text = raw.decode("utf-8-sig", errors="ignore")
+    products: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except Exception:
+            continue
+        if isinstance(payload, dict) and isinstance(payload.get("response"), list):
+            products.extend([x for x in payload["response"] if isinstance(x, dict)])
+        elif isinstance(payload, list):
+            products.extend([x for x in payload if isinstance(x, dict)])
+        elif isinstance(payload, dict) and "codigo" in payload:
+            products.append(payload)
+    if not products:
+        raise HTTPException(status_code=400, detail="No se detectaron productos válidos en el archivo.")
+    service = OdooMigrationService(contifico_client)
+    output = service.generate_products_and_stock_csv_from_items(
+        products=products,
+        export_stock=export_stock,
+        include_additional_attributes=include_additional_attributes,
+    )
+    run_id = output.folder.name
+    return {
+        "run_id": run_id,
+        "source": "uploaded_raw_json",
+        "detected_products": len(products),
+        "folder": str(output.folder),
+        "files": _build_files(run_id),
+        "total_products": output.total_products,
+        "total_errors": output.total_errors,
+        "summary": output.summary,
+        "pages_fetched": output.pages_fetched,
+        "hit_max_pages": output.hit_max_pages,
+    }
+
+
 @router.post("/products-stock/export-jobs")
 def start_export_job(
     page_size: int = Query(default=200, ge=1, le=500),

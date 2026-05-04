@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 import json
 
-from ..contifico import ContificoClient
+from ..contifico import ContificoClient, ContificoTransportError
 from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
     parse_shirt_sku, parse_suit_sku, parse_blazer_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku,
@@ -52,7 +52,25 @@ class OdooMigrationService:
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
         products,pages_fetched,hit_max_pages=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
+        return self._generate_from_products(
+            products=products, folder=folder, pages_fetched=pages_fetched, hit_max_pages=hit_max_pages,
+            export_stock=export_stock, include_additional_attributes=include_additional_attributes,
+            progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines,
+        )
 
+    def generate_products_and_stock_csv_from_items(self, *, products: list[dict[str, Any]], export_stock: bool = False, include_additional_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
+        self._validate_templates()
+        ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
+        debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'source=uploaded_raw_json',f'export_stock={export_stock}']; raw_lines=[json.dumps({"uploaded_items": len(products)})]
+        return self._generate_from_products(
+            products=products, folder=folder, pages_fetched=0, hit_max_pages=False,
+            export_stock=export_stock, include_additional_attributes=include_additional_attributes,
+            progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines,
+        )
+
+    def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
+        product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
+        snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, export_stock=export_stock, progress_callback=progress_callback)
         self._write_stock_state(state_path, phase1['stock_state'])
         self._write_csv(stock_csv, STOCK_COLUMNS, [])
@@ -315,7 +333,7 @@ class OdooMigrationService:
         items=[]; pages=0
         for page in range(1,max_pages+1):
             if progress_callback: progress_callback({"stage":"fetching","page":page,"max_pages":max_pages,"found_items":len(items)})
-            batch=list(self.client.list_products(page=page,page_size=page_size)); pages=page
+            batch = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
             if debug_lines is not None: debug_lines.append(f"fetch page={page} items={len(batch)}")
             if raw_lines is not None: raw_lines.append(json.dumps({"page":page,"response":batch}, ensure_ascii=False))
             if not batch: break
@@ -323,6 +341,25 @@ class OdooMigrationService:
             if progress_callback: progress_callback({"stage":"fetched_page","page":page,"fetched":len(batch),"found_items":len(items)})
             if len(batch)<page_size: break
         return items, pages, pages>=max_pages
+
+    def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> list[dict[str, Any]]:
+        sizes = [page_size]
+        if page_size > 100:
+            sizes.extend([100, 50, 25])
+        elif page_size > 50:
+            sizes.extend([50, 25])
+        elif page_size > 25:
+            sizes.append(25)
+        last_exc: Exception | None = None
+        for size in sizes:
+            try:
+                return list(self.client.list_products(page=page, page_size=size))
+            except ContificoTransportError as exc:
+                last_exc = exc
+                continue
+        if last_exc:
+            raise last_exc
+        return []
 
     @staticmethod
     def _base_group_key(sku: str, name: str) -> str:

@@ -206,6 +206,18 @@ $('precheckOdooOffline').addEventListener('click', async () => {
   }
 });
 
+$('processRawJson').addEventListener('click', async () => {
+  try {
+    const data = await apiUpload('/odoo-migration/products-stock/process-raw-upload', 'rawJsonFile', {
+      include_additional_attributes: $('includeAdditionalAttributes').checked,
+      export_stock: false,
+    });
+    show('migrationSummaryOut', data);
+    renderMigrationLinks(data.files);
+    setMigrationStatus(`Archivo procesado. Productos detectados: ${data.detected_products}.`);
+  } catch (e) { showErr(e); }
+});
+
 $('loadRuns').addEventListener('click', async () => {
   try {
     setMigrationStatus('Consultando últimas corridas...');
