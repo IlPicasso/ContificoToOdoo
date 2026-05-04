@@ -53,7 +53,7 @@ class OdooMigrationService:
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
         products,pages_fetched,hit_max_pages=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
 
-        phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, progress_callback=progress_callback)
+        phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, export_stock=export_stock, progress_callback=progress_callback)
         self._write_stock_state(state_path, phase1['stock_state'])
         self._write_csv(stock_csv, STOCK_COLUMNS, [])
         self._write_csv(stock_quant_csv, STOCK_QUANT_COLUMNS, [])
@@ -64,7 +64,7 @@ class OdooMigrationService:
         self._write_csv(errors_csv, ERROR_COLUMNS, phase1['erows'])
         self._write_csv(mapping_csv, MAP_COLUMNS, phase1['mrows'])
         self._write_csv(excluded_zero_csv, EXCLUDED_ZERO_COLUMNS, phase1['zrows'])
-        self._write_variant_import_outputs(folder, phase1.get("variant_rows", []))
+        self._write_variant_import_outputs(folder, phase1.get("variant_rows", []), include_stock=export_stock)
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
@@ -85,13 +85,14 @@ class OdooMigrationService:
             })
         return MigrationOutput(folder,product_csv,stock_csv,errors_csv,mapping_csv,excluded_zero_csv,len(phase1['prows']),len(phase1['erows']),pages_fetched,hit_max_pages,debug_log,raw_log,summary)
 
-    def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, include_additional_attributes: bool = False, progress_callback=None) -> dict[str, Any]:
+    def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, include_additional_attributes: bool = False, export_stock: bool = False, progress_callback=None) -> dict[str, Any]:
         prows=[]; mrows=[]; erows=[]; zrows=[]; variant_rows=[]
         seen_sku=set(); seen_barcode=set(); counts={"ok":0,"manual_review":0,"error":0,"excluded_zero_stock":0}
         group_totals = {}; prepared=[]; stock_state=[]
         for item in products:
             sku=str(item.get('codigo') or '').strip(); name=str(item.get('nombre') or '')
-            stock_map=self._extract_stock_from_item(item); stock_total=calculate_total_stock(stock_map)
+            stock_map=self._extract_stock_from_item(item) if export_stock else {k: 0.0 for k in WAREHOUSE_TO_LOCATION}
+            stock_total=calculate_total_stock(stock_map)
             base_key = self._base_group_key(sku, name)
             group_totals[base_key] = group_totals.get(base_key, 0.0) + stock_total
             prepared.append((item, sku, name, stock_map, stock_total, base_key))
@@ -102,7 +103,7 @@ class OdooMigrationService:
                 marca_raw=str(item.get('marca_nombre') or item.get('marca') or '')
                 price=float(item.get('pvp1') or 0); cost=float(item.get('costo_maximo') or item.get('costo_promedio') or item.get('costo') or 0)
                 include_by_group = group_totals.get(base_key, 0.0) > 0
-                if should_exclude_zero_stock(stock_total) and not include_by_group:
+                if export_stock and should_exclude_zero_stock(stock_total) and not include_by_group:
                     zrows.append(build_zero_stock_exclusion_row(sku=sku,nombre_contifico=name,codigo_barra=barcode,categoria_id=categoria_id,marca_nombre=marca_raw,pvp1=f"{price:.2f}",costo=f"{cost:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado_contifico=str(item.get('estado') or '')))
                     counts['excluded_zero_stock'] += 1
                     mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado='',categoria_odoo_detectada='',talla_detectada='',manga_detectada='',ancho_corbata_detectado='',marca_detectada=detect_brand(marca_raw,name),color_detectado=detect_color(name),barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='excluded_zero_stock',confidence='1.00',parser_rule='exclude_zero_no_group_stock'))
@@ -146,7 +147,7 @@ class OdooMigrationService:
         self._write_csv(product_csv, PRODUCT_COLUMNS, prows)
         return {"prows": prows, "mrows": mrows, "erows": erows, "zrows": zrows, "counts": counts, "stock_state": stock_state, "variant_rows": variant_rows}
 
-    def _write_variant_import_outputs(self, run_folder: Path, variant_rows: list[dict[str, Any]]) -> None:
+    def _write_variant_import_outputs(self, run_folder: Path, variant_rows: list[dict[str, Any]], include_stock: bool = False) -> None:
         grouped: dict[str, list[dict[str, Any]]] = {}
         for row in variant_rows:
             key = self._slugify(row.get("name") or row.get("sku") or "")
@@ -176,10 +177,11 @@ class OdooMigrationService:
                     "Sales Price": r["price"], "Cost": r["cost"], "Weight": r["weight"],
                     "Original Product Values": build_product_values(talla=attrs.get("Talla",""), manga=attrs.get("Manga de Camisa",""), ancho_corbata=attrs.get("Ancho Corbata",""), marca=attrs.get("Marca",""), color=attrs.get("Color",""))
                 })
-                for wh, loc in WAREHOUSE_TO_LOCATION.items():
-                    qty = float((r.get("stock_map") or {}).get(wh, 0) or 0)
-                    if qty > 0:
-                        stock_rows.append({"Product External ID": source_ext, "Location": loc, "Quantity": f"{qty:.2f}"})
+                if include_stock:
+                    for wh, loc in WAREHOUSE_TO_LOCATION.items():
+                        qty = float((r.get("stock_map") or {}).get(wh, 0) or 0)
+                        if qty > 0:
+                            stock_rows.append({"Product External ID": source_ext, "Location": loc, "Quantity": f"{qty:.2f}"})
             for attr, values in sorted(attr_values.items()):
                 values_csv = ",".join(sorted(values))
                 template_rows.append({
