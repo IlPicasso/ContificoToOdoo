@@ -85,7 +85,7 @@ def test_fetch_products_resumes_from_last_successful_page(tmp_path):
     client = ResumeClient()
     service = OdooMigrationService(client=client, output_root=output_root)
 
-    items, pages, _ = service._fetch_products(page_size=200, max_pages=5)
+    items, pages, _, expected_min = service._fetch_products(page_size=200, max_pages=5)
 
     assert client.calls[0] == (3, 200)
     assert items == [
@@ -93,6 +93,7 @@ def test_fetch_products_resumes_from_last_successful_page(tmp_path):
         {"id": "P-2", "codigo": "SKU-2"},
     ]
     assert pages == 3
+    assert expected_min is None
     assert not state_path.exists()
     assert not items_path.exists()
 
@@ -138,11 +139,12 @@ def test_fetch_products_v2_does_not_stop_on_first_short_page(tmp_path):
 
     service = OdooMigrationService(client=V2Client(), output_root=tmp_path / "odoo_migration")
 
-    items, pages, hit_max = service._fetch_products(page_size=200, max_pages=10)
+    items, pages, hit_max, expected_min = service._fetch_products(page_size=200, max_pages=10)
 
     assert len(items) == 200
     assert pages == 3
     assert hit_max is False
+    assert expected_min is None
 
 
 def test_fetch_products_uses_configured_page_delay_and_retry_backoff(monkeypatch, tmp_path):
@@ -172,9 +174,32 @@ def test_fetch_products_uses_configured_page_delay_and_retry_backoff(monkeypatch
         page_retry_jitter_seconds=0.5,
     )
 
-    items, pages, _ = service._fetch_products(page_size=200, max_pages=3)
+    items, pages, _, expected_min = service._fetch_products(page_size=200, max_pages=3)
 
     assert items == [{"id": "P-1"}]
     assert pages == 2
+    assert expected_min is None
     assert 2.0 in sleep_calls  # retry backoff
     assert 1.2 in sleep_calls  # inter-page pacing
+
+
+def test_fetch_products_tracks_expected_total_from_v2_count(tmp_path):
+    class V2CountClient:
+        products_base_url = "https://api.contifico.com/sistema/api/v2"
+
+        def __init__(self):
+            self.last_products_total_count = None
+
+        def list_products(self, *, page: int, page_size: int):
+            self.last_products_total_count = 24605
+            if page <= 2:
+                return [{"id": f"P-{page}-{i}"} for i in range(100)]
+            return []
+
+    service = OdooMigrationService(client=V2CountClient(), output_root=tmp_path / "odoo_migration")
+    items, pages, hit_max, expected_min = service._fetch_products(page_size=200, max_pages=10)
+
+    assert len(items) == 200
+    assert pages == 3
+    assert hit_max is False
+    assert expected_min == 24605

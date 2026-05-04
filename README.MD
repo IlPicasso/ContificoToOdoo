@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.40
+Versión 1.0.41
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -67,6 +67,10 @@ Parámetros recomendados para mitigar throttling/timeouts en descargas largas:
 - `CONTIFICO_PRODUCTS_PAGE_RETRY_ATTEMPTS` (default `5`)
 - `CONTIFICO_PRODUCTS_PAGE_RETRY_BACKOFF_BASE_SECONDS` (default `1.5`)
 - `CONTIFICO_PRODUCTS_PAGE_RETRY_JITTER_SECONDS` (default `0.4`)
+
+En modo API v2 también se registra en el resumen el `count` reportado por Contífico como
+`expected_min_items_from_api`, para comparar rápidamente si la corrida trajo un mínimo
+coherente de ítems (`fetched_items_meet_expected_min`).
 
 #### Límites para la búsqueda de facturas en Contífico
 

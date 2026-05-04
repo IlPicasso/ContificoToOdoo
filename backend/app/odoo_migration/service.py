@@ -61,9 +61,10 @@ class OdooMigrationService:
         product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
-        products,pages_fetched,hit_max_pages=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
+        products,pages_fetched,hit_max_pages,expected_min_items=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
         return self._generate_from_products(
             products=products, folder=folder, pages_fetched=pages_fetched, hit_max_pages=hit_max_pages,
+            expected_min_items=expected_min_items,
             export_stock=export_stock, include_additional_attributes=include_additional_attributes,
             progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines,
         )
@@ -73,12 +74,12 @@ class OdooMigrationService:
         ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'source=uploaded_raw_json',f'export_stock={export_stock}']; raw_lines=[json.dumps({"uploaded_items": len(products)})]
         return self._generate_from_products(
-            products=products, folder=folder, pages_fetched=0, hit_max_pages=False,
+            products=products, folder=folder, pages_fetched=0, hit_max_pages=False, expected_min_items=None,
             export_stock=export_stock, include_additional_attributes=include_additional_attributes,
             progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines,
         )
 
-    def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
+    def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, expected_min_items: int | None, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
         product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, export_stock=export_stock, progress_callback=progress_callback)
@@ -97,7 +98,7 @@ class OdooMigrationService:
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
-        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes}
+        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None}
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
@@ -350,6 +351,7 @@ class OdooMigrationService:
         )
         pages = start_page - 1
         products_v2_mode = "/api/v2" in str(getattr(self.client, "products_base_url", "")).lower()
+        expected_min_items = None
         for page in range(start_page, max_pages + 1):
             if progress_callback: progress_callback({"stage":"fetching","page":page,"max_pages":max_pages,"found_items":len(items)})
             batch, effective_page_size = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
@@ -358,6 +360,9 @@ class OdooMigrationService:
             if not batch: break
             page_items = [b for b in batch if isinstance(b,dict)]
             items.extend(page_items)
+            api_total = getattr(self.client, "last_products_total_count", None)
+            if isinstance(api_total, int) and api_total > 0:
+                expected_min_items = api_total
             self._save_fetch_resume_state(
                 resume_state_path=resume_state_path,
                 resume_items_path=resume_items_path,
@@ -372,7 +377,7 @@ class OdooMigrationService:
             if self.page_delay_seconds > 0:
                 time.sleep(self.page_delay_seconds)
         self._clear_fetch_resume_state(resume_state_path=resume_state_path, resume_items_path=resume_items_path)
-        return items, pages, pages>=max_pages
+        return items, pages, pages>=max_pages, expected_min_items
 
     def _load_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page_size: int, max_pages: int) -> tuple[list[dict[str, Any]], int]:
         if not resume_state_path.exists() or not resume_items_path.exists():
