@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.31
+Versión 1.0.42
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -47,12 +47,33 @@ SECRET_KEY="pon-aqui-una-clave-de-al-menos-32-caracteres"
 # Credenciales de Contífico
 CONTIFICO_API_KEY="tu-api-key"
 CONTIFICO_API_TOKEN="tu-api-token"
+# Opcional: usar API v2 solo para productos
+# CONTIFICO_PRODUCTS_API_BASE_URL="https://api.contifico.com/sistema/api/v2"
 EOF
 # También puedes exportarla directamente:
 export SECRET_KEY="pon-aqui-una-clave-de-al-menos-32-caracteres"
 # export CONTIFICO_API_KEY="tu-api-key"
 # export CONTIFICO_API_TOKEN="tu-api-token"
+# export CONTIFICO_PRODUCTS_API_BASE_URL="https://api.contifico.com/sistema/api/v2"
 ```
+
+Nota: en API v2 de productos la paginación documentada usa `page` (100 ítems por página),
+por lo que el cliente evita enviar `page_size/result_page/result_size` en ese modo.
+Además, la respuesta de v2 puede venir envuelta en `{count,next,previous,results}` y el
+cliente ya consume `results` automáticamente.
+
+Parámetros recomendados para mitigar throttling/timeouts en descargas largas:
+- `CONTIFICO_PRODUCTS_PAGE_DELAY_SECONDS` (default `1.0`)
+- `CONTIFICO_PRODUCTS_PAGE_RETRY_ATTEMPTS` (default `5`)
+- `CONTIFICO_PRODUCTS_PAGE_RETRY_BACKOFF_BASE_SECONDS` (default `1.5`)
+- `CONTIFICO_PRODUCTS_PAGE_RETRY_JITTER_SECONDS` (default `0.4`)
+
+En modo API v2 también se registra en el resumen el `count` reportado por Contífico como
+`expected_min_items_from_api`, para comparar rápidamente si la corrida trajo un mínimo
+coherente de ítems (`fetched_items_meet_expected_min`).
+
+Para Fase 1 se recomienda trabajar con `page_size=100` y `max_pages=300` (cobertura de hasta
+30,000 productos en API v2).
 
 #### Límites para la búsqueda de facturas en Contífico
 

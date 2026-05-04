@@ -1,5 +1,6 @@
 from __future__ import annotations
 import csv
+import random
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -7,7 +8,9 @@ from pathlib import Path
 from typing import Any, Callable
 import json
 
-from ..contifico import ContificoClient, ContificoTransportError
+import time
+
+from ..contifico import ContificoAPIError, ContificoClient, ContificoTransportError
 from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
     parse_shirt_sku, parse_suit_sku, parse_blazer_sku, parse_tie_sku, parse_bowtie_sku, parse_fajin_sku,
@@ -39,8 +42,15 @@ class MigrationOutput:
 
 
 class OdooMigrationService:
-    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration"):
+    PRODUCT_PAGE_SERVER_RETRIES = 3
+    PRODUCT_PAGE_RETRY_BACKOFF_BASE_SECONDS = 0.8
+
+    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration", *, page_delay_seconds: float = 1.0, page_retry_attempts: int | None = None, page_retry_backoff_base_seconds: float | None = None, page_retry_jitter_seconds: float = 0.4):
         self.client = client; self.output_root = Path(output_root)
+        self.page_delay_seconds = max(0.0, float(page_delay_seconds))
+        self.page_retry_attempts = int(page_retry_attempts or self.PRODUCT_PAGE_SERVER_RETRIES)
+        self.page_retry_backoff_base_seconds = float(page_retry_backoff_base_seconds or self.PRODUCT_PAGE_RETRY_BACKOFF_BASE_SECONDS)
+        self.page_retry_jitter_seconds = max(0.0, float(page_retry_jitter_seconds))
         self._warehouse_by_id = {w.get("id"): w for w in WAREHOUSE_CATALOG if w.get("id")}
         self._warehouse_by_code = {str(w.get("codigo","")).upper(): w for w in WAREHOUSE_CATALOG}
         self._warehouse_by_name = {str(w.get("nombre","")).upper(): w for w in WAREHOUSE_CATALOG}
@@ -51,9 +61,10 @@ class OdooMigrationService:
         product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'page_size={page_size}',f'max_pages={max_pages}',f'export_stock={export_stock}']; raw_lines=[]
-        products,pages_fetched,hit_max_pages=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
+        products,pages_fetched,hit_max_pages,expected_min_items=self._fetch_products(page_size=page_size,max_pages=max_pages,progress_callback=progress_callback,debug_lines=debug_lines,raw_lines=raw_lines)
         return self._generate_from_products(
             products=products, folder=folder, pages_fetched=pages_fetched, hit_max_pages=hit_max_pages,
+            expected_min_items=expected_min_items,
             export_stock=export_stock, include_additional_attributes=include_additional_attributes,
             progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines,
         )
@@ -63,12 +74,12 @@ class OdooMigrationService:
         ts = datetime.utcnow().strftime('%Y%m%d_%H%M%S'); folder = self.output_root / ts; folder.mkdir(parents=True, exist_ok=True)
         debug_lines=[f'start={datetime.utcnow().isoformat()}Z',f'source=uploaded_raw_json',f'export_stock={export_stock}']; raw_lines=[json.dumps({"uploaded_items": len(products)})]
         return self._generate_from_products(
-            products=products, folder=folder, pages_fetched=0, hit_max_pages=False,
+            products=products, folder=folder, pages_fetched=0, hit_max_pages=False, expected_min_items=None,
             export_stock=export_stock, include_additional_attributes=include_additional_attributes,
             progress_callback=progress_callback, debug_lines=debug_lines, raw_lines=raw_lines,
         )
 
-    def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
+    def _generate_from_products(self, *, products: list[dict[str, Any]], folder: Path, pages_fetched: int, hit_max_pages: bool, expected_min_items: int | None, export_stock: bool, include_additional_attributes: bool, progress_callback=None, debug_lines=None, raw_lines=None) -> MigrationOutput:
         product_csv=folder/'product_product.csv'; stock_csv=folder/'initial_stock.csv'; stock_quant_csv=folder/'stock_quant.csv'; errors_csv=folder/'migration_errors.csv'; mapping_csv=folder/'mapping_report.csv'; excluded_zero_csv=folder/'excluded_zero_stock.csv'; debug_log=folder/'debug.log'; raw_log=folder/'raw.log'
         snapshot_path = folder / 'products_snapshot.jsonl'; state_path = folder / 'stock_state.json'
         phase1 = self._phase1_prepare_products(products=products, folder=folder, snapshot_path=snapshot_path, errors_csv=errors_csv, mapping_csv=mapping_csv, excluded_zero_csv=excluded_zero_csv, product_csv=product_csv, include_additional_attributes=include_additional_attributes, export_stock=export_stock, progress_callback=progress_callback)
@@ -87,7 +98,7 @@ class OdooMigrationService:
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
-        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes}
+        summary={"total_products":len(phase1['prows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None}
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
@@ -330,33 +341,107 @@ class OdooMigrationService:
         return [c.strip() for c in line.split(',') if c.strip()]
 
     def _fetch_products(self, *, page_size:int, max_pages:int, progress_callback=None, debug_lines=None, raw_lines=None):
-        items=[]; pages=0
-        for page in range(1,max_pages+1):
+        resume_state_path = self.output_root / "products_fetch_resume_state.json"
+        resume_items_path = self.output_root / "products_fetch_resume_items.jsonl"
+        items, start_page = self._load_fetch_resume_state(
+            resume_state_path=resume_state_path,
+            resume_items_path=resume_items_path,
+            page_size=page_size,
+            max_pages=max_pages,
+        )
+        pages = start_page - 1
+        products_v2_mode = "/api/v2" in str(getattr(self.client, "products_base_url", "")).lower()
+        expected_min_items = None
+        for page in range(start_page, max_pages + 1):
             if progress_callback: progress_callback({"stage":"fetching","page":page,"max_pages":max_pages,"found_items":len(items)})
             batch, effective_page_size = self._fetch_products_page_with_fallback(page=page, page_size=page_size); pages=page
             if debug_lines is not None: debug_lines.append(f"fetch page={page} items={len(batch)}")
             if raw_lines is not None: raw_lines.append(json.dumps({"page":page,"response":batch}, ensure_ascii=False))
             if not batch: break
-            items.extend([b for b in batch if isinstance(b,dict)])
-            if progress_callback: progress_callback({"stage":"fetched_page","page":page,"fetched":len(batch),"found_items":len(items)})
-            if len(batch)<effective_page_size: break
-        return items, pages, pages>=max_pages
+            page_items = [b for b in batch if isinstance(b,dict)]
+            items.extend(page_items)
+            api_total = getattr(self.client, "last_products_total_count", None)
+            if isinstance(api_total, int) and api_total > 0:
+                expected_min_items = api_total
+            self._save_fetch_resume_state(
+                resume_state_path=resume_state_path,
+                resume_items_path=resume_items_path,
+                page=page,
+                page_size=page_size,
+                max_pages=max_pages,
+                page_items=page_items,
+            )
+            if progress_callback:
+                progress_callback({
+                    "stage":"fetched_page",
+                    "page":page,
+                    "fetched":len(batch),
+                    "found_items":len(items),
+                    "expected_min_items_from_api": expected_min_items,
+                    "fetched_items_meet_expected_min": (len(items) >= expected_min_items) if expected_min_items is not None else None,
+                })
+            if (not products_v2_mode) and len(batch) < effective_page_size:
+                break
+            if self.page_delay_seconds > 0:
+                time.sleep(self.page_delay_seconds)
+        self._clear_fetch_resume_state(resume_state_path=resume_state_path, resume_items_path=resume_items_path)
+        return items, pages, pages>=max_pages, expected_min_items
+
+    def _load_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page_size: int, max_pages: int) -> tuple[list[dict[str, Any]], int]:
+        if not resume_state_path.exists() or not resume_items_path.exists():
+            return [], 1
+        try:
+            state = json.loads(resume_state_path.read_text(encoding="utf-8"))
+            if int(state.get("page_size") or 0) != int(page_size) or int(state.get("max_pages") or 0) != int(max_pages):
+                return [], 1
+            last_page = int(state.get("last_successful_page") or 0)
+            items = []
+            for line in resume_items_path.read_text(encoding="utf-8").splitlines():
+                payload = json.loads(line)
+                if isinstance(payload, dict):
+                    items.append(payload)
+            return items, max(1, last_page + 1)
+        except Exception:
+            return [], 1
+
+    def _save_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page: int, page_size: int, max_pages: int, page_items: list[dict[str, Any]]) -> None:
+        resume_state_path.parent.mkdir(parents=True, exist_ok=True)
+        with resume_items_path.open("a", encoding="utf-8") as fh:
+            for item in page_items:
+                fh.write(json.dumps(item, ensure_ascii=False) + "\n")
+        resume_state_path.write_text(
+            json.dumps({"last_successful_page": page, "page_size": page_size, "max_pages": max_pages}, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    @staticmethod
+    def _clear_fetch_resume_state(*, resume_state_path: Path, resume_items_path: Path) -> None:
+        if resume_state_path.exists():
+            resume_state_path.unlink()
+        if resume_items_path.exists():
+            resume_items_path.unlink()
 
     def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
+        # Importante: no degradar page_size entre reintentos porque el número de página
+        # representa offsets distintos para cada tamaño y puede crear huecos/duplicados.
         sizes = [page_size]
-        if page_size > 100:
-            sizes.extend([100, 50, 25])
-        elif page_size > 50:
-            sizes.extend([50, 25])
-        elif page_size > 25:
-            sizes.append(25)
         last_exc: Exception | None = None
         for size in sizes:
-            try:
-                return list(self.client.list_products(page=page, page_size=size)), size
-            except ContificoTransportError as exc:
-                last_exc = exc
-                continue
+            for attempt in range(1, self.page_retry_attempts + 1):
+                try:
+                    return list(self.client.list_products(page=page, page_size=size)), size
+                except ContificoTransportError as exc:
+                    last_exc = exc
+                except ContificoAPIError as exc:
+                    if exc.status_code not in {429, 500, 502, 503, 504}:
+                        raise
+                    last_exc = exc
+
+                if attempt < self.page_retry_attempts:
+                    base = self.page_retry_backoff_base_seconds * (2 ** (attempt - 1))
+                    jitter = random.uniform(0.0, self.page_retry_jitter_seconds) if self.page_retry_jitter_seconds > 0 else 0.0
+                    time.sleep(base + jitter)
+            continue
         if last_exc:
             raise last_exc
         return [], page_size
