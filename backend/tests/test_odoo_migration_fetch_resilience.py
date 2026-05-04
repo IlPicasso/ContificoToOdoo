@@ -85,7 +85,7 @@ def test_fetch_products_resumes_from_last_successful_page(tmp_path):
     client = ResumeClient()
     service = OdooMigrationService(client=client, output_root=output_root)
 
-    items, pages, _, expected_min = service._fetch_products(page_size=200, max_pages=5)
+    items, pages, _, expected_min = service._fetch_products(page_size=200, max_pages=5, run_folder=output_root)
 
     assert client.calls[0] == (3, 200)
     assert items == [
@@ -139,7 +139,7 @@ def test_fetch_products_v2_does_not_stop_on_first_short_page(tmp_path):
 
     service = OdooMigrationService(client=V2Client(), output_root=tmp_path / "odoo_migration")
 
-    items, pages, hit_max, expected_min = service._fetch_products(page_size=200, max_pages=10)
+    items, pages, hit_max, expected_min = service._fetch_products(page_size=200, max_pages=10, run_folder=tmp_path / "odoo_migration")
 
     assert len(items) == 200
     assert pages == 3
@@ -174,7 +174,7 @@ def test_fetch_products_uses_configured_page_delay_and_retry_backoff(monkeypatch
         page_retry_jitter_seconds=0.5,
     )
 
-    items, pages, _, expected_min = service._fetch_products(page_size=200, max_pages=3)
+    items, pages, _, expected_min = service._fetch_products(page_size=200, max_pages=3, run_folder=tmp_path / "odoo_migration")
 
     assert items == [{"id": "P-1"}]
     assert pages == 2
@@ -197,7 +197,7 @@ def test_fetch_products_tracks_expected_total_from_v2_count(tmp_path):
             return []
 
     service = OdooMigrationService(client=V2CountClient(), output_root=tmp_path / "odoo_migration")
-    items, pages, hit_max, expected_min = service._fetch_products(page_size=200, max_pages=10)
+    items, pages, hit_max, expected_min = service._fetch_products(page_size=200, max_pages=10, run_folder=tmp_path / "odoo_migration")
 
     assert len(items) == 200
     assert pages == 3

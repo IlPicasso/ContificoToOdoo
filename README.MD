@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.42
+Versión 1.0.43
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -74,6 +74,11 @@ coherente de ítems (`fetched_items_meet_expected_min`).
 
 Para Fase 1 se recomienda trabajar con `page_size=100` y `max_pages=300` (cobertura de hasta
 30,000 productos en API v2).
+
+Cada RUN guarda su propio `run_summary.json` dentro de la carpeta del run con, al menos:
+- total de productos extraídos
+- productos excluidos por stock 0
+- duración total de la corrida (segundos)
 
 #### Límites para la búsqueda de facturas en Contífico
 

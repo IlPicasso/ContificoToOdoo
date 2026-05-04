@@ -53,6 +53,7 @@ def _build_files(run_id: str) -> dict[str, str]:
         "products_variants_report_md": f"/odoo-migration/runs/{run_id}/files/import_products_and_variants_report.md",
         "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
         "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
+        "run_summary_json": f"/odoo-migration/runs/{run_id}/files/run_summary.json",
     }
 
 
