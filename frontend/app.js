@@ -155,17 +155,22 @@ $('generateMigrationCsv').addEventListener('click', async () => {
       const found = Number(job.found_items || 0);
       const processed = Number(job.processed_items || 0);
       const total = Number(job.total_items || 0);
+      const expectedMin = Number(job.expected_min_items_from_api || 0);
+      const expectedLabel = expectedMin > 0 ? ` · esperado API v2: ${expectedMin} · cobertura: ${Math.min(100, ((found / expectedMin) * 100)).toFixed(2)}%` : '';
       let progress = 12;
       if (stage === 'fetching' || stage === 'fetched_page') progress = Math.min(45, 10 + found / 3);
       if (stage === 'processing') progress = total > 0 ? Math.min(92, 45 + (processed / total) * 47) : 55;
       if (job.status === 'completed') progress = 100;
       setProgress(true, progress);
-      setMigrationStatus(`Etapa: ${stage} · items encontrados: ${found} · procesados: ${processed}${total ? `/${total}` : ''}`);
+      setMigrationStatus(`Etapa: ${stage} · items encontrados: ${found} · procesados: ${processed}${total ? `/${total}` : ''}${expectedLabel}`);
       if (job.status === 'completed') {
         done = true;
         show('migrationSummaryOut', job);
         renderMigrationLinks(job.files);
-        setMigrationStatus(job.hit_max_pages ? 'Exportación completada pero alcanzó el límite de páginas. Sube Max pages para traer más.' : 'Exportación completada. Descarga los archivos generados.');
+        const summaryExpected = Number((job.summary || {}).expected_min_items_from_api || 0);
+        const summaryFound = Number(job.found_items || (job.summary || {}).total_products || 0);
+        const summaryCoverage = summaryExpected > 0 ? ` Cobertura vs count API: ${summaryFound}/${summaryExpected} (${Math.min(100, ((summaryFound / summaryExpected) * 100)).toFixed(2)}%).` : '';
+        setMigrationStatus((job.hit_max_pages ? 'Exportación completada pero alcanzó el límite de páginas. Sube Max pages para traer más.' : 'Exportación completada. Descarga los archivos generados.') + summaryCoverage);
       }
     }
   } catch (e) {
