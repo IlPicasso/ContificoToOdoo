@@ -1861,3 +1861,18 @@ def test_list_products_accepts_paginated_results_payload() -> None:
     products = list(client.list_products(page=1, page_size=100))
 
     assert products == [{"id": "A1", "codigo": "SKU-1", "nombre": "Producto"}]
+
+
+def test_list_products_returns_empty_when_page_is_out_of_range(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = ContificoClient("key123", "token-xyz", base_url="https://api.example.com")
+
+    def fake_request(method, endpoint, *, base_url=None, params=None, json=None):
+        raise ContificoAPIError(
+            400,
+            'Error: {"code":"400","error":"Pagina fuera del rango"}',
+            payload={"code": "400", "error": "Pagina fuera del rango"},
+        )
+
+    monkeypatch.setattr(client, "_request", fake_request)
+
+    assert list(client.list_products(page=999, page_size=100)) == []
