@@ -563,6 +563,23 @@ class ContificoClient:
             return target.startswith(candidate)
         return False
 
+    @staticmethod
+    def _is_page_out_of_range_error(exc: ContificoAPIError) -> bool:
+        if int(getattr(exc, "status_code", 0) or 0) != 400:
+            return False
+        payload = getattr(exc, "payload", None)
+        message_parts: list[str] = [str(getattr(exc, "detail", "") or "")]
+        if isinstance(payload, dict):
+            for key in ("error", "mensaje", "message", "detail"):
+                value = payload.get(key)
+                if isinstance(value, str) and value.strip():
+                    message_parts.append(value)
+            code_value = str(payload.get("code") or "").strip()
+            if code_value and code_value != "400":
+                return False
+        message = " ".join(message_parts).lower()
+        return "fuera del rango" in message and "pagina" in message.replace("á", "a")
+
     def list_products(
         self,
         *,
@@ -588,12 +605,18 @@ class ContificoClient:
             if not category_value:
                 raise ValueError("El identificador de la categoría no puede estar vacío.")
             params["categoria_id"] = category_value
-        data = self._request(
-            "GET",
-            "producto/",
-            base_url=self.products_base_url,
-            params=params,
-        )
+        try:
+            data = self._request(
+                "GET",
+                "producto/",
+                base_url=self.products_base_url,
+                params=params,
+            )
+        except ContificoAPIError as exc:
+            if self._is_page_out_of_range_error(exc):
+                self.last_products_total_count = None
+                return []
+            raise
         if data is None:
             return []
         if isinstance(data, list):

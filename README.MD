@@ -287,6 +287,8 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.33 (2026-05-04)**: Se robusteció el manejo de paginación agotada de Contífico también en `ContificoClient.list_products` (no solo en el servicio de migración), interpretando el `400` con `Pagina fuera del rango` como lista vacía para evitar abortos en exportaciones.
+- **1.0.32 (2026-05-04)**: El fetch paginado de productos ahora interpreta el 400 de Contífico `{"code":"400","error":"Pagina fuera del rango"}` como fin de paginación (no como error fatal), evitando cancelar corridas cuando se solicita una página inexistente.
 - **1.0.31 (2026-05-04)**: Se corrigió el corte prematuro del fetch paginado cuando entraba fallback de `page_size`; ahora la condición de fin usa el tamaño efectivo de página y evita truncar resultados (ej. alrededor de ~6600 ítems).
 - **1.0.30 (2026-05-04)**: Se añadió procesamiento directo de `raw.log`/JSON subido desde frontend para generar la corrida de migración sin fetchear nuevamente Contífico mientras se diagnostican límites/timeouts de paginación.
 - **1.0.29 (2026-05-04)**: Se añadió fallback de `page_size` al fetchear productos de Contífico (ej. 200→100→50→25) cuando hay `ContificoTransportError`, para reducir fallas por timeout en páginas pesadas.
