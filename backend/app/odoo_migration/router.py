@@ -109,8 +109,8 @@ def precheck_odoo_attributes_offline():
     current_attrs = {_extract_attribute_name(str(a)) for a in snapshot.get('attributes', []) if _extract_attribute_name(str(a))}
     current_cats = {str(c).strip() for c in snapshot.get('categories', []) if str(c).strip()}
 
-    expected_attrs = {'Talla', 'Manga de Camisa', 'Ancho de Corbata', 'Marca', 'Color'}
-    alias_attr = {'Ancho Corbata': 'Ancho de Corbata'}
+    expected_attrs = {'Talla', 'Manga de Camisa', 'Ancho Corbata', 'Marca', 'Color'}
+    alias_attr = {'Ancho de Corbata': 'Ancho Corbata'}
     normalized_current_attrs = {alias_attr.get(a, a) for a in current_attrs}
     missing_attrs = sorted(list(expected_attrs - normalized_current_attrs))
 

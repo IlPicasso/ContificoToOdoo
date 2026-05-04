@@ -137,7 +137,7 @@ class OdooMigrationService:
                 variant_rows.append({
                     "sku": sku, "name": prod_name, "barcode": barcode, "price": f"{price:.2f}", "cost": f"{cost:.2f}",
                     "weight": "0.0", "category": category, "stock_map": stock_map,
-                    "attrs": {"Marca": brand, "Color": color, "Talla": talla, "Manga de Camisa": manga, "Ancho de Corbata": ancho}
+                    "attrs": {"Marca": brand, "Color": color, "Talla": talla, "Manga de Camisa": manga, "Ancho Corbata": ancho}
                 })
                 payload = {"id": str(item.get('id') or ''), "sku": sku, "cost": cost, "stock_map": stock_map}
                 snap.write(json.dumps(payload, ensure_ascii=False) + "\n")
@@ -176,7 +176,7 @@ class OdooMigrationService:
                     "Template External ID": tmpl_ext, "Template Name": first["name"], "Source Variant External ID": source_ext,
                     "Variant Attributes Key": combo, "Internal Reference": r["sku"], "Barcode": r.get("barcode",""),
                     "Sales Price": r["price"], "Cost": r["cost"], "Weight": r["weight"],
-                    "Original Product Values": build_product_values(talla=attrs.get("Talla",""), manga=attrs.get("Manga de Camisa",""), ancho_corbata=attrs.get("Ancho de Corbata",""), marca=attrs.get("Marca",""), color=attrs.get("Color",""))
+                    "Original Product Values": build_product_values(talla=attrs.get("Talla",""), manga=attrs.get("Manga de Camisa",""), ancho_corbata=attrs.get("Ancho Corbata",""), marca=attrs.get("Marca",""), color=attrs.get("Color",""))
                 })
                 for wh, loc in WAREHOUSE_TO_LOCATION.items():
                     qty = float((r.get("stock_map") or {}).get(wh, 0) or 0)
@@ -212,7 +212,7 @@ class OdooMigrationService:
             f"- Total productos con Marca: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Marca'))}",
             f"- Total productos con Color: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Color'))}",
             f"- Total productos con Talla: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Talla'))}",
-            f"- Total productos con Ancho de Corbata: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Ancho de Corbata'))}",
+            f"- Total productos con Ancho Corbata: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Ancho Corbata'))}",
             f"- Total productos con Manga de Camisa: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Manga de Camisa'))}",
             f"- Productos sin barcode: {sum(1 for r in variant_rows if not r.get('barcode'))}",
             f"- Productos sin Internal Reference: {sum(1 for r in variant_rows if not r.get('sku'))}",

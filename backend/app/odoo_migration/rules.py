@@ -152,7 +152,7 @@ def build_product_values(*, talla='', manga='', ancho_corbata='', marca='', colo
     parts = []
     if talla: parts.append(f'Talla:{talla}')
     if manga: parts.append(f'Manga de Camisa:{manga}')
-    if ancho_corbata: parts.append(f'Ancho de Corbata:{ancho_corbata}')
+    if ancho_corbata: parts.append(f'Ancho Corbata:{ancho_corbata}')
     if marca: parts.append(f'Marca:{marca}')
     if color: parts.append(f'Color:{color}')
     return ','.join(parts)
