@@ -421,40 +421,6 @@ class OdooMigrationService:
         if resume_items_path.exists():
             resume_items_path.unlink()
 
-    def _load_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page_size: int, max_pages: int) -> tuple[list[dict[str, Any]], int]:
-        if not resume_state_path.exists() or not resume_items_path.exists():
-            return [], 1
-        try:
-            state = json.loads(resume_state_path.read_text(encoding="utf-8"))
-            if int(state.get("page_size") or 0) != int(page_size) or int(state.get("max_pages") or 0) != int(max_pages):
-                return [], 1
-            last_page = int(state.get("last_successful_page") or 0)
-            items = []
-            for line in resume_items_path.read_text(encoding="utf-8").splitlines():
-                payload = json.loads(line)
-                if isinstance(payload, dict):
-                    items.append(payload)
-            return items, max(1, last_page + 1)
-        except Exception:
-            return [], 1
-
-    def _save_fetch_resume_state(self, *, resume_state_path: Path, resume_items_path: Path, page: int, page_size: int, max_pages: int, page_items: list[dict[str, Any]]) -> None:
-        resume_state_path.parent.mkdir(parents=True, exist_ok=True)
-        with resume_items_path.open("a", encoding="utf-8") as fh:
-            for item in page_items:
-                fh.write(json.dumps(item, ensure_ascii=False) + "\n")
-        resume_state_path.write_text(
-            json.dumps({"last_successful_page": page, "page_size": page_size, "max_pages": max_pages}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
-    @staticmethod
-    def _clear_fetch_resume_state(*, resume_state_path: Path, resume_items_path: Path) -> None:
-        if resume_state_path.exists():
-            resume_state_path.unlink()
-        if resume_items_path.exists():
-            resume_items_path.unlink()
-
     def _fetch_products_page_with_fallback(self, *, page: int, page_size: int) -> tuple[list[dict[str, Any]], int]:
         # Importante: no degradar page_size entre reintentos porque el número de página
         # representa offsets distintos para cada tamaño y puede crear huecos/duplicados.
