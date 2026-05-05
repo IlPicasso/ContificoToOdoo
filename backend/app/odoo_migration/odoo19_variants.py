@@ -21,8 +21,19 @@ STOCK_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity",
 
 def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
     value = (codigo or "").strip()
+    if not value:
+        return "", ""
+    shirt = re.match(r"^(?P<base>[A-Za-z0-9]+)-(?P<size>\d+(?:\.\d+)?)-(?P<sleeve>S[12])$", value, flags=re.IGNORECASE)
+    if shirt:
+        return shirt.group("base"), f"{shirt.group('size')}-{shirt.group('sleeve').upper()}"
     if "/" not in value:
+        m = re.match(r"^(?P<base>.+)-(?P<variant>(?:XXL|XL|XS|L|M|S|\d+(?:\.\d+)?|[A-Za-z]\d+))$", value, flags=re.IGNORECASE)
+        if m:
+            return m.group("base"), m.group("variant")
         return value, ""
+    tie = re.match(r"^(?P<base>.+/\d+)-(?P<variant>\d+(?:\.\d+)?)$", value)
+    if tie:
+        return tie.group("base"), tie.group("variant")
     base, variant = value.rsplit("/", 1)
     return base.strip(), variant.strip()
 

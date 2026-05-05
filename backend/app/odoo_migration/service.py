@@ -175,7 +175,8 @@ class OdooMigrationService:
                 if not parsed and 'LEVA' in name.upper(): parsed = parse_blazer_sku(sku) or {}
                 if not parsed: parsed = parse_suit_sku(sku) or {}
                 if parsed: parser_rule=parsed.get('parser_rule','')
-                talla=parsed.get('talla') or parse_generic_size(sku)
+                talla = parsed.get('talla') or (' ' if parsed.get('ancho_corbata') else parse_generic_size(sku))
+                talla = talla.strip()
                 manga=parsed.get('manga',''); ancho=parsed.get('ancho_corbata','')
                 prod_name=parsed.get('product_name') or name or sku
                 brand=detect_brand(marca_raw,name); color=detect_color(name)

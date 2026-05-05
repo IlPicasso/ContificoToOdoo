@@ -1,4 +1,5 @@
 from app.odoo_migration.odoo19_variants import (
+    parse_base_code_and_variant,
     build_products_with_variants_from_variant_rows,
     build_variant_sku_mapping,
 )
@@ -33,3 +34,9 @@ def test_variant_csv_builders():
     assert mapping[0]["Ancho Corbata"] == "7 cm"
     assert by_attr["Talla"]["Product Category"] == "Ropa / Camisas"
 
+
+def test_parent_base_code_extraction_rules():
+    assert parse_base_code_and_variant("VE-MICAELA-AZ-XL") == ("VE-MICAELA-AZ", "XL")
+    assert parse_base_code_and_variant("17605DC-16.5-S1") == ("17605DC", "16.5-S1")
+    assert parse_base_code_and_variant("ZP-0907-BRW/10") == ("ZP-0907-BRW", "10")
+    assert parse_base_code_and_variant("BW4624/641-7") == ("BW4624/641", "7")
