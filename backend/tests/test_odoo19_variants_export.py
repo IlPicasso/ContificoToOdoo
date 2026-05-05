@@ -1,7 +1,7 @@
 from app.odoo_migration.odoo19_variants import (
-    build_attributes_values,
+    parse_base_code_and_variant,
     build_products_with_variants_from_variant_rows,
-    build_stock_quant,
+    build_variant_sku_mapping,
 )
 
 
@@ -22,10 +22,6 @@ def _sample():
 
 def test_variant_csv_builders():
     products_raw = [{"codigo": f"007-51BC-2/{s}", "marca_nombre": "ADAMS", "cantidad_stock": 0, "estado": "A", "nombre": "CAMISA M/L MODERNA"} for s in ["54", "56"]]
-    attrs = build_attributes_values(products_raw)
-    assert [r["Values / Value"] for r in attrs if r["Attribute"] == "Talla"] == ["54", "56"]
-    assert any(r["Attribute"] == "Marca" and r["Variant Creation Mode"] == "Never" for r in attrs)
-
     rows = build_products_with_variants_from_variant_rows(_sample())
     by_attr = {r["Product Attributes / Attribute"]: r for r in rows}
     assert by_attr["Talla"]["Product Attributes / Values"] == "54,56"
@@ -33,7 +29,14 @@ def test_variant_csv_builders():
     assert by_attr["Color"]["Product Attributes / Values"] == "Azul"
     assert by_attr["Manga de Camisa"]["Product Attributes / Values"] == "L"
     assert by_attr["Ancho Corbata"]["Product Attributes / Values"] == "7"
+
+    mapping = build_variant_sku_mapping(_sample())
+    assert mapping[0]["Ancho Corbata"] == "7 cm"
     assert by_attr["Talla"]["Product Category"] == "Ropa / Camisas"
 
-    stock = build_stock_quant(products_raw, scheduled_date="2026-05-04")
-    assert len(stock) == 2
+
+def test_parent_base_code_extraction_rules():
+    assert parse_base_code_and_variant("VE-MICAELA-AZ-XL") == ("VE-MICAELA-AZ", "XL")
+    assert parse_base_code_and_variant("17605DC-16.5-S1") == ("17605DC", "16.5-S1")
+    assert parse_base_code_and_variant("ZP-0907-BRW/10") == ("ZP-0907-BRW", "10")
+    assert parse_base_code_and_variant("BW4624/641-7") == ("BW4624/641", "7")

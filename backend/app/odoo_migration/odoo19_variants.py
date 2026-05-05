@@ -8,16 +8,32 @@ from typing import Any
 ATTR_COLUMNS = ["Attribute", "Display Type", "Variant Creation Mode", "Values / Value"]
 PRODUCTS_COLUMNS = [
     "External ID", "Name", "Product Type", "Product Category", "Sales Price", "Cost", "Can be Sold",
-    "Can be Purchased", "Available in POS", "Internal Reference", "Barcode", "Sales Description", "Customer Taxes",
-    "Product Attributes / Attribute", "Product Attributes / Values",
+    "Can be Purchased", "Available in POS", "Customer Taxes", "Product Attributes / Attribute", "Product Attributes / Values",
 ]
+VARIANT_MAPPING_COLUMNS = [
+    "Product Template External ID", "Product Template Name", "Internal Reference", "Barcode", "Talla", "Color",
+    "Manga de Camisa", "Ancho Corbata", "Marca", "Sales Price", "Cost", "Product Category",
+]
+STOCK_QUANT_SIMPLE_COLUMNS = ["Product / Internal Reference", "Location", "Inventory Quantity"]
+VALIDATION_COLUMNS = ["level", "rule", "entity", "message"]
 STOCK_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
 
 
 def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
     value = (codigo or "").strip()
+    if not value:
+        return "", ""
+    shirt = re.match(r"^(?P<base>[A-Za-z0-9]+)-(?P<size>\d+(?:\.\d+)?)-(?P<sleeve>S[12])$", value, flags=re.IGNORECASE)
+    if shirt:
+        return shirt.group("base"), f"{shirt.group('size')}-{shirt.group('sleeve').upper()}"
     if "/" not in value:
+        m = re.match(r"^(?P<base>.+)-(?P<variant>(?:XXL|XL|XS|L|M|S|\d+(?:\.\d+)?|[A-Za-z]\d+))$", value, flags=re.IGNORECASE)
+        if m:
+            return m.group("base"), m.group("variant")
         return value, ""
+    tie = re.match(r"^(?P<base>.+/\d+)-(?P<variant>\d+(?:\.\d+)?)$", value)
+    if tie:
+        return tie.group("base"), tie.group("variant")
     base, variant = value.rsplit("/", 1)
     return base.strip(), variant.strip()
 
@@ -189,9 +205,6 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             "Can be Sold": "True",
             "Can be Purchased": "True",
             "Available in POS": "True",
-            "Internal Reference": base,
-            "Barcode": barcode,
-            "Sales Description": "",
             "Customer Taxes": "IVA 0%",
         }
         attr_values: dict[str, list[str]] = {}
@@ -216,3 +229,35 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             for attr_name, values in attr_values.items():
                 result.append({**common, "Product Attributes / Attribute": attr_name, "Product Attributes / Values": ",".join(values)})
     return result
+
+
+def normalize_ancho_corbata(value: str) -> str:
+    raw = normalize_product_name(value)
+    if not raw:
+        return ""
+    if raw.lower().endswith("cm"):
+        return raw.replace("CM", "cm")
+    return f"{raw} cm"
+
+
+def build_variant_sku_mapping(variant_rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    rows = []
+    for row in variant_rows:
+        sku = str(row.get("sku") or "").strip()
+        base, _ = parse_base_code_and_variant(sku)
+        attrs = row.get("attrs") or {}
+        rows.append({
+            "Product Template External ID": normalize_external_id(base or sku, "product_template"),
+            "Product Template Name": normalize_product_name(str(row.get("name") or "")),
+            "Internal Reference": sku,
+            "Barcode": str(row.get("barcode") or ""),
+            "Talla": normalize_product_name(str(attrs.get("Talla") or "")),
+            "Color": normalize_product_name(str(attrs.get("Color") or "")),
+            "Manga de Camisa": normalize_product_name(str(attrs.get("Manga de Camisa") or "")),
+            "Ancho Corbata": normalize_ancho_corbata(str(attrs.get("Ancho Corbata") or "")),
+            "Marca": normalize_product_name(str(attrs.get("Marca") or "")),
+            "Sales Price": normalize_price(row.get("price")),
+            "Cost": normalize_price(row.get("cost")),
+            "Product Category": normalize_product_name(str(row.get("category") or "")),
+        })
+    return rows
