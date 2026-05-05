@@ -27,8 +27,23 @@ def detect_brand(marca_nombre: str, nombre: str = '') -> str:
     normalized = normalize_text(marca_nombre or nombre)
     for alias, brand in BRAND_ALIASES.items():
         if alias in normalized:
-            return brand
+            return format_brand_name(brand)
     return ''
+
+
+def format_brand_name(value: str) -> str:
+    words = re.split(r"\s+", str(value or "").strip())
+    if not words:
+        return ""
+    formatted = []
+    for word in words:
+        if not word:
+            continue
+        if len(word) <= 3:
+            formatted.append(word.upper())
+        else:
+            formatted.append(word[0].upper() + word[1:].lower())
+    return " ".join(formatted)
 
 
 def detect_color(nombre: str) -> str:
@@ -51,6 +66,12 @@ def detect_category(nombre: str, categoria_raw: str = '', sku: str = '') -> str:
         if "MUJER" in source or "DAMA" in source:
             return "Ropa / Mujeres / Zapatos"
         return "Ropa / Hombres / Zapatos"
+    if sku_norm.startswith("PT-") or " PT-" in sku_norm:
+        if "MUJER" in source or "DAMA" in source:
+            return "Ropa / Mujeres / Pantalones"
+        return "Ropa / Hombres / Pantalones"
+    if sku_norm.startswith("CH-") or " CH-" in sku_norm:
+        return "Ropa / Hombres / Chaleco"
 
     woman_hint = "MUJER" in source or "DAMA" in source
     men_hint = "HOMBRE" in source or "HOMBRES" in source
@@ -114,6 +135,13 @@ def parse_suit_sku(sku: str):
     m = PATTERNS['suit'].match(sku)
     if not m:
         return None
+    sku_norm = normalize_text(sku)
+    if sku_norm.startswith("ZP-"):
+        return {'product_name': f"Zapato {m.group('base')}", 'talla': m.group('size'), 'parser_rule': 'shoe'}
+    if sku_norm.startswith("PT-"):
+        return {'product_name': f"Pantalon {m.group('base')}", 'talla': m.group('size'), 'parser_rule': 'pants'}
+    if sku_norm.startswith("CH-"):
+        return {'product_name': f"Chaleco {m.group('base')}", 'talla': m.group('size'), 'parser_rule': 'vest'}
     return {'product_name': f"Terno {m.group('base')}", 'talla': m.group('size'), 'parser_rule': 'suit'}
 
 

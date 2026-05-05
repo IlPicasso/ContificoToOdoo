@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.48
+Versión 1.0.49
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -287,6 +287,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.49 (2026-05-05)**: Se corrigió clasificación por prefijo SKU para evitar que `ZP-`/`PT-`/`CH-` salgan como `Terno` en productos madre/variantes; ahora `ZP` genera nombre `Zapato`, `PT` genera `Pantalon`, `CH` genera `Chaleco`, y además se agrega categoría `Ropa / Hombres / Chaleco`. También se normalizan marcas en formato título (ej. `Bruno Cassini`) en exportaciones.
 - **1.0.45 (2026-05-04)**: Se movió el filtrado de stock 0 a Fase 1 (manteniendo la regla de grupo por variantes con stock), y se incorporó mapeo explícito 100% determinístico `categoria_id Contífico -> categoría Odoo` mediante configuración (`config/contifico_category_to_odoo.json`) para evitar heurísticas cuando la categoría viene solo por ID.
 - **1.0.44 (2026-05-04)**: Se agregó mapeo explícito de categorías de Contífico por `categoria_id` para detectar categoría Odoo con mayor precisión cuando el listado de productos no trae nombre de categoría, y se añadió salida `unmapped_categories.csv` por run para revisión manual de IDs no mapeados.
 - **1.0.34 (2026-05-04)**: Se corrigió el caso real de Contífico donde la respuesta HTTP puede venir con `status=404` pero body `{"code":"400","error":"Pagina fuera del rango"}`; ahora también se interpreta como fin de paginación para no cancelar la exportación.

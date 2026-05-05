@@ -28,7 +28,7 @@ def test_map_contifico_product_stocks_and_defaults():
 
     assert row.producto_madre == "Camisa 17601"
     assert row.manga == "S2 - 34/35"
-    assert row.marca == "BRUNO CASSINI"
+    assert row.marca == "Bruno Cassini"
     assert row.stock_bpu == 5
     assert row.stock_tur == 2
     assert row.stock_bat == 1

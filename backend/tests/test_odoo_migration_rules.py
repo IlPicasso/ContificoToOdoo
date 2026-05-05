@@ -44,7 +44,7 @@ from app.odoo_migration.rules import detect_category, detect_brand
 
 def test_detect_women_category_and_brands():
     assert detect_category('PANTALON DAMA NEGRO', '').startswith('Ropa / Mujeres')
-    assert detect_brand('TED LAPIDUS') == "TED LAPIDUS"
+    assert detect_brand('TED LAPIDUS') == "TED Lapidus"
     assert detect_brand('BFL') == "BFL"
 
 
@@ -52,6 +52,14 @@ def test_detect_shoes_prefix_zp():
     from app.odoo_migration.rules import detect_category
     assert detect_category('H. ZAPATOS', '', sku='ZP-LOAFER-H-BRW/8.5') == 'Ropa / Hombres / Zapatos'
     assert detect_category('ZAPATO DAMA', '', sku='ZP-ABC/38') == 'Ropa / Mujeres / Zapatos'
+
+
+def test_detect_pants_and_vest_prefixes():
+    from app.odoo_migration.rules import detect_category, parse_suit_sku
+    assert detect_category('PANTALON FORMAL', '', sku='PT-ABC/34') == 'Ropa / Hombres / Pantalones'
+    assert detect_category('CHALECO CLASICO', '', sku='CH-XYZ/48') == 'Ropa / Hombres / Chaleco'
+    assert parse_suit_sku('PT-ABC/34')['product_name'].startswith('Pantalon')
+    assert parse_suit_sku('CH-XYZ/48')['product_name'].startswith('Chaleco')
 
 
 def test_bg_group_normalization():
