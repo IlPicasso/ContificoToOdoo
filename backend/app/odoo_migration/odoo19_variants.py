@@ -381,15 +381,18 @@ def dedupe_variant_mapping_rows(rows: list[dict[str, str]]) -> tuple[list[dict[s
     for row in rows:
         key = build_variant_combination_key(row)
         grouped.setdefault(key, []).append(row)
-    deduped = [item for items in grouped.values() for item in items]
+    deduped = []
     duplicates = []
     for key, items in grouped.items():
+        ordered = sorted(items, key=lambda r: normalize_product_name(r.get("Internal Reference", "")))
+        deduped.append(ordered[0])
         if len(items) > 1:
             duplicates.append({
                 "key": key,
                 "count": len(items),
-                "template_external_id": items[0].get("Product Template External ID", ""),
-                "examples": [i.get("Internal Reference", "") for i in items[:3]],
+                "template_external_id": ordered[0].get("Product Template External ID", ""),
+                "examples": [i.get("Internal Reference", "") for i in ordered[:3]],
+                "dropped_internal_references": [i.get("Internal Reference", "") for i in ordered[1:]],
             })
     return deduped, duplicates
 

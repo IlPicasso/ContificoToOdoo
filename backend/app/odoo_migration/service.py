@@ -136,7 +136,8 @@ class OdooMigrationService:
         duplicate_rows = []
         duplicate_skus_with_stock = set()
         for dup in duplicate_combinations:
-            matches = [r for r in o19_variant_map_rows if r.get("Product Template External ID") == dup.get("template_external_id") and r.get("Internal Reference") in set(dup.get("examples", []))]
+            dup_refs = set(dup.get("examples", []) + dup.get("dropped_internal_references", []))
+            matches = [r for r in o19_variant_map_raw if r.get("Product Template External ID") == dup.get("template_external_id") and r.get("Internal Reference") in dup_refs]
             if matches:
                 duplicate_rows.append({
                     "Product Template External ID": dup.get("template_external_id", ""),
