@@ -30,7 +30,7 @@ def test_variant_csv_builders():
     assert by_attr["Marca"]["Product Attributes / Values"] == "ADAMS"
     assert by_attr["Color"]["Product Attributes / Values"] == "Azul"
     assert by_attr["Manga de Camisa"]["Product Attributes / Values"] == "L"
-    assert by_attr["Ancho Corbata"]["Product Attributes / Values"] == "7"
+    assert by_attr["Ancho Corbata"]["Product Attributes / Values"] == "7 cm"
 
     mapping = build_variant_sku_mapping(_sample())
     assert mapping[0]["Ancho Corbata"] == "7 cm"
@@ -98,3 +98,12 @@ def test_invalid_raw_attrs_do_not_pollute_talla_or_ancho():
     ])
     assert rows[0]["Ancho Corbata"] == ""
     assert rows[1]["Talla"] == ""
+
+
+def test_tie_slash_non_width_is_not_forced_to_ancho():
+    rows = build_variant_sku_mapping([
+        {"sku": "CORBATA-BC/2013", "name": "CORBATA BC", "barcode": "", "price": "1", "cost": "1", "category": "ACCESORIOS", "attrs": {"Ancho Corbata": "CORBATA-BC/2013"}},
+    ])
+    assert rows[0]["Ancho Corbata"] == ""
+    assert rows[0]["Talla"] == ""
+    assert rows[0]["Parse Status"] == "UNPARSED"

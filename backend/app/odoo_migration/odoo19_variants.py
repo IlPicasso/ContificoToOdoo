@@ -62,6 +62,13 @@ def derive_parent_and_attrs(sku: str, name: str, category: str) -> dict[str, Any
         if t:
             attrs["Ancho Corbata"] = _format_cm_value(t.group("w"))
             return {"sku": raw_sku, "parent_key": t.group("base"), "template_external_id": normalize_external_id(t.group("base"), "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "tie_width", "warnings": warnings}
+        s_tie = re.match(r"^(?P<base>.+)/(?P<tail>\d+(?:\.\d+)?)$", raw_sku)
+        if s_tie:
+            tail = s_tie.group("tail")
+            if tail in {"6", "6.5", "7", "7.5", "8"}:
+                attrs["Ancho Corbata"] = _format_cm_value(tail)
+                return {"sku": raw_sku, "parent_key": s_tie.group("base"), "template_external_id": normalize_external_id(s_tie.group("base"), "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "tie_slash_width", "warnings": warnings}
+            return {"sku": raw_sku, "parent_key": raw_sku, "template_external_id": normalize_external_id(raw_sku, "product_template"), "attrs": attrs, "parse_status": "UNPARSED", "parser_rule": "tie_slash_non_width", "warnings": ["Slash final en corbata no coincide con ancho válido"]}
     s = re.match(r"^(?P<base>.+)/(?P<size>\d+(?:\.\d+)?|XS|S|M|L|XL|XXL|XXXL)$", raw_sku, flags=re.IGNORECASE)
     if s:
         base = s.group("base")
@@ -217,6 +224,7 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             continue
         parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
         cleaned_attrs = _clean_candidate_attrs(sku, parsed.get("attrs") or {}, row.get("attrs") or {})
+        cleaned_attrs = _apply_tie_attribute_rules(cleaned_attrs, str(row.get("name") or ""), str(row.get("category") or ""))
         grouped.setdefault(parsed["parent_key"] or sku, []).append({**row, "_parsed": parsed, "_clean_attrs": cleaned_attrs})
 
     result: list[dict[str, str]] = []
