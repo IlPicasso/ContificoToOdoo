@@ -12,12 +12,11 @@ import time
 
 from ..contifico import ContificoAPIError, ContificoClient, ContificoTransportError
 from .odoo19_variants import (
-    ATTR_COLUMNS as O19_ATTR_COLUMNS,
-    PRODUCTS_COLUMNS as O19_PRODUCTS_COLUMNS,
-    STOCK_COLUMNS as O19_STOCK_COLUMNS,
-    build_attributes_values,
     build_products_with_variants_from_variant_rows,
-    build_stock_quant,
+    build_variant_sku_mapping,
+    PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
+    VARIANT_MAPPING_COLUMNS,
+    STOCK_QUANT_SIMPLE_COLUMNS,
 )
 from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
@@ -109,12 +108,19 @@ class OdooMigrationService:
 
         self._write_variant_import_outputs(folder, phase1.get("variant_rows", []), include_stock=export_stock)
         o19_warnings: list[str] = []
-        o19_attr_rows = build_attributes_values(products)
         o19_product_rows = build_products_with_variants_from_variant_rows(phase1.get("variant_rows", []), warnings=o19_warnings)
-        o19_stock_rows = build_stock_quant(products)
-        self._write_csv(folder / "attributes_values.csv", O19_ATTR_COLUMNS, o19_attr_rows)
-        self._write_csv(folder / "products_with_variants.csv", O19_PRODUCTS_COLUMNS, o19_product_rows)
-        self._write_csv(folder / "stock_quant.csv", O19_STOCK_COLUMNS, o19_stock_rows)
+        o19_variant_map_rows = build_variant_sku_mapping(phase1.get("variant_rows", []))
+        o19_stock_rows = []
+        for vr in phase1.get("variant_rows", []):
+            sku = str(vr.get("sku") or "").strip()
+            for wh, loc in WAREHOUSE_TO_LOCATION.items():
+                qty = float((vr.get("stock_map") or {}).get(wh, 0) or 0)
+                if qty > 0:
+                    o19_stock_rows.append({"Product / Internal Reference": sku, "Location": loc, "Inventory Quantity": f"{qty:.2f}"})
+        self._write_csv(folder / "odoo_product_templates.csv", ODOO_TEMPLATE_COLUMNS, o19_product_rows)
+        self._write_csv(folder / "odoo_variant_sku_mapping.csv", VARIANT_MAPPING_COLUMNS, o19_variant_map_rows)
+        self._write_csv(folder / "odoo_stock_quant.csv", STOCK_QUANT_SIMPLE_COLUMNS, o19_stock_rows)
+        self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], [])
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
