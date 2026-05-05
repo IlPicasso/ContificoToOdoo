@@ -5,6 +5,8 @@ from datetime import datetime
 import re
 from typing import Any
 
+from .rules import normalize_tie_width
+
 ATTR_COLUMNS = ["Attribute", "Display Type", "Variant Creation Mode", "Values / Value"]
 PRODUCTS_COLUMNS = [
     "External ID", "Name", "Product Type", "Product Category", "Sales Price", "Cost", "Can be Sold",
@@ -206,7 +208,7 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
         manga_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Manga de Camisa") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Manga de Camisa") or ""))}, key=_natural_key)
         if manga_values:
             attr_values["Manga de Camisa"] = manga_values
-        ancho_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or ""))}, key=_natural_key)
+        ancho_values = sorted({normalize_tie_width(normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or ""))) for i in items if normalize_tie_width(normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or "")))}, key=_natural_key)
         if ancho_values:
             attr_values["Ancho Corbata"] = ancho_values
 

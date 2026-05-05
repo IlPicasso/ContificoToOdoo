@@ -15,8 +15,8 @@ def _sample():
         "attrs": {"Marca": "ADAMS", "Color": "Azul", "Manga de Camisa": "L"},
     }
     return [
-        {**base, "sku": "007-51BC-2/54", "barcode": "007-51BC-2/O54", "attrs": {"Marca": "ADAMS", "Talla": "54", "Color": "Azul", "Manga de Camisa": "L", "Ancho Corbata": "7"}},
-        {**base, "sku": "007-51BC-2/56", "barcode": "007-51BC-2/O56", "attrs": {"Marca": "ADAMS", "Talla": "56", "Color": "Azul", "Manga de Camisa": "L", "Ancho Corbata": "7"}},
+        {**base, "sku": "007-51BC-2/54", "barcode": "007-51BC-2/O54", "attrs": {"Marca": "ADAMS", "Talla": "54", "Color": "Azul", "Manga de Camisa": "L", "Ancho Corbata": "7 cm"}},
+        {**base, "sku": "007-51BC-2/56", "barcode": "007-51BC-2/O56", "attrs": {"Marca": "ADAMS", "Talla": "56", "Color": "Azul", "Manga de Camisa": "L", "Ancho Corbata": "7 cm"}},
     ]
 
 
@@ -32,7 +32,7 @@ def test_variant_csv_builders():
     assert by_attr["Marca"]["Product Attributes / Values"] == "ADAMS"
     assert by_attr["Color"]["Product Attributes / Values"] == "Azul"
     assert by_attr["Manga de Camisa"]["Product Attributes / Values"] == "L"
-    assert by_attr["Ancho Corbata"]["Product Attributes / Values"] == "7"
+    assert by_attr["Ancho Corbata"]["Product Attributes / Values"] == "7 cm"
     assert by_attr["Talla"]["Product Category"] == "Ropa / Camisas"
 
     stock = build_stock_quant(products_raw, scheduled_date="2026-05-04")

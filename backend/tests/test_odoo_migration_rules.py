@@ -11,9 +11,9 @@ def test_real_patterns():
     assert parse_suit_sku('210001/46')['talla'] == '46'
     assert parse_suit_sku('007-13BC-2/46')['talla'] == '46'
     assert parse_blazer_sku('007-51/68')['talla'] == '68'
-    assert parse_tie_sku('MF11812/4-6')['ancho_corbata'] == '6'
-    assert parse_tie_sku('MF11887/20-7.5')['ancho_corbata'] == '7.5'
-    assert parse_tie_sku('#0050/23-7.5')['ancho_corbata'] == '7.5'
+    assert parse_tie_sku('MF11812/4-6')['ancho_corbata'] == '6 cm'
+    assert parse_tie_sku('MF11887/20-7.5')['ancho_corbata'] == '7.5 cm'
+    assert parse_tie_sku('#0050/23-7.5')['ancho_corbata'] == '7.5 cm'
     assert parse_bowtie_sku('MF11829/1-CO')['product_name'].startswith('Corbatín')
     assert parse_fajin_sku('MF11829/1-FJ')['product_name'].startswith('Set Corbatín + Faja')
     assert parse_generic_size('006-ZOLEY-PANT/L') == 'L'

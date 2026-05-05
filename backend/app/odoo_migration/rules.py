@@ -152,11 +152,20 @@ def parse_blazer_sku(sku: str):
     return {'product_name': f"Leva {m.group('base')}", 'talla': m.group('size'), 'parser_rule': 'blazer'}
 
 
+def normalize_tie_width(value: str) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "").strip())
+    if not cleaned:
+        return ""
+    if cleaned.lower().endswith("cm"):
+        return cleaned
+    return f"{cleaned} cm"
+
+
 def parse_tie_sku(sku: str):
     m = PATTERNS['tie_width'].match(sku)
     if not m:
         return None
-    return {'product_name': f"Corbata {m.group('base')}", 'ancho_corbata': m.group('width'), 'parser_rule': 'tie_width'}
+    return {'product_name': f"Corbata {m.group('base')}", 'ancho_corbata': normalize_tie_width(m.group('width')), 'parser_rule': 'tie_width'}
 
 
 def parse_bowtie_sku(sku: str):
