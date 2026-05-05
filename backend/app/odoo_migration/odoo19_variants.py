@@ -70,6 +70,11 @@ def derive_parent_and_attrs(sku: str, name: str, category: str) -> dict[str, Any
             base = re.sub(r"BG$", "", base, flags=re.IGNORECASE)
         attrs["Talla"] = s.group("size").upper()
         return {"sku": raw_sku, "parent_key": base, "template_external_id": normalize_external_id(base, "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "slash_size", "warnings": warnings}
+    # Generic hyphen size suffix (e.g. VE-MICAELA-AZ-XL, VE-ELA-STP-M)
+    g = re.match(r"^(?P<base>.+)-(?P<size>XS|S|M|L|XL|XXL|XXXL|\d+(?:\.\d+)?)$", raw_sku, flags=re.IGNORECASE)
+    if g:
+        attrs["Talla"] = g.group("size").upper()
+        return {"sku": raw_sku, "parent_key": g.group("base"), "template_external_id": normalize_external_id(g.group("base"), "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "hyphen_size", "warnings": warnings}
     return {"sku": raw_sku, "parent_key": raw_sku, "template_external_id": normalize_external_id(raw_sku, "product_template"), "attrs": attrs, "parse_status": "UNPARSED", "parser_rule": "fallback", "warnings": ["No se pudo parsear SKU"]}
 
 

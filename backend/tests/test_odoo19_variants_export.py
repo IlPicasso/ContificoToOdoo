@@ -85,3 +85,7 @@ def test_bg_dc_and_slash_and_tie_rules():
     p4 = derive_parent_and_attrs("BW4624/641-7", "CORBATA BW", "ROPA / HOMBRES / CORBATAS")
     assert p4["parent_key"] == "BW4624/641"
     assert p4["attrs"]["Ancho Corbata"] == "7 cm"
+
+    p5 = derive_parent_and_attrs("VE-MICAELA-AZ-XL", "VESTIDO MICAELA AZUL", "Ropa / Mujeres / Vestidos")
+    assert p5["parent_key"] == "VE-MICAELA-AZ"
+    assert p5["attrs"]["Talla"] == "XL"
