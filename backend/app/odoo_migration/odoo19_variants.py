@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import re
 from typing import Any
@@ -231,6 +232,78 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
     return result
 
 
+
+
+def _is_tie_product(name: str, category: str) -> bool:
+    category_norm = normalize_product_name(category).upper()
+    name_norm = normalize_product_name(name).upper()
+    return category_norm == "ROPA / HOMBRES / CORBATAS" or "CORBATA" in name_norm
+
+
+def _format_cm_value(value: str) -> str:
+    raw = normalize_product_name(value)
+    if not raw:
+        return ""
+    match = re.match(r"^(?P<num>\d+(?:[\.,]\d+)?)\s*(?:cm)?$", raw, flags=re.IGNORECASE)
+    if not match:
+        return raw if raw.lower().endswith("cm") else f"{raw} cm"
+    num = match.group("num").replace(",", ".")
+    try:
+        dec = Decimal(num)
+        if dec == dec.to_integral():
+            num = str(int(dec))
+        else:
+            num = format(dec.normalize(), "f").rstrip("0").rstrip(".")
+    except InvalidOperation:
+        pass
+    return f"{num} cm"
+
+
+def _apply_tie_attribute_rules(attrs: dict[str, Any], name: str, category: str) -> dict[str, str]:
+    normalized = {
+        "Talla": attrs.get("Talla", ""),
+        "Color": attrs.get("Color", ""),
+        "Manga de Camisa": attrs.get("Manga de Camisa", ""),
+        "Ancho Corbata": normalize_product_name(str(attrs.get("Ancho Corbata") or "")),
+        "Marca": attrs.get("Marca", ""),
+    }
+    if _is_tie_product(name, category):
+        talla = normalized["Talla"]
+        ancho = normalized["Ancho Corbata"]
+        if talla and re.match(r"^\d+(?:[\.,]\d+)?(?:\s*cm)?$", talla, flags=re.IGNORECASE):
+            if not ancho:
+                ancho = talla
+            normalized["Talla"] = ""
+        normalized["Ancho Corbata"] = _format_cm_value(ancho)
+        normalized["Talla"] = ""
+    else:
+        normalized["Ancho Corbata"] = _format_cm_value(normalized["Ancho Corbata"]) if normalized["Ancho Corbata"] else ""
+    return normalized
+
+
+def build_variant_combination_key(row: dict[str, str]) -> str:
+    attrs = [row.get("Talla", ""), row.get("Color", ""), row.get("Manga de Camisa", ""), row.get("Ancho Corbata", ""), row.get("Marca", "")]
+    norm_attrs = [normalize_product_name(str(v or "")).upper() for v in attrs]
+    return f"{row.get('Product Template External ID','')}|" + "|".join(norm_attrs)
+
+
+def dedupe_variant_mapping_rows(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for row in rows:
+        key = build_variant_combination_key(row)
+        grouped.setdefault(key, []).append(row)
+    deduped = [items[0] for items in grouped.values()]
+    duplicates = []
+    for key, items in grouped.items():
+        if len(items) > 1:
+            duplicates.append({
+                "key": key,
+                "count": len(items),
+                "template_external_id": items[0].get("Product Template External ID", ""),
+                "examples": [i.get("Internal Reference", "") for i in items[:3]],
+            })
+    return deduped, duplicates
+
 def normalize_ancho_corbata(value: str) -> str:
     raw = normalize_product_name(value)
     if not raw:
@@ -245,17 +318,17 @@ def build_variant_sku_mapping(variant_rows: list[dict[str, Any]]) -> list[dict[s
     for row in variant_rows:
         sku = str(row.get("sku") or "").strip()
         base, _ = parse_base_code_and_variant(sku)
-        attrs = row.get("attrs") or {}
+        attrs = _apply_tie_attribute_rules(row.get("attrs") or {}, str(row.get("name") or ""), str(row.get("category") or ""))
         rows.append({
             "Product Template External ID": normalize_external_id(base or sku, "product_template"),
             "Product Template Name": normalize_product_name(str(row.get("name") or "")),
             "Internal Reference": sku,
             "Barcode": str(row.get("barcode") or ""),
-            "Talla": normalize_product_name(str(attrs.get("Talla") or "")),
-            "Color": normalize_product_name(str(attrs.get("Color") or "")),
-            "Manga de Camisa": normalize_product_name(str(attrs.get("Manga de Camisa") or "")),
-            "Ancho Corbata": normalize_ancho_corbata(str(attrs.get("Ancho Corbata") or "")),
-            "Marca": normalize_product_name(str(attrs.get("Marca") or "")),
+            "Talla": attrs.get("Talla", ""),
+            "Color": attrs.get("Color", ""),
+            "Manga de Camisa": attrs.get("Manga de Camisa", ""),
+            "Ancho Corbata": attrs.get("Ancho Corbata", ""),
+            "Marca": attrs.get("Marca", ""),
             "Sales Price": normalize_price(row.get("price")),
             "Cost": normalize_price(row.get("cost")),
             "Product Category": normalize_product_name(str(row.get("category") or "")),
