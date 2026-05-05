@@ -13,11 +13,12 @@ PRODUCTS_COLUMNS = [
 ]
 VARIANT_MAPPING_COLUMNS = [
     "Product Template External ID", "Product Template Name", "Internal Reference", "Barcode", "Talla", "Color",
-    "Manga de Camisa", "Ancho Corbata", "Marca", "Sales Price", "Cost", "Product Category",
+    "Manga de Camisa", "Ancho Corbata", "Marca", "Sales Price", "Cost", "Product Category", "Parse Status", "Parser Rule", "Warnings",
 ]
 STOCK_QUANT_SIMPLE_COLUMNS = ["Product / Internal Reference", "Location", "Inventory Quantity"]
 VALIDATION_COLUMNS = ["level", "rule", "entity", "message"]
 STOCK_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
+SLEEVE_MAP = {"S1": "S1 - 32/33", "S2": "S2 - 34/35"}
 
 
 def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
@@ -37,6 +38,44 @@ def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
         return tie.group("base"), tie.group("variant")
     base, variant = value.rsplit("/", 1)
     return base.strip(), variant.strip()
+
+
+def derive_parent_and_attrs(sku: str, name: str, category: str) -> dict[str, Any]:
+    raw_sku = (sku or "").strip()
+    attrs = {"Talla": "", "Color": "", "Manga de Camisa": "", "Ancho Corbata": "", "Marca": ""}
+    cat = normalize_product_name(category).upper()
+    name_u = normalize_product_name(name).upper()
+    is_camisa = "CAMISA" in cat or "CAMISA" in name_u
+    is_terno = "TERNO" in cat or "TERNO" in name_u
+    is_corbata = "CORBATA" in cat or "CORBATA" in name_u
+    warnings: list[str] = []
+    m = re.match(r"^(?P<base>.+?)-(?P<size>\d+(?:\.\d+)?)-(?P<sleeve>S[12])$", raw_sku, flags=re.IGNORECASE)
+    if m and is_camisa:
+        base = m.group("base").strip()
+        base = re.sub(r"BG(?=-|$)", "", base, flags=re.IGNORECASE)
+        base = re.sub(r"-{2,}", "-", base).strip("-")
+        attrs["Talla"] = m.group("size")
+        attrs["Manga de Camisa"] = SLEEVE_MAP.get(m.group("sleeve").upper(), m.group("sleeve").upper())
+        return {"sku": raw_sku, "parent_key": base, "template_external_id": normalize_external_id(base, "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "shirt_bg_dc", "warnings": warnings}
+    if is_corbata:
+        t = re.match(r"^(?P<base>.+)-(?P<w>\d+(?:\.\d+)?)$", raw_sku)
+        if t:
+            attrs["Ancho Corbata"] = _format_cm_value(t.group("w"))
+            return {"sku": raw_sku, "parent_key": t.group("base"), "template_external_id": normalize_external_id(t.group("base"), "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "tie_width", "warnings": warnings}
+    s = re.match(r"^(?P<base>.+)/(?P<size>\d+(?:\.\d+)?|XS|S|M|L|XL|XXL|XXXL)$", raw_sku, flags=re.IGNORECASE)
+    if s:
+        base = s.group("base")
+        if is_terno:
+            base = re.sub(r"BG(?=/|$)", "", base, flags=re.IGNORECASE)
+            base = re.sub(r"BG$", "", base, flags=re.IGNORECASE)
+        attrs["Talla"] = s.group("size").upper()
+        return {"sku": raw_sku, "parent_key": base, "template_external_id": normalize_external_id(base, "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "slash_size", "warnings": warnings}
+    # Generic hyphen size suffix (e.g. VE-MICAELA-AZ-XL, VE-ELA-STP-M)
+    g = re.match(r"^(?P<base>.+)-(?P<size>XS|S|M|L|XL|XXL|XXXL|\d+(?:\.\d+)?)$", raw_sku, flags=re.IGNORECASE)
+    if g:
+        attrs["Talla"] = g.group("size").upper()
+        return {"sku": raw_sku, "parent_key": g.group("base"), "template_external_id": normalize_external_id(g.group("base"), "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "hyphen_size", "warnings": warnings}
+    return {"sku": raw_sku, "parent_key": raw_sku, "template_external_id": normalize_external_id(raw_sku, "product_template"), "attrs": attrs, "parse_status": "UNPARSED", "parser_rule": "fallback", "warnings": ["No se pudo parsear SKU"]}
 
 
 def normalize_external_id(value: str, prefix: str) -> str:
@@ -176,8 +215,8 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
         if not sku:
             warnings.append("Producto sin codigo")
             continue
-        base, _ = parse_base_code_and_variant(sku)
-        grouped.setdefault(base or sku, []).append(row)
+        parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
+        grouped.setdefault(parsed["parent_key"] or sku, []).append({**row, "_parsed": parsed})
 
     result: list[dict[str, str]] = []
     for base, items in grouped.items():
@@ -191,10 +230,14 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             warnings.append(f"Precios distintos en variantes: {base}")
         price = min(prices, key=lambda x: float(x or 0)) if prices else "0.00"
         category = normalize_product_name(str(items[0].get("category") or "All / ADAMS / Sin categoría"))
-        brand_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Marca") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Marca") or ""))}, key=_natural_key)
+        brand_values = sorted({
+            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Marca") or (i.get("attrs") or {}).get("Marca") or "")))
+            for i in items
+            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Marca") or (i.get("attrs") or {}).get("Marca") or "")))
+        }, key=_natural_key)
         if len(brand_values) > 1:
             warnings.append(f"Marcas distintas en mismo base: {base}")
-        sizes = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Talla") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Talla") or ""))}, key=_natural_key)
+        sizes = sorted({normalize_product_name(str(((i.get("_parsed") or {}).get("attrs") or {}).get("Talla") or "")) for i in items if normalize_product_name(str(((i.get("_parsed") or {}).get("attrs") or {}).get("Talla") or ""))}, key=_natural_key)
         barcode = "" if sizes else str(items[0].get("barcode") or "")
         common = {
             "External ID": normalize_external_id(base, "product_template"),
@@ -214,13 +257,25 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
         brand_values = brand_values
         if brand_values:
             attr_values["Marca"] = [brand_values[0]]
-        color_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Color") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Color") or ""))}, key=_natural_key)
+        color_values = sorted({
+            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Color") or (i.get("attrs") or {}).get("Color") or "")))
+            for i in items
+            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Color") or (i.get("attrs") or {}).get("Color") or "")))
+        }, key=_natural_key)
         if color_values:
             attr_values["Color"] = color_values
-        manga_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Manga de Camisa") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Manga de Camisa") or ""))}, key=_natural_key)
+        manga_values = sorted({
+            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Manga de Camisa") or (i.get("attrs") or {}).get("Manga de Camisa") or "")))
+            for i in items
+            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Manga de Camisa") or (i.get("attrs") or {}).get("Manga de Camisa") or "")))
+        }, key=_natural_key)
         if manga_values:
             attr_values["Manga de Camisa"] = manga_values
-        ancho_values = sorted({normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or "")) for i in items if normalize_product_name(str((i.get("attrs") or {}).get("Ancho Corbata") or ""))}, key=_natural_key)
+        ancho_values = sorted({
+            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Ancho Corbata") or (i.get("attrs") or {}).get("Ancho Corbata") or "")))
+            for i in items
+            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Ancho Corbata") or (i.get("attrs") or {}).get("Ancho Corbata") or "")))
+        }, key=_natural_key)
         if ancho_values:
             attr_values["Ancho Corbata"] = ancho_values
 
@@ -292,7 +347,7 @@ def dedupe_variant_mapping_rows(rows: list[dict[str, str]]) -> tuple[list[dict[s
     for row in rows:
         key = build_variant_combination_key(row)
         grouped.setdefault(key, []).append(row)
-    deduped = [items[0] for items in grouped.values()]
+    deduped = [item for items in grouped.values() for item in items]
     duplicates = []
     for key, items in grouped.items():
         if len(items) > 1:
@@ -317,10 +372,11 @@ def build_variant_sku_mapping(variant_rows: list[dict[str, Any]]) -> list[dict[s
     rows = []
     for row in variant_rows:
         sku = str(row.get("sku") or "").strip()
-        base, _ = parse_base_code_and_variant(sku)
-        attrs = _apply_tie_attribute_rules(row.get("attrs") or {}, str(row.get("name") or ""), str(row.get("category") or ""))
+        parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
+        merged_attrs = {**(parsed.get("attrs") or {}), **(row.get("attrs") or {})}
+        attrs = _apply_tie_attribute_rules(merged_attrs, str(row.get("name") or ""), str(row.get("category") or ""))
         rows.append({
-            "Product Template External ID": normalize_external_id(base or sku, "product_template"),
+            "Product Template External ID": parsed.get("template_external_id") or normalize_external_id(sku, "product_template"),
             "Product Template Name": normalize_product_name(str(row.get("name") or "")),
             "Internal Reference": sku,
             "Barcode": str(row.get("barcode") or ""),
@@ -332,5 +388,8 @@ def build_variant_sku_mapping(variant_rows: list[dict[str, Any]]) -> list[dict[s
             "Sales Price": normalize_price(row.get("price")),
             "Cost": normalize_price(row.get("cost")),
             "Product Category": normalize_product_name(str(row.get("category") or "")),
+            "Parse Status": str(parsed.get("parse_status") or ""),
+            "Parser Rule": str(parsed.get("parser_rule") or ""),
+            "Warnings": "|".join(parsed.get("warnings") or []),
         })
     return rows
