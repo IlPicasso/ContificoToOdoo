@@ -121,17 +121,57 @@ class OdooMigrationService:
                 "message": f"{dup['count']} filas para misma combinación; ejemplos: {', '.join(dup['examples'])}",
             })
         o19_stock_rows = []
+        stock_positive_skus = set()
         for vr in phase1.get("variant_rows", []):
             sku = str(vr.get("sku") or "").strip()
+            total_qty = 0.0
             for wh, loc in WAREHOUSE_TO_LOCATION.items():
                 qty = float((vr.get("stock_map") or {}).get(wh, 0) or 0)
+                total_qty += qty
                 if qty > 0:
                     o19_stock_rows.append({"Product / Internal Reference": sku, "Location": loc, "Inventory Quantity": f"{qty:.2f}"})
+            if total_qty > 0:
+                stock_positive_skus.add(sku)
+
+        duplicate_rows = []
+        duplicate_skus_with_stock = set()
+        for dup in duplicate_combinations:
+            matches = [r for r in o19_variant_map_rows if r.get("Product Template External ID") == dup.get("template_external_id") and r.get("Internal Reference") in set(dup.get("examples", []))]
+            if matches:
+                duplicate_rows.append({
+                    "Product Template External ID": dup.get("template_external_id", ""),
+                    "Product Template Name": matches[0].get("Product Template Name", ""),
+                    "Internal References involucrados": ",".join([m.get("Internal Reference", "") for m in matches]),
+                    "Talla": matches[0].get("Talla", ""),
+                    "Color": matches[0].get("Color", ""),
+                    "Manga de Camisa": matches[0].get("Manga de Camisa", ""),
+                    "Ancho Corbata": matches[0].get("Ancho Corbata", ""),
+                    "Marca": matches[0].get("Marca", ""),
+                    "Parser Rule": matches[0].get("Parser Rule", ""),
+                    "Parse Status": matches[0].get("Parse Status", ""),
+                    "Reason": "DUPLICATE_VARIANT_COMBINATION",
+                    "Stock Contifico": "1" if any(m.get("Internal Reference", "") in stock_positive_skus for m in matches) else "0",
+                })
+                if any(m.get("Internal Reference", "") in stock_positive_skus for m in matches):
+                    duplicate_skus_with_stock.update({m.get("Internal Reference", "") for m in matches})
         self._validate_template_attribute_consistency(o19_product_rows=o19_product_rows, o19_variant_map_rows=o19_variant_map_rows)
         self._write_csv(folder / "odoo_product_templates.csv", ODOO_TEMPLATE_COLUMNS, o19_product_rows)
         self._write_csv(folder / "odoo_variant_sku_mapping.csv", VARIANT_MAPPING_COLUMNS, o19_variant_map_rows)
         self._write_csv(folder / "odoo_stock_quant.csv", STOCK_QUANT_SIMPLE_COLUMNS, o19_stock_rows)
         self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], validation_rows)
+        self._write_csv(folder / "odoo_duplicate_variant_combinations.csv", ["Product Template External ID","Product Template Name","Internal References involucrados","Talla","Color","Manga de Camisa","Ancho Corbata","Marca","Parser Rule","Parse Status","Reason","Stock Contifico"], duplicate_rows)
+
+        mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
+        stock_skus = {r.get("Product / Internal Reference", "") for r in o19_stock_rows}
+        missing_rows = []
+        for vr in phase1.get("variant_rows", []):
+            sku = str(vr.get("sku") or "").strip()
+            total_qty = sum(float((vr.get("stock_map") or {}).get(wh, 0) or 0) for wh in WAREHOUSE_TO_LOCATION)
+            if total_qty <= 0:
+                continue
+            if sku not in mapping_skus or sku not in stock_skus:
+                missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_VARIANT_MAPPING" if sku not in mapping_skus else "MISSING_IN_STOCK_QUANT"})
+        self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
