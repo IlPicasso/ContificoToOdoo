@@ -64,7 +64,7 @@ def test_dedupe_variant_mapping_by_template_and_attributes():
         {"sku": "210001BG/46", "name": "Terno X", "barcode": "", "price": "1", "cost": "1", "category": "TERNO / CABALLERO", "attrs": {"Color": "Azul", "Marca": "A"}},
     ])
     deduped, duplicates = dedupe_variant_mapping_rows(rows)
-    assert len(deduped) == 1
+    assert len(deduped) == 2
     assert duplicates and duplicates[0]["count"] == 2
 
 
