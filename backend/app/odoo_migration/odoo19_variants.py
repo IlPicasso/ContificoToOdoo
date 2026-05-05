@@ -216,7 +216,8 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             warnings.append("Producto sin codigo")
             continue
         parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
-        grouped.setdefault(parsed["parent_key"] or sku, []).append({**row, "_parsed": parsed})
+        cleaned_attrs = _clean_candidate_attrs(sku, parsed.get("attrs") or {}, row.get("attrs") or {})
+        grouped.setdefault(parsed["parent_key"] or sku, []).append({**row, "_parsed": parsed, "_clean_attrs": cleaned_attrs})
 
     result: list[dict[str, str]] = []
     for base, items in grouped.items():
@@ -237,7 +238,7 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
         }, key=_natural_key)
         if len(brand_values) > 1:
             warnings.append(f"Marcas distintas en mismo base: {base}")
-        sizes = sorted({normalize_product_name(str(((i.get("_parsed") or {}).get("attrs") or {}).get("Talla") or "")) for i in items if normalize_product_name(str(((i.get("_parsed") or {}).get("attrs") or {}).get("Talla") or ""))}, key=_natural_key)
+        sizes = sorted({normalize_product_name(str((i.get("_clean_attrs") or {}).get("Talla") or "")) for i in items if normalize_product_name(str((i.get("_clean_attrs") or {}).get("Talla") or ""))}, key=_natural_key)
         barcode = "" if sizes else str(items[0].get("barcode") or "")
         common = {
             "External ID": normalize_external_id(base, "product_template"),
@@ -258,23 +259,23 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
         if brand_values:
             attr_values["Marca"] = [brand_values[0]]
         color_values = sorted({
-            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Color") or (i.get("attrs") or {}).get("Color") or "")))
+            normalize_product_name(str((i.get("_clean_attrs") or {}).get("Color") or ""))
             for i in items
-            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Color") or (i.get("attrs") or {}).get("Color") or "")))
+            if normalize_product_name(str((i.get("_clean_attrs") or {}).get("Color") or ""))
         }, key=_natural_key)
         if color_values:
             attr_values["Color"] = color_values
         manga_values = sorted({
-            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Manga de Camisa") or (i.get("attrs") or {}).get("Manga de Camisa") or "")))
+            normalize_product_name(str((i.get("_clean_attrs") or {}).get("Manga de Camisa") or ""))
             for i in items
-            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Manga de Camisa") or (i.get("attrs") or {}).get("Manga de Camisa") or "")))
+            if normalize_product_name(str((i.get("_clean_attrs") or {}).get("Manga de Camisa") or ""))
         }, key=_natural_key)
         if manga_values:
             attr_values["Manga de Camisa"] = manga_values
         ancho_values = sorted({
-            normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Ancho Corbata") or (i.get("attrs") or {}).get("Ancho Corbata") or "")))
+            normalize_product_name(str((i.get("_clean_attrs") or {}).get("Ancho Corbata") or ""))
             for i in items
-            if normalize_product_name(str((((i.get("_parsed") or {}).get("attrs") or {}).get("Ancho Corbata") or (i.get("attrs") or {}).get("Ancho Corbata") or "")))
+            if normalize_product_name(str((i.get("_clean_attrs") or {}).get("Ancho Corbata") or ""))
         }, key=_natural_key)
         if ancho_values:
             attr_values["Ancho Corbata"] = ancho_values
@@ -336,6 +337,31 @@ def _apply_tie_attribute_rules(attrs: dict[str, Any], name: str, category: str) 
     return normalized
 
 
+def _looks_like_valid_size(value: str) -> bool:
+    v = normalize_product_name(value).upper()
+    if not v:
+        return False
+    return bool(re.match(r"^(XS|S|M|L|XL|XXL|XXXL|SL|ML|\d+(?:\.\d+)?)$", v))
+
+
+def _clean_candidate_attrs(sku: str, parsed_attrs: dict[str, Any], raw_attrs: dict[str, Any]) -> dict[str, Any]:
+    sku_u = normalize_product_name(sku).upper()
+    talla = normalize_product_name(str(parsed_attrs.get("Talla") or raw_attrs.get("Talla") or ""))
+    ancho = normalize_product_name(str(parsed_attrs.get("Ancho Corbata") or raw_attrs.get("Ancho Corbata") or ""))
+    if not _looks_like_valid_size(talla) or normalize_product_name(talla).upper() == sku_u or "/" in talla:
+        talla = ""
+    # Ancho Corbata only accepts numeric-ish values, never full SKUs/codes
+    if ancho and not re.match(r"^\d+(?:[\.,]\d+)?(?:\s*cm)?$", ancho, flags=re.IGNORECASE):
+        ancho = ""
+    return {
+        "Talla": talla,
+        "Ancho Corbata": ancho,
+        "Color": normalize_product_name(str(parsed_attrs.get("Color") or raw_attrs.get("Color") or "")),
+        "Manga de Camisa": normalize_product_name(str(parsed_attrs.get("Manga de Camisa") or raw_attrs.get("Manga de Camisa") or "")),
+        "Marca": normalize_product_name(str(parsed_attrs.get("Marca") or raw_attrs.get("Marca") or "")),
+    }
+
+
 def build_variant_combination_key(row: dict[str, str]) -> str:
     attrs = [row.get("Talla", ""), row.get("Color", ""), row.get("Manga de Camisa", ""), row.get("Ancho Corbata", ""), row.get("Marca", "")]
     norm_attrs = [normalize_product_name(str(v or "")).upper() for v in attrs]
@@ -373,7 +399,7 @@ def build_variant_sku_mapping(variant_rows: list[dict[str, Any]]) -> list[dict[s
     for row in variant_rows:
         sku = str(row.get("sku") or "").strip()
         parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
-        merged_attrs = {**(parsed.get("attrs") or {}), **(row.get("attrs") or {})}
+        merged_attrs = _clean_candidate_attrs(sku, parsed.get("attrs") or {}, row.get("attrs") or {})
         attrs = _apply_tie_attribute_rules(merged_attrs, str(row.get("name") or ""), str(row.get("category") or ""))
         rows.append({
             "Product Template External ID": parsed.get("template_external_id") or normalize_external_id(sku, "product_template"),

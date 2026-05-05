@@ -89,3 +89,12 @@ def test_bg_dc_and_slash_and_tie_rules():
     p5 = derive_parent_and_attrs("VE-MICAELA-AZ-XL", "VESTIDO MICAELA AZUL", "Ropa / Mujeres / Vestidos")
     assert p5["parent_key"] == "VE-MICAELA-AZ"
     assert p5["attrs"]["Talla"] == "XL"
+
+
+def test_invalid_raw_attrs_do_not_pollute_talla_or_ancho():
+    rows = build_variant_sku_mapping([
+        {"sku": "MR-10845-1/7", "name": "MANCUERNILLA", "barcode": "", "price": "1", "cost": "1", "category": "ACCESORIOS", "attrs": {"Ancho Corbata": "MR-10845-1/7"}},
+        {"sku": "CIN-C-ML", "name": "CINTURON", "barcode": "", "price": "1", "cost": "1", "category": "ACCESORIOS", "attrs": {"Talla": "CIN-C-ML"}},
+    ])
+    assert rows[0]["Ancho Corbata"] == ""
+    assert rows[1]["Talla"] == ""
