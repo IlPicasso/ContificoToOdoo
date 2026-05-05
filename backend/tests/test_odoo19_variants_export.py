@@ -1,5 +1,6 @@
 from app.odoo_migration.odoo19_variants import (
     parse_base_code_and_variant,
+    derive_parent_and_attrs,
     build_products_with_variants_from_variant_rows,
     build_variant_sku_mapping,
     dedupe_variant_mapping_rows,
@@ -59,9 +60,41 @@ def test_tie_rule_moves_talla_to_ancho_and_formats_cm():
 
 def test_dedupe_variant_mapping_by_template_and_attributes():
     rows = build_variant_sku_mapping([
-        {"sku": "X-1", "name": "Producto X", "barcode": "", "price": "1", "cost": "1", "category": "Ropa / Hombres / Camisas", "attrs": {"Talla": "M", "Color": "Azul", "Marca": "A"}},
-        {"sku": "X-2", "name": "Producto X", "barcode": "", "price": "1", "cost": "1", "category": "Ropa / Hombres / Camisas", "attrs": {"Talla": "M", "Color": "Azul", "Marca": "A"}},
+        {"sku": "210001/46", "name": "Terno X", "barcode": "", "price": "1", "cost": "1", "category": "TERNO / CABALLERO", "attrs": {"Color": "Azul", "Marca": "A"}},
+        {"sku": "210001BG/46", "name": "Terno X", "barcode": "", "price": "1", "cost": "1", "category": "TERNO / CABALLERO", "attrs": {"Color": "Azul", "Marca": "A"}},
     ])
     deduped, duplicates = dedupe_variant_mapping_rows(rows)
-    assert len(deduped) == 1
+    assert len(deduped) == 2
     assert duplicates and duplicates[0]["count"] == 2
+
+
+def test_bg_dc_and_slash_and_tie_rules():
+    p1 = derive_parent_and_attrs("17604BG-DC-18.5-S1", "CAMISA 17604", "CAMISA")
+    assert p1["parent_key"] == "17604-DC"
+    assert p1["attrs"]["Talla"] == "18.5"
+    assert p1["attrs"]["Manga de Camisa"] == "S1 - 32/33"
+
+    p2 = derive_parent_and_attrs("210001BG/54", "TERNO 210001", "TERNO / CABALLERO")
+    assert p2["parent_key"] == "210001"
+    assert p2["attrs"]["Talla"] == "54"
+
+    p3 = derive_parent_and_attrs("TL-X25-502A.A/L", "TL", "OTROS")
+    assert p3["parent_key"] == "TL-X25-502A.A"
+    assert p3["attrs"]["Talla"] == "L"
+
+    p4 = derive_parent_and_attrs("BW4624/641-7", "CORBATA BW", "ROPA / HOMBRES / CORBATAS")
+    assert p4["parent_key"] == "BW4624/641"
+    assert p4["attrs"]["Ancho Corbata"] == "7 cm"
+
+    p5 = derive_parent_and_attrs("VE-MICAELA-AZ-XL", "VESTIDO MICAELA AZUL", "Ropa / Mujeres / Vestidos")
+    assert p5["parent_key"] == "VE-MICAELA-AZ"
+    assert p5["attrs"]["Talla"] == "XL"
+
+
+def test_invalid_raw_attrs_do_not_pollute_talla_or_ancho():
+    rows = build_variant_sku_mapping([
+        {"sku": "MR-10845-1/7", "name": "MANCUERNILLA", "barcode": "", "price": "1", "cost": "1", "category": "ACCESORIOS", "attrs": {"Ancho Corbata": "MR-10845-1/7"}},
+        {"sku": "CIN-C-ML", "name": "CINTURON", "barcode": "", "price": "1", "cost": "1", "category": "ACCESORIOS", "attrs": {"Talla": "CIN-C-ML"}},
+    ])
+    assert rows[0]["Ancho Corbata"] == ""
+    assert rows[1]["Talla"] == ""
