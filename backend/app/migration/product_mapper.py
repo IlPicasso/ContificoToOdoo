@@ -51,6 +51,19 @@ def parse_sku(sku: str) -> tuple[str, str, str]:
     return f"Producto {sku}", "", ""
 
 
+def format_brand_name(value: str) -> str:
+    words = re.split(r"\s+", str(value or "").strip())
+    formatted = []
+    for word in words:
+        if not word:
+            continue
+        if len(word) <= 3:
+            formatted.append(word.upper())
+        else:
+            formatted.append(word[0].upper() + word[1:].lower())
+    return " ".join(formatted)
+
+
 def map_contifico_product(item: dict[str, Any]) -> ExportProductRow:
     sku = str(item.get("sku") or "").strip()
     producto_madre, talla, manga = parse_sku(sku)
@@ -64,7 +77,7 @@ def map_contifico_product(item: dict[str, Any]) -> ExportProductRow:
         categoria_odoo=str(item.get("categoria_odoo") or "Ropa / Accesorios"),
         talla=talla,
         manga=manga,
-        marca=str(item.get("marca") or "BRUNO CASSINI"),
+        marca=format_brand_name(str(item.get("marca") or "Bruno Cassini")),
         color=str(item.get("color") or ""),
         precio_venta=float(item.get("precio_venta") or 0),
         costo=float(item.get("costo") or 0),

@@ -49,6 +49,19 @@ def normalize_product_name(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip())
 
 
+def normalize_brand_name(name: str) -> str:
+    cleaned = normalize_product_name(name)
+    if not cleaned:
+        return ""
+    parts = []
+    for token in cleaned.split(" "):
+        if len(token) <= 3:
+            parts.append(token.upper())
+        else:
+            parts.append(token[:1].upper() + token[1:].lower())
+    return " ".join(parts)
+
+
 def _natural_key(val: str):
     s = str(val or "")
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
@@ -67,7 +80,7 @@ def build_attributes_values(products: list[dict[str, Any]]) -> list[dict[str, st
         base, size = parse_base_code_and_variant(str(p.get("codigo") or ""))
         if base and size:
             sizes.add(size)
-        brand = normalize_product_name(str(p.get("marca_nombre") or ""))
+        brand = normalize_brand_name(str(p.get("marca_nombre") or ""))
         if brand:
             brands.add(brand)
     rows = [{"Attribute": "Talla", "Display Type": "Selection", "Variant Creation Mode": "Instantly", "Values / Value": s} for s in sorted(sizes, key=_natural_key)]
@@ -99,7 +112,7 @@ def build_products_with_variants(products: list[dict[str, Any]], warnings: list[
             warnings.append(f"Precios distintos en variantes: {base}")
         cost = normalize_price(items[0].get("costo_maximo"))
         barcode = "" if any(parse_base_code_and_variant(str(i.get("codigo") or ""))[1] for i in items) else str(items[0].get("codigo_barra") or "")
-        marcas = sorted({normalize_product_name(str(i.get("marca_nombre") or "")) for i in items if str(i.get("marca_nombre") or "").strip()}, key=_natural_key)
+        marcas = sorted({normalize_brand_name(str(i.get("marca_nombre") or "")) for i in items if str(i.get("marca_nombre") or "").strip()}, key=_natural_key)
         if len(marcas) > 1:
             warnings.append(f"Marcas distintas en mismo base: {base}")
         talla_vals = sorted({parse_base_code_and_variant(str(i.get("codigo") or ""))[1] for i in items if parse_base_code_and_variant(str(i.get("codigo") or ""))[1]}, key=_natural_key)
