@@ -14,6 +14,7 @@ from ..contifico import ContificoAPIError, ContificoClient, ContificoTransportEr
 from .odoo19_variants import (
     build_products_with_variants_from_variant_rows,
     build_variant_sku_mapping,
+    dedupe_variant_mapping_rows,
     PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
     VARIANT_MAPPING_COLUMNS,
     STOCK_QUANT_SIMPLE_COLUMNS,
@@ -109,7 +110,16 @@ class OdooMigrationService:
         self._write_variant_import_outputs(folder, phase1.get("variant_rows", []), include_stock=export_stock)
         o19_warnings: list[str] = []
         o19_product_rows = build_products_with_variants_from_variant_rows(phase1.get("variant_rows", []), warnings=o19_warnings)
-        o19_variant_map_rows = build_variant_sku_mapping(phase1.get("variant_rows", []))
+        o19_variant_map_raw = build_variant_sku_mapping(phase1.get("variant_rows", []))
+        o19_variant_map_rows, duplicate_combinations = dedupe_variant_mapping_rows(o19_variant_map_raw)
+        validation_rows: list[dict[str, str]] = []
+        for dup in duplicate_combinations:
+            validation_rows.append({
+                "level": "warning",
+                "rule": "duplicate_variant_combination",
+                "entity": dup["template_external_id"],
+                "message": f"{dup['count']} filas para misma combinación; ejemplos: {', '.join(dup['examples'])}",
+            })
         o19_stock_rows = []
         for vr in phase1.get("variant_rows", []):
             sku = str(vr.get("sku") or "").strip()
@@ -117,10 +127,11 @@ class OdooMigrationService:
                 qty = float((vr.get("stock_map") or {}).get(wh, 0) or 0)
                 if qty > 0:
                     o19_stock_rows.append({"Product / Internal Reference": sku, "Location": loc, "Inventory Quantity": f"{qty:.2f}"})
+        self._validate_template_attribute_consistency(o19_product_rows=o19_product_rows, o19_variant_map_rows=o19_variant_map_rows)
         self._write_csv(folder / "odoo_product_templates.csv", ODOO_TEMPLATE_COLUMNS, o19_product_rows)
         self._write_csv(folder / "odoo_variant_sku_mapping.csv", VARIANT_MAPPING_COLUMNS, o19_variant_map_rows)
         self._write_csv(folder / "odoo_stock_quant.csv", STOCK_QUANT_SIMPLE_COLUMNS, o19_stock_rows)
-        self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], [])
+        self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], validation_rows)
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
@@ -285,6 +296,36 @@ class OdooMigrationService:
             for e in examples:
                 report.append(f"  - {e[0]} | {e[1]} | variantes reales={e[2]} | combinaciones fantasma≈{e[3]}")
         (run_folder / "import_products_and_variants_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+
+
+    @staticmethod
+    def _validate_template_attribute_consistency(*, o19_product_rows: list[dict[str, str]], o19_variant_map_rows: list[dict[str, str]]) -> None:
+        attr_columns = ["Talla", "Color", "Manga de Camisa", "Ancho Corbata", "Marca"]
+        allowed_by_template: dict[str, set[str]] = {}
+        for row in o19_product_rows:
+            tmpl = str(row.get("External ID") or "")
+            attr = str(row.get("Product Attributes / Attribute") or "").strip()
+            if tmpl and attr:
+                allowed_by_template.setdefault(tmpl, set()).add(attr)
+
+        tie_templates = set()
+        for row in o19_product_rows:
+            if str(row.get("Product Category") or "").strip().upper() == "ROPA / HOMBRES / CORBATAS":
+                tie_templates.add(str(row.get("External ID") or ""))
+
+        violations: list[str] = []
+        for row in o19_variant_map_rows:
+            tmpl = str(row.get("Product Template External ID") or "")
+            allowed = allowed_by_template.get(tmpl, set())
+            for col in attr_columns:
+                value = str(row.get(col) or "").strip()
+                if value and col not in allowed:
+                    violations.append(f"{tmpl}: columna {col} con valor no permitido ({row.get('Internal Reference','')})")
+            if tmpl in tie_templates and str(row.get("Talla") or "").strip():
+                violations.append(f"{tmpl}: corbata con Talla no permitida ({row.get('Internal Reference','')})")
+
+        if violations:
+            raise ValueError("Inconsistencia template/variantes detectada: " + " | ".join(violations[:10]))
 
     @staticmethod
     def _slugify(text: str) -> str:
