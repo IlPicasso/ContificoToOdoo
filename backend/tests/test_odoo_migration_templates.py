@@ -1,3 +1,5 @@
+import pytest
+
 from app.odoo_migration.service import (
     OdooMigrationService,
     PRODUCT_COLUMNS,
