@@ -669,12 +669,12 @@ class OdooMigrationService:
     def _validate_phase2_variant_internal_reference_csv(*, csv_path: Path, errors_path: Path) -> None:
         expected_header = ["Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
         errors: list[dict[str, str]] = []
-        lines = csv_path.read_text(encoding="utf-8").splitlines()
+        lines = csv_path.read_text(encoding="utf-8-sig").splitlines()
 
         if not lines:
             errors.append({"row_number": "1", "raw_line": "", "parsed_column_count": "0", "reason": "Empty CSV"})
         else:
-            with csv_path.open("r", newline="", encoding="utf-8") as f:
+            with csv_path.open("r", newline="", encoding="utf-8-sig") as f:
                 reader = csv.reader(f, delimiter=",", quotechar='"')
                 for row_number, parsed in enumerate(reader, start=1):
                     raw_line = lines[row_number - 1] if row_number - 1 < len(lines) else ""
@@ -814,7 +814,7 @@ class OdooMigrationService:
 
     @staticmethod
     def _read_header(path: Path):
-        with path.open('r', encoding='utf-8') as f: line=f.readline().strip()
+        with path.open('r', encoding='utf-8-sig') as f: line=f.readline().strip()
         return [c.strip() for c in line.split(',') if c.strip()]
 
     def _fetch_products(self, *, page_size:int, max_pages:int, run_folder: Path, progress_callback=None, debug_lines=None, raw_lines=None):
@@ -1010,7 +1010,7 @@ class OdooMigrationService:
 
     @staticmethod
     def _write_csv(path: Path, columns: list[str], rows: list[dict[str, Any]]):
-        with path.open('w', newline='', encoding='utf-8') as f:
+        with path.open('w', newline='', encoding='utf-8-sig') as f:
             w = csv.DictWriter(
                 f,
                 fieldnames=columns,
@@ -1037,5 +1037,5 @@ class OdooMigrationService:
     def _read_csv_rows(path: Path) -> list[dict[str, str]]:
         if not path.exists():
             return []
-        with path.open('r', newline='', encoding='utf-8') as f:
+        with path.open('r', newline='', encoding='utf-8-sig') as f:
             return list(csv.DictReader(f))

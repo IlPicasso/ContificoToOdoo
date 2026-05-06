@@ -346,7 +346,7 @@ def download_file(run_id: str, filename: str):
     file_path = _output_root() / run_id / filename
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
-    media_type = "text/plain" if filename.endswith(('.log', '.md')) else "text/csv"
+    media_type = "text/plain; charset=utf-8" if filename.endswith(('.log', '.md')) else "text/csv; charset=utf-8"
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
 
 

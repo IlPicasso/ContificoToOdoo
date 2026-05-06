@@ -4,7 +4,7 @@ from app.odoo_migration.service import OdooMigrationService
 
 
 def _read_csv(path: Path):
-    with path.open('r', newline='', encoding='utf-8') as f:
+    with path.open('r', newline='', encoding='utf-8-sig') as f:
         return list(csv.DictReader(f, delimiter=','))
 
 
