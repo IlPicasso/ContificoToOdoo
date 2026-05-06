@@ -35,6 +35,8 @@ def test_variant_csv_builders():
     mapping = build_variant_sku_mapping(_sample())
     assert mapping[0]["Ancho Corbata"] == "7 cm"
     assert by_attr["Talla"]["Product Category"] == "Ropa / Camisas"
+    assert by_attr["Talla"]["is_storable"] == "True"
+    assert by_attr["Talla"]["available_in_pos"] == "False"
 
 
 def test_parent_base_code_extraction_rules():
