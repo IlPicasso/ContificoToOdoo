@@ -11,6 +11,7 @@ ATTR_COLUMNS = ["Attribute", "Display Type", "Variant Creation Mode", "Values / 
 PRODUCTS_COLUMNS = [
     "External ID", "Name", "Product Type", "Product Category", "Sales Price", "Cost", "Can be Sold",
     "Can be Purchased", "is_storable", "available_in_pos", "Product Attributes / Attribute", "Product Attributes / Values",
+    "Product Attributes / Create Variants",
 ]
 VARIANT_MAPPING_COLUMNS = [
     "Product Template External ID", "Product Template Name", "Internal Reference", "Barcode", "Talla", "Color",
@@ -516,5 +517,6 @@ def split_templates_by_catalog(
         for attr_name, values in attrs.items():
             if not values:
                 continue
-            with_attrs_rows.append({**common, "Product Attributes / Attribute": attr_name, "Product Attributes / Values": ",".join(sorted(values, key=_natural_key))})
+            create_variants_mode = "no_variant" if attr_name == "Marca" else "dynamic"
+            with_attrs_rows.append({**common, "Product Attributes / Attribute": attr_name, "Product Attributes / Values": ",".join(sorted(values, key=_natural_key)), "Product Attributes / Create Variants": create_variants_mode})
     return simple_rows, with_attrs_rows, rejection_rows, conflict_rows
