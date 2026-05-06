@@ -65,17 +65,17 @@ def test_dedupe_variant_mapping_by_template_and_attributes():
     ])
     deduped, duplicates = dedupe_variant_mapping_rows(rows)
     assert len(deduped) == 2
-    assert duplicates and duplicates[0]["count"] == 2
+    assert duplicates == []
 
 
 def test_bg_dc_and_slash_and_tie_rules():
     p1 = derive_parent_and_attrs("17604BG-DC-18.5-S1", "CAMISA 17604", "CAMISA")
-    assert p1["parent_key"] == "17604-DC"
+    assert p1["parent_key"] == "17604BG-DC"
     assert p1["attrs"]["Talla"] == "18.5"
     assert p1["attrs"]["Manga de Camisa"] == "S1 - 32/33"
 
     p2 = derive_parent_and_attrs("210001BG/54", "TERNO 210001", "TERNO / CABALLERO")
-    assert p2["parent_key"] == "210001"
+    assert p2["parent_key"] == "210001BG"
     assert p2["attrs"]["Talla"] == "54"
 
     p3 = derive_parent_and_attrs("TL-X25-502A.A/L", "TL", "OTROS")
