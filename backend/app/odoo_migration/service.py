@@ -144,7 +144,6 @@ class OdooMigrationService:
                     "Can be Purchased": "True",
                     "is_storable": "True",
                     "available_in_pos": _to_odoo_bool(src.get("para_pos")),
-                    "Customer Taxes": "IVA 0%",
                     "Internal Reference": sku,
                     "Barcode": str(src.get("barcode") or sku),
                 })
@@ -222,7 +221,6 @@ class OdooMigrationService:
                     "Can be Purchased": "True",
                     "is_storable": "True",
                     "available_in_pos": _to_odoo_bool(src.get("para_pos")),
-                    "Customer Taxes": "IVA 0%",
                     "Internal Reference": sku,
                     "Barcode": str(src.get("barcode") or sku),
                 })
@@ -238,8 +236,8 @@ class OdooMigrationService:
             if not row.get("Internal Reference"):
                 row["Internal Reference"] = str(row.get("source_sku") or "")
             row["Barcode"] = str(row.get("Barcode") or row.get("barcode") or row.get("Internal Reference") or "")
-        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Customer Taxes","Internal Reference","Barcode"], simple_rows)
-        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Customer Taxes","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
+        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Internal Reference","Barcode"], simple_rows)
+        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
         self._write_csv(folder / "odoo_attribute_rejections.csv", ["source_sku","source_id","source_name","attempted_attribute","attempted_value","reason"], rejection_rows)
         mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
         simple_skus = {r.get("Internal Reference", "") for r in simple_rows}
@@ -272,11 +270,49 @@ class OdooMigrationService:
         if external_id_conflicts:
             raise ValueError("Se detectaron conflictos reales de External ID. Revisar odoo_external_id_conflicts.csv.")
 
+        # H4: phase2 orphan check — variant SKUs whose template name is not in with_attr templates
+        with_attr_names = {str(r.get("Name") or "").strip() for r in with_attr_rows}
+        phase2_orphan_count = sum(
+            1 for r in o19_variant_map_rows
+            if str(r.get("Product Template Name") or "").strip() not in with_attr_names
+        )
+
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
         duration_seconds = round((datetime.utcnow() - started_at).total_seconds(), 2)
-        summary={"total_products":len(phase1['prows']),"total_categorias_no_mapeadas":len(phase1['unmapped_category_rows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds, "exporter_version": EXPORTER_VERSION}
+        summary = {
+            "total_products": len(phase1['prows']),
+            "total_categorias_no_mapeadas": len(phase1['unmapped_category_rows']),
+            "total_skus_unicos_product_product": len({r.get('Internal Reference') for r in phase1['prows']}),
+            "total_lineas_initial_stock": 0,
+            "total_lineas_stock_quant": 0,
+            "total_skus_stock_match_producto": 0,
+            "total_skus_stock_no_match_producto": 0,
+            "total_ubicaciones_mapeadas": 0,
+            "total_ubicaciones_no_mapeadas": 0,
+            "total_productos_excluidos_stock_0": len(phase1['zrows']),
+            "total_errores_reales": len(phase1['erows']),
+            # --- Auditoría de calidad de datos ---
+            "total_simple_products": len(simple_rows),
+            "total_templates_con_atributos": len({r.get("External ID", "") for r in with_attr_rows}),
+            "total_variant_skus_mapeados": len(o19_variant_map_rows),
+            "total_attribute_rejections": len(rejection_rows),
+            "total_barcode_conflicts": len(barcode_conflicts),
+            "total_missing_from_stock": len(missing_rows),
+            "total_duplicate_variant_combinations": len(duplicate_combinations),
+            "total_phase2_orphan_variant_skus": phase2_orphan_count,
+            # --- Meta ---
+            "stock_export_enabled": export_stock,
+            "phase_1_completed": True,
+            "phase_2_completed": export_stock,
+            "include_additional_attributes": include_additional_attributes,
+            "include_brand_color_attributes": include_additional_attributes,
+            "expected_min_items_from_api": expected_min_items,
+            "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None,
+            "duration_seconds": duration_seconds,
+            "exporter_version": EXPORTER_VERSION,
+        }
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
