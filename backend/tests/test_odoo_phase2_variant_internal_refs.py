@@ -1,15 +1,11 @@
+import csv
 from pathlib import Path
 from app.odoo_migration.service import OdooMigrationService
 
 
 def _read_csv(path: Path):
-    lines = path.read_text(encoding='utf-8').splitlines()
-    header = lines[0].split(',')
-    rows = []
-    for ln in lines[1:]:
-        parts = ln.split(',')
-        rows.append(dict(zip(header, parts)))
-    return rows
+    with path.open('r', newline='', encoding='utf-8') as f:
+        return list(csv.DictReader(f, delimiter=','))
 
 
 def test_phase2_variant_outputs_are_generated(tmp_path: Path):
@@ -52,3 +48,31 @@ def test_phase2_variant_outputs_are_generated(tmp_path: Path):
 
     missing = _read_csv(tmp_path / "odoo_phase2_missing_stock_references.csv")
     assert missing[0]["stock_internal_reference"] == "MISSING-SKU"
+
+
+
+def test_phase2_variant_csv_format_validation_has_no_errors_for_valid_output(tmp_path: Path):
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [{
+        "Product Template External ID": "product_template_camisa",
+        "Product Template Name": "H. CAMISA D/P BLACK, BRUNO CASSINI",
+        "Internal Reference": "17605DC-16.5-S1",
+        "Barcode": "17605DC202591651",
+        "Talla": "16.5",
+        "Color": "Negro",
+        "Manga de Camisa": "S1 - 32/33",
+        "Marca": "Bruno Cassini",
+        "Sales Price": "82.52",
+        "Cost": "0.00",
+    }]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=[{"Name": "H. CAMISA D/P BLACK, BRUNO CASSINI"}],
+        simple_rows=[],
+        stock_rows=[],
+    )
+
+    errors = _read_csv(tmp_path / "odoo_phase2_csv_format_errors.csv")
+    assert errors == []
