@@ -16,7 +16,6 @@ from .odoo19_variants import (
     build_variant_sku_mapping,
     dedupe_variant_mapping_rows,
     PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
-    ODOO_CSV_EXPORT_VERSION,
     VARIANT_MAPPING_COLUMNS,
     STOCK_QUANT_SIMPLE_COLUMNS,
 )
@@ -157,12 +156,7 @@ class OdooMigrationService:
                 if any(m.get("Internal Reference", "") in stock_positive_skus for m in matches):
                     duplicate_skus_with_stock.update({m.get("Internal Reference", "") for m in matches})
         self._validate_template_attribute_consistency(o19_product_rows=o19_product_rows, o19_variant_map_rows=o19_variant_map_rows)
-        self._validate_template_external_id_conflicts(o19_product_rows)
-        simple_cols = [c for c in ODOO_TEMPLATE_COLUMNS if c not in {"Product Attributes / Attribute", "Product Attributes / Values"}]
-        simple_rows, with_attr_rows = self._split_template_rows_for_odoo_import(o19_product_rows)
         self._write_csv(folder / "odoo_product_templates.csv", ODOO_TEMPLATE_COLUMNS, o19_product_rows)
-        self._write_csv(folder / "odoo_product_templates_simple.csv", simple_cols, simple_rows)
-        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ODOO_TEMPLATE_COLUMNS, with_attr_rows)
         self._write_csv(folder / "odoo_variant_sku_mapping.csv", VARIANT_MAPPING_COLUMNS, o19_variant_map_rows)
         self._write_csv(folder / "odoo_stock_quant.csv", STOCK_QUANT_SIMPLE_COLUMNS, o19_stock_rows)
         self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], validation_rows)
@@ -184,7 +178,7 @@ class OdooMigrationService:
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
         duration_seconds = round((datetime.utcnow() - started_at).total_seconds(), 2)
-        summary={"total_products":len(phase1['prows']),"total_categorias_no_mapeadas":len(phase1['unmapped_category_rows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds, "odoo_csv_export_version": ODOO_CSV_EXPORT_VERSION}
+        summary={"total_products":len(phase1['prows']),"total_categorias_no_mapeadas":len(phase1['unmapped_category_rows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds}
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
@@ -386,54 +380,6 @@ class OdooMigrationService:
 
         if violations:
             raise ValueError("Inconsistencia template/variantes detectada: " + " | ".join(violations[:10]))
-
-    @staticmethod
-    def _split_template_rows_for_odoo_import(rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-        simple_rows: list[dict[str, str]] = []
-        with_attr_rows: list[dict[str, str]] = []
-        grouped_by_external_id: dict[str, list[dict[str, str]]] = {}
-        for row in rows:
-            grouped_by_external_id.setdefault(str(row.get("External ID") or ""), []).append(row)
-
-        for external_id, same_template_rows in grouped_by_external_id.items():
-            attr_pairs: dict[str, set[str]] = {}
-            for row in same_template_rows:
-                attr = str(row.get("Product Attributes / Attribute") or "").strip()
-                values = [v.strip() for v in str(row.get("Product Attributes / Values") or "").split(",") if v.strip()]
-                if not attr and not values:
-                    continue
-                if attr and not values:
-                    continue
-                if values and not attr:
-                    continue
-                attr_pairs.setdefault(attr, set()).update(values)
-
-            base_row = dict(same_template_rows[0]) if same_template_rows else {"External ID": external_id}
-            if not attr_pairs:
-                clean = {k: v for k, v in base_row.items() if k not in {"Product Attributes / Attribute", "Product Attributes / Values"}}
-                simple_rows.append(clean)
-                continue
-
-            for attr, values in sorted(attr_pairs.items()):
-                with_attr_rows.append({**base_row, "Product Attributes / Attribute": attr, "Product Attributes / Values": ",".join(sorted(values))})
-        return simple_rows, with_attr_rows
-
-    @staticmethod
-    def _validate_template_external_id_conflicts(rows: list[dict[str, str]]) -> None:
-        by_ext: dict[str, set[tuple[str, str, str]]] = {}
-        for row in rows:
-            ext = str(row.get("External ID") or "").strip()
-            if not ext:
-                continue
-            signature = (
-                str(row.get("Name") or "").strip(),
-                str(row.get("Sales Price") or "").strip(),
-                str(row.get("Product Category") or "").strip(),
-            )
-            by_ext.setdefault(ext, set()).add(signature)
-        conflicts = [ext for ext, sigs in by_ext.items() if len(sigs) > 1]
-        if conflicts:
-            raise ValueError(f"External ID conflictivo detectado en templates: {', '.join(conflicts[:10])}")
 
     @staticmethod
     def _slugify(text: str) -> str:
