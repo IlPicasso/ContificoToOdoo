@@ -82,3 +82,26 @@ def test_filter_template_attributes_with_master_catalog(tmp_path, monkeypatch):
     assert {r["External ID"] for r in out_with_attrs} == {"product_template_2"}
     assert any(r["attempted_value"] == "9002" for r in rejects)
     assert any(r["attempted_attribute"] == "Marca" and "Attribute not found" in r["reason"] for r in rejects)
+
+
+def test_filter_template_attributes_with_normalized_matching(tmp_path, monkeypatch):
+    catalog = tmp_path / "Product Attribute (product.attribute).csv"
+    catalog.write_text(
+        "Atributo,Valor\n"
+        "Ancho Corbata,7 cm\n"
+        "Color,Azul Marino\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(OdooMigrationService, "_attribute_catalog_paths", staticmethod(lambda: [catalog]))
+    simple_rows = []
+    with_attr_rows = [
+        {"External ID": "product_template_7", "Name": "Corbata", "Product Attributes / Attribute": "Ancho de Corbata", "Product Attributes / Values": "7"},
+        {"External ID": "product_template_7", "Name": "Corbata", "Product Attributes / Attribute": "COLOR", "Product Attributes / Values": "azul marino"},
+    ]
+    out_simple, out_with_attrs, rejects = OdooMigrationService._filter_template_attributes_with_master_catalog(
+        simple_rows=simple_rows,
+        with_attr_rows=with_attr_rows,
+    )
+    assert out_simple == []
+    assert len(out_with_attrs) == 2
+    assert rejects == []
