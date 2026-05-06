@@ -236,8 +236,12 @@ class OdooMigrationService:
             if not row.get("Internal Reference"):
                 row["Internal Reference"] = str(row.get("source_sku") or "")
             row["Barcode"] = str(row.get("Barcode") or row.get("barcode") or row.get("Internal Reference") or "")
-        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Internal Reference","Barcode"], simple_rows)
-        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
+        simple_columns = ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Internal Reference","Barcode"]
+        attr_columns = ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Product Attributes / Attribute","Product Attributes / Values"]
+        self._write_csv(folder / "odoo_product_templates_simple.csv", simple_columns, simple_rows)
+        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", attr_columns, with_attr_rows)
+        simple_part_files = self._split_into_parts(folder=folder, filename_stem="odoo_product_templates_simple", columns=simple_columns, rows=simple_rows, group_key="External ID")
+        attr_part_files = self._split_into_parts(folder=folder, filename_stem="odoo_product_templates_with_attributes", columns=attr_columns, rows=with_attr_rows, group_key="External ID")
         self._write_csv(folder / "odoo_attribute_rejections.csv", ["source_sku","source_id","source_name","attempted_attribute","attempted_value","reason"], rejection_rows)
         mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
         simple_skus = {r.get("Internal Reference", "") for r in simple_rows}
@@ -302,6 +306,9 @@ class OdooMigrationService:
             "total_missing_from_stock": len(missing_rows),
             "total_duplicate_variant_combinations": len(duplicate_combinations),
             "total_phase2_orphan_variant_skus": phase2_orphan_count,
+            # --- Partes para importar en lotes ---
+            "simple_part_files": simple_part_files,
+            "attr_part_files": attr_part_files,
             # --- Meta ---
             "stock_export_enabled": export_stock,
             "phase_1_completed": True,
@@ -947,6 +954,59 @@ class OdooMigrationService:
         if '/' in normalized: return normalized.rsplit('/', 1)[0]
         if '-' in sku: return sku.rsplit('-', 1)[0]
         return sku or name
+
+    def _split_into_parts(
+        self,
+        *,
+        folder: Path,
+        filename_stem: str,
+        columns: list[str],
+        rows: list[dict[str, str]],
+        group_key: str,
+        max_rows_per_file: int = 500,
+    ) -> list[str]:
+        """Split rows into numbered part files keeping all rows for the same group_key together.
+
+        Returns list of generated filenames (not full paths).
+        """
+        if not rows:
+            return []
+
+        # Group consecutive rows by group_key so a template's rows stay together
+        groups: list[list[dict[str, str]]] = []
+        current_key: str | None = None
+        current_group: list[dict[str, str]] = []
+        for row in rows:
+            key = str(row.get(group_key) or "")
+            if key != current_key:
+                if current_group:
+                    groups.append(current_group)
+                current_group = [row]
+                current_key = key
+            else:
+                current_group.append(row)
+        if current_group:
+            groups.append(current_group)
+
+        # Pack groups into parts without exceeding max_rows_per_file
+        parts: list[list[dict[str, str]]] = []
+        current_part: list[dict[str, str]] = []
+        for group in groups:
+            if current_part and len(current_part) + len(group) > max_rows_per_file:
+                parts.append(current_part)
+                current_part = list(group)
+            else:
+                current_part.extend(group)
+        if current_part:
+            parts.append(current_part)
+
+        total = len(parts)
+        filenames: list[str] = []
+        for i, part_rows in enumerate(parts, start=1):
+            fname = f"{filename_stem}_part{i:02d}_of_{total:02d}.csv"
+            self._write_csv(folder / fname, columns, part_rows)
+            filenames.append(fname)
+        return filenames
 
     @staticmethod
     def _write_csv(path: Path, columns: list[str], rows: list[dict[str, Any]]):

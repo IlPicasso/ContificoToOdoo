@@ -138,7 +138,17 @@ const FILE_PHASES = {
   run_summary_json:                         { phase: 'Logs', label: 'run_summary.json', import: false },
 };
 
-function renderMigrationLinks(files) {
+function makeLink(href, label, isImport) {
+  const a = document.createElement('a');
+  a.href = href;
+  a.textContent = `↓ ${label}`;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.className = isImport ? 'download-link download-link--import' : 'download-link download-link--report';
+  return a;
+}
+
+function renderMigrationLinks(files, summary) {
   const container = $('migrationLinks');
   container.innerHTML = '';
   const byPhase = {};
@@ -147,6 +157,26 @@ function renderMigrationLinks(files) {
     if (!byPhase[meta.phase]) byPhase[meta.phase] = [];
     byPhase[meta.phase].push({ label: meta.label, path, import: meta.import });
   });
+
+  // Extract run_id from any path (e.g. /odoo-migration/runs/20260506_123456/files/foo.csv)
+  const anyPath = Object.values(files || {})[0] || '';
+  const runIdMatch = anyPath.match(/\/runs\/([^/]+)\//);
+  const runId = runIdMatch ? runIdMatch[1] : null;
+
+  // Inject part files into Phase 1 section
+  if (runId && summary) {
+    const phase1key = 'Fase 1 · Importar en Odoo';
+    if (!byPhase[phase1key]) byPhase[phase1key] = [];
+    (summary.simple_part_files || []).forEach((fname, i) => {
+      const path = `/odoo-migration/runs/${runId}/files/${fname}`;
+      byPhase[phase1key].push({ label: `① Simples — parte ${i + 1} (${fname})`, path, import: true, partOrder: i });
+    });
+    (summary.attr_part_files || []).forEach((fname, i) => {
+      const path = `/odoo-migration/runs/${runId}/files/${fname}`;
+      byPhase[phase1key].push({ label: `② Con atributos — parte ${i + 1} (${fname})`, path, import: true, partOrder: i });
+    });
+  }
+
   Object.entries(byPhase).forEach(([phase, items]) => {
     const section = document.createElement('div');
     section.className = 'phase-section';
@@ -155,13 +185,7 @@ function renderMigrationLinks(files) {
     title.textContent = phase;
     section.appendChild(title);
     items.forEach(({ label, path, import: isImport }) => {
-      const a = document.createElement('a');
-      a.href = `${base()}${path}`;
-      a.textContent = `↓ ${label}`;
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.className = isImport ? 'download-link download-link--import' : 'download-link download-link--report';
-      section.appendChild(a);
+      section.appendChild(makeLink(`${base()}${path}`, label, isImport));
     });
     container.appendChild(section);
   });
@@ -236,7 +260,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
         done = true;
         show('migrationSummaryOut', job);
         renderWarnings(job.summary || {});
-        renderMigrationLinks(job.files);
+        renderMigrationLinks(job.files, job.summary);
         const summaryExpected = Number((job.summary || {}).expected_min_items_from_api || 0);
         const summaryFound = Number(job.found_items || (job.summary || {}).total_products || 0);
         const summaryCoverage = summaryExpected > 0 ? ` Cobertura vs count API: ${summaryFound}/${summaryExpected} (${Math.min(100, ((summaryFound / summaryExpected) * 100)).toFixed(2)}%).` : '';
@@ -289,7 +313,7 @@ $('processRawJson').addEventListener('click', async () => {
     });
     show('migrationSummaryOut', data);
     renderWarnings(data.summary || {});
-    renderMigrationLinks(data.files);
+    renderMigrationLinks(data.files, data.summary);
     setMigrationStatus(`Archivo procesado. Productos detectados: ${data.detected_products}.`);
   } catch (e) { showErr(e); }
 });
