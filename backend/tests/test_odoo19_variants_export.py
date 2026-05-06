@@ -107,3 +107,4 @@ def test_tie_slash_non_width_is_not_forced_to_ancho():
     assert rows[0]["Ancho Corbata"] == ""
     assert rows[0]["Talla"] == ""
     assert rows[0]["Parse Status"] == "UNPARSED"
+
