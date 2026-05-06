@@ -15,6 +15,7 @@ from .odoo19_variants import (
     build_products_with_variants_from_variant_rows,
     build_variant_sku_mapping,
     dedupe_variant_mapping_rows,
+    split_templates_by_catalog,
     PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
     VARIANT_MAPPING_COLUMNS,
     STOCK_QUANT_SIMPLE_COLUMNS,
@@ -173,6 +174,13 @@ class OdooMigrationService:
             if sku not in mapping_skus or sku not in stock_skus:
                 missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_VARIANT_MAPPING" if sku not in mapping_skus else "MISSING_IN_STOCK_QUANT"})
         self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
+        simple_rows, with_attr_rows, rejection_rows, external_id_conflicts = split_templates_by_catalog(phase1.get("variant_rows", []))
+        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes"], simple_rows)
+        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
+        self._write_csv(folder / "odoo_attribute_rejections.csv", ["source_sku","source_id","source_name","attempted_attribute","attempted_value","reason"], rejection_rows)
+        self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
+        if external_id_conflicts:
+            raise ValueError("Se detectaron conflictos reales de External ID. Revisar odoo_external_id_conflicts.csv.")
 
         counts = phase1['counts']
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
