@@ -45,7 +45,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.4.3"
+EXPORTER_VERSION = "1.4.4"
 
 
 @dataclass
@@ -646,7 +646,7 @@ class OdooMigrationService:
     @staticmethod
     def _write_csv(path: Path, columns: list[str], rows: list[dict[str, Any]]):
         with path.open('w', newline='', encoding='utf-8') as f:
-            w=csv.DictWriter(f, fieldnames=columns); w.writeheader(); [w.writerow(r) for r in rows]
+            w=csv.DictWriter(f, fieldnames=columns, extrasaction="ignore"); w.writeheader(); [w.writerow(r) for r in rows]
 
     @staticmethod
     def _write_stock_state(path: Path, rows: list[dict[str, Any]]) -> None:
