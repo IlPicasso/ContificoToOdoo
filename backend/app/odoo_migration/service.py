@@ -45,7 +45,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.4.1"
+EXPORTER_VERSION = "1.4.2"
 
 
 @dataclass
@@ -186,15 +186,6 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_duplicate_variant_combinations.csv", ["Product Template External ID","Product Template Name","Internal References involucrados","Talla","Color","Manga de Camisa","Ancho Corbata","Marca","Parser Rule","Parse Status","Reason","Stock Contifico"], duplicate_rows)
 
         stock_skus = {r.get("Product / Internal Reference", "") for r in o19_stock_rows}
-        missing_rows = []
-        for vr in phase1.get("variant_rows", []):
-            sku = str(vr.get("sku") or "").strip()
-            total_qty = sum(float((vr.get("stock_map") or {}).get(wh, 0) or 0) for wh in WAREHOUSE_TO_LOCATION)
-            if total_qty <= 0:
-                continue
-            if (sku not in mapping_skus and sku not in simple_skus) or sku not in stock_skus:
-                missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_PRODUCTS_MAPPING" if (sku not in mapping_skus and sku not in simple_skus) else "MISSING_IN_STOCK_QUANT"})
-        self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
         simple_rows, with_attr_rows, rejection_rows, external_id_conflicts = split_templates_by_catalog(phase1.get("variant_rows", []))
         simple_rows.extend(moved_to_simple_rows)
         for row in simple_rows:
@@ -206,6 +197,15 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_attribute_rejections.csv", ["source_sku","source_id","source_name","attempted_attribute","attempted_value","reason"], rejection_rows)
         mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
         simple_skus = {r.get("Internal Reference", "") for r in simple_rows}
+        missing_rows = []
+        for vr in phase1.get("variant_rows", []):
+            sku = str(vr.get("sku") or "").strip()
+            total_qty = sum(float((vr.get("stock_map") or {}).get(wh, 0) or 0) for wh in WAREHOUSE_TO_LOCATION)
+            if total_qty <= 0:
+                continue
+            if (sku not in mapping_skus and sku not in simple_skus) or sku not in stock_skus:
+                missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_PRODUCTS_MAPPING" if (sku not in mapping_skus and sku not in simple_skus) else "MISSING_IN_STOCK_QUANT"})
+        self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
         self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
         barcode_index: dict[str, list[str]] = {}
         for r in o19_variant_map_rows:
