@@ -517,6 +517,6 @@ def split_templates_by_catalog(
         for attr_name, values in attrs.items():
             if not values:
                 continue
-            create_variants_mode = "no_variant" if attr_name in ("Marca", "Color") else "dynamic"
+            create_variants_mode = "no_variant" if attr_name in ("Marca", "Color") else "always"
             with_attrs_rows.append({**common, "Product Attributes / Attribute": attr_name, "Product Attributes / Values": ",".join(sorted(values, key=_natural_key)), "Product Attributes / Create Variants": create_variants_mode})
     return simple_rows, with_attrs_rows, rejection_rows, conflict_rows
