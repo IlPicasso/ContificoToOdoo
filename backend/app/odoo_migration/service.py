@@ -2,7 +2,6 @@ from __future__ import annotations
 import csv
 import random
 import re
-import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -495,12 +494,6 @@ class OdooMigrationService:
                     attr = normalized.get("attribute") or normalized.get("atributo") or normalized.get("product attributes / attribute") or normalized.get("name")
                     value = normalized.get("values / value") or normalized.get("value") or normalized.get("valor") or normalized.get("product attributes / values")
                     if not attr:
-                        keys = [k for k in normalized.keys() if k]
-                        if keys:
-                            attr = normalized.get(keys[0], "")
-                        if len(keys) > 1 and not value:
-                            value = normalized.get(keys[1], "")
-                    if not attr:
                         continue
                     catalog.setdefault(attr, set())
                     if value:
@@ -509,23 +502,8 @@ class OdooMigrationService:
         return catalog
 
     @staticmethod
-    def _normalize_catalog_token(value: str) -> str:
-        v = unicodedata.normalize("NFKD", str(value or ""))
-        v = "".join(ch for ch in v if not unicodedata.combining(ch))
-        v = re.sub(r"\s+", " ", v).strip().lower()
-        if v.endswith(" cm"):
-            v = v[:-3].strip()
-        return v
-
-    @staticmethod
     def _filter_template_attributes_with_master_catalog(*, simple_rows: list[dict[str, str]], with_attr_rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
         catalog = OdooMigrationService._load_attribute_master_catalog()
-        normalized_catalog: dict[str, dict[str, str]] = {}
-        for attr, values in catalog.items():
-            n_attr = OdooMigrationService._normalize_catalog_token(attr)
-            normalized_catalog.setdefault(n_attr, {})
-            for v in values:
-                normalized_catalog[n_attr][OdooMigrationService._normalize_catalog_token(v)] = v
         rejections: list[dict[str, str]] = []
         by_external: dict[str, dict[str, Any]] = {}
         for row in simple_rows:
@@ -546,23 +524,13 @@ class OdooMigrationService:
             if values and not attr:
                 rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": "", "attempted_value": ",".join(values), "reason": "Empty attribute"})
                 continue
-            n_attr = OdooMigrationService._normalize_catalog_token(attr)
-            if n_attr == "ancho de corbata":
-                n_attr = "ancho corbata"
-            allowed_values_map = normalized_catalog.get(n_attr)
-            if allowed_values_map is None:
+            allowed_values = catalog.get(attr)
+            if allowed_values is None:
                 for val in values:
                     rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": attr, "attempted_value": val, "reason": "Attribute not found in Odoo attribute catalog"})
                 continue
-            accepted = []
-            rejected = []
-            for v in values:
-                n_val = OdooMigrationService._normalize_catalog_token(v)
-                master_val = allowed_values_map.get(n_val)
-                if master_val is None:
-                    rejected.append(v)
-                else:
-                    accepted.append(master_val)
+            accepted = [v for v in values if v in allowed_values]
+            rejected = [v for v in values if v not in allowed_values]
             for val in rejected:
                 rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": attr, "attempted_value": val, "reason": "Value not found for this attribute in Odoo attribute catalog"})
             if accepted:
