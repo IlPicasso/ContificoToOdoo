@@ -4,3 +4,6 @@
 !.dev.vars.example
 .env*
 !.env.example
+
+# Generated migration output (always regenerated from pipeline)
+output/

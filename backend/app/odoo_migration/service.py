@@ -17,6 +17,7 @@ from .odoo19_variants import (
     dedupe_variant_mapping_rows,
     split_templates_by_catalog,
     derive_parent_and_attrs,
+    normalize_bool,
     PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
     VARIANT_MAPPING_COLUMNS,
     STOCK_QUANT_SIMPLE_COLUMNS,
@@ -46,6 +47,12 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
+INTERNAL_REF_UPDATE_COLUMNS = [
+    "External ID", "Name", "Internal Reference", "Barcode", "available_in_pos", "record_type", "Variant Values",
+]
+INTERNAL_REF_CONFLICT_COLUMNS = [
+    "barcode", "conflicting_internal_references", "count", "reason",
+]
 EXPORTER_VERSION = "1.5.2"
 
 
@@ -247,6 +254,7 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
         self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
         self._write_phase2_variant_internal_reference_outputs(folder=folder, variant_map_rows=o19_variant_map_rows, with_attr_rows=with_attr_rows, simple_rows=simple_rows, stock_rows=o19_stock_rows)
+        self._write_internal_reference_update_csv(folder=folder, simple_rows=simple_rows, variant_map_rows=o19_variant_map_rows, variant_rows_raw=phase1.get("variant_rows", []))
         barcode_index: dict[str, list[str]] = {}
         for r in o19_variant_map_rows:
             bc = str(r.get("Barcode") or r.get("Internal Reference") or "").strip()
@@ -517,6 +525,102 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_phase2_duplicate_variant_keys.csv", ["product_template_name","variant_values","internal_reference","barcode","source_sku","reason"], duplicate_key_rows)
         self._write_csv(folder / "odoo_phase2_missing_stock_references.csv", ["stock_internal_reference","location","inventory_quantity","reason"], missing_stock_rows)
 
+
+    def _write_internal_reference_update_csv(
+        self,
+        *,
+        folder: Path,
+        simple_rows: list[dict[str, str]],
+        variant_map_rows: list[dict[str, str]],
+        variant_rows_raw: list[dict[str, Any]],
+    ) -> None:
+        """Generate product_internal_reference_update.csv for updating Internal Reference / SKU in Odoo.
+
+        Covers both simple products and variants. Uses External ID to identify existing records
+        (never creates new ones). Barcodes that appear on multiple SKUs are cleared and reported
+        separately so the import is not forced through a conflict.
+        """
+        attr_order = ["Talla", "Color", "Manga de Camisa", "Ancho Corbata", "Marca"]
+
+        # Build para_pos lookup from raw phase-1 variant rows
+        para_pos_by_sku: dict[str, Any] = {
+            str(vr.get("sku") or "").strip(): vr.get("para_pos")
+            for vr in variant_rows_raw
+            if str(vr.get("sku") or "").strip()
+        }
+
+        # Pre-scan barcodes to detect conflicts before writing anything
+        barcode_index: dict[str, list[str]] = {}
+        for row in simple_rows:
+            sku = str(row.get("Internal Reference") or "").strip()
+            bc = str(row.get("Barcode") or "").strip()
+            if bc and sku:
+                barcode_index.setdefault(bc, []).append(sku)
+        for row in variant_map_rows:
+            sku = str(row.get("Internal Reference") or "").strip()
+            bc = str(row.get("Barcode") or "").strip()
+            if bc and sku:
+                barcode_index.setdefault(bc, []).append(sku)
+        conflicted_barcodes: set[str] = {bc for bc, skus in barcode_index.items() if len(set(skus)) > 1}
+
+        update_rows: list[dict[str, str]] = []
+        seen_skus: set[str] = set()
+
+        for row in simple_rows:
+            sku = str(row.get("Internal Reference") or "").strip()
+            if not sku or sku in seen_skus:
+                continue
+            seen_skus.add(sku)
+            bc = str(row.get("Barcode") or "").strip()
+            update_rows.append({
+                "External ID": str(row.get("External ID") or "").strip(),
+                "Name": str(row.get("Name") or "").strip(),
+                "Internal Reference": sku,
+                "Barcode": "" if bc in conflicted_barcodes else bc,
+                "available_in_pos": str(row.get("available_in_pos") or "False"),
+                "record_type": "simple_product",
+                "Variant Values": "",
+            })
+
+        for row in variant_map_rows:
+            sku = str(row.get("Internal Reference") or "").strip()
+            if not sku or sku in seen_skus:
+                continue
+            seen_skus.add(sku)
+            bc = str(row.get("Barcode") or "").strip()
+            values = [
+                f"{attr}: {str(row.get(attr) or '').strip()}"
+                for attr in attr_order
+                if str(row.get(attr) or "").strip()
+            ]
+            update_rows.append({
+                "External ID": str(row.get("Product Template External ID") or "").strip(),
+                "Name": str(row.get("Product Template Name") or "").strip(),
+                "Internal Reference": sku,
+                "Barcode": "" if bc in conflicted_barcodes else bc,
+                "available_in_pos": normalize_bool(para_pos_by_sku.get(sku), default=False),
+                "record_type": "variant_product",
+                "Variant Values": ", ".join(values),
+            })
+
+        conflict_rows: list[dict[str, str]] = [
+            {
+                "barcode": bc,
+                "conflicting_internal_references": ",".join(sorted(set(barcode_index[bc]))),
+                "count": str(len(set(barcode_index[bc]))),
+                "reason": "BARCODE_DUPLICADO",
+            }
+            for bc in sorted(conflicted_barcodes)
+        ]
+
+        self._write_csv(folder / "product_internal_reference_update.csv", INTERNAL_REF_UPDATE_COLUMNS, update_rows)
+        self._write_csv(folder / "product_internal_reference_barcode_conflicts.csv", INTERNAL_REF_CONFLICT_COLUMNS, conflict_rows)
+
+        # Write stable copy to output/ at project root (latest run always available)
+        output_dir = Path(__file__).resolve().parents[3] / "output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self._write_csv(output_dir / "product_internal_reference_update.csv", INTERNAL_REF_UPDATE_COLUMNS, update_rows)
+        self._write_csv(output_dir / "product_internal_reference_barcode_conflicts.csv", INTERNAL_REF_CONFLICT_COLUMNS, conflict_rows)
 
     @staticmethod
     def _validate_phase2_variant_internal_reference_csv(*, csv_path: Path, errors_path: Path) -> None:
