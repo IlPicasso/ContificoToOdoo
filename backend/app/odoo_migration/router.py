@@ -51,6 +51,8 @@ def _build_files(run_id: str) -> dict[str, str]:
         "odoo_attribute_rejections_csv": f"/odoo-migration/runs/{run_id}/files/odoo_attribute_rejections.csv",
         "odoo_external_id_conflicts_csv": f"/odoo-migration/runs/{run_id}/files/odoo_external_id_conflicts.csv",
         "odoo_barcode_conflicts_csv": f"/odoo-migration/runs/{run_id}/files/odoo_barcode_conflicts.csv",
+        "product_internal_reference_update_csv": f"/odoo-migration/runs/{run_id}/files/product_internal_reference_update.csv",
+        "product_internal_reference_barcode_conflicts_csv": f"/odoo-migration/runs/{run_id}/files/product_internal_reference_barcode_conflicts.csv",
         "odoo_import_validation_report_csv": f"/odoo-migration/runs/{run_id}/files/odoo_import_validation_report.csv",
         "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
         "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
@@ -333,6 +335,8 @@ def download_file(run_id: str, filename: str):
         "odoo_stock_quant.csv",
         "odoo_variant_sku_mapping.csv",
         "odoo_product_templates.csv",
+        "product_internal_reference_update.csv",
+        "product_internal_reference_barcode_conflicts.csv",
     }
     if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
