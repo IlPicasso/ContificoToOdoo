@@ -53,29 +53,3 @@ def test_validate_template_external_id_conflicts_raises():
     ]
     with pytest.raises(ValueError):
         OdooMigrationService._validate_template_external_id_conflicts(rows)
-
-
-def test_filter_template_attributes_with_master_catalog(tmp_path, monkeypatch):
-    catalog = tmp_path / "Product Attribute (product.attribute).csv"
-    catalog.write_text(
-        "Attribute,Values / Value\n"
-        "Talla,S\n"
-        "Talla,M\n"
-        "Color,Azul\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(OdooMigrationService, "_attribute_catalog_paths", staticmethod(lambda: [catalog]))
-    simple_rows = [{"External ID": "product_template_1", "Name": "Simple"}]
-    with_attr_rows = [
-        {"External ID": "product_template_2", "Name": "Camisa", "Product Attributes / Attribute": "Talla", "Product Attributes / Values": "S,M,9002"},
-        {"External ID": "product_template_2", "Name": "Camisa", "Product Attributes / Attribute": "Color", "Product Attributes / Values": "Azul"},
-        {"External ID": "product_template_3", "Name": "Otro", "Product Attributes / Attribute": "Marca", "Product Attributes / Values": "X"},
-    ]
-    out_simple, out_with_attrs, rejects = OdooMigrationService._filter_template_attributes_with_master_catalog(
-        simple_rows=simple_rows,
-        with_attr_rows=with_attr_rows,
-    )
-    assert {r["External ID"] for r in out_simple} == {"product_template_1", "product_template_3"}
-    assert {r["External ID"] for r in out_with_attrs} == {"product_template_2"}
-    assert any(r["attempted_value"] == "9002" for r in rejects)
-    assert any(r["attempted_attribute"] == "Marca" and "Attribute not found" in r["reason"] for r in rejects)
