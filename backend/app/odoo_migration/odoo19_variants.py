@@ -501,6 +501,8 @@ def split_templates_by_catalog(
             "Can be Purchased": "True",
             "Available in POS": "True",
             "Customer Taxes": "IVA 0%",
+            "Internal Reference": str(seed.get("sku") or ""),
+            "Barcode": str(seed.get("barcode") or str(seed.get("sku") or "")),
         }
         sig = {k: common[k] for k in ("Name", "Product Category", "Sales Price")}
         if ext_id in by_external and by_external[ext_id] != sig:
