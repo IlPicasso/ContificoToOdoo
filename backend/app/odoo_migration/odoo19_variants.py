@@ -60,8 +60,6 @@ def derive_parent_and_attrs(sku: str, name: str, category: str) -> dict[str, Any
     m = re.match(r"^(?P<base>.+?)-(?P<size>\d+(?:\.\d+)?)-(?P<sleeve>S[12])$", raw_sku, flags=re.IGNORECASE)
     if m and is_camisa:
         base = m.group("base").strip()
-        base = re.sub(r"BG(?=-|$)", "", base, flags=re.IGNORECASE)
-        base = re.sub(r"-{2,}", "-", base).strip("-")
         attrs["Talla"] = m.group("size")
         attrs["Manga de Camisa"] = SLEEVE_MAP.get(m.group("sleeve").upper(), m.group("sleeve").upper())
         return {"sku": raw_sku, "parent_key": base, "template_external_id": normalize_external_id(base, "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "shirt_bg_dc", "warnings": warnings}
@@ -80,9 +78,6 @@ def derive_parent_and_attrs(sku: str, name: str, category: str) -> dict[str, Any
     s = re.match(r"^(?P<base>.+)/(?P<size>\d+(?:\.\d+)?|XS|S|M|L|XL|XXL|XXXL)$", raw_sku, flags=re.IGNORECASE)
     if s:
         base = s.group("base")
-        if is_terno:
-            base = re.sub(r"BG(?=/|$)", "", base, flags=re.IGNORECASE)
-            base = re.sub(r"BG$", "", base, flags=re.IGNORECASE)
         attrs["Talla"] = s.group("size").upper()
         return {"sku": raw_sku, "parent_key": base, "template_external_id": normalize_external_id(base, "product_template"), "attrs": attrs, "parse_status": "PARSED", "parser_rule": "slash_size", "warnings": warnings}
     # Generic hyphen size suffix (e.g. VE-MICAELA-AZ-XL, VE-ELA-STP-M)
@@ -506,6 +501,8 @@ def split_templates_by_catalog(
             "Can be Purchased": "True",
             "Available in POS": "True",
             "Customer Taxes": "IVA 0%",
+            "Internal Reference": str(seed.get("sku") or ""),
+            "Barcode": str(seed.get("barcode") or str(seed.get("sku") or "")),
         }
         sig = {k: common[k] for k in ("Name", "Product Category", "Sales Price")}
         if ext_id in by_external and by_external[ext_id] != sig:
