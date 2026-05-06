@@ -46,7 +46,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.4.5"
+EXPORTER_VERSION = "1.4.6"
 
 
 @dataclass
@@ -197,9 +197,10 @@ class OdooMigrationService:
             for sku in rejected_skus:
                 src = by_sku.get(sku, {})
                 parsed = derive_parent_and_attrs(sku, str(src.get("name") or ""), str(src.get("category") or ""))
+                ext_id_from_sku = f"product_template_{normalize_sku_for_group(sku).lower()}"
                 rejected_template_ids.add(parsed.get("template_external_id") or "")
                 simple_rows.append({
-                    "External ID": parsed.get("template_external_id") or f"product_template_{normalize_sku_for_group(sku).lower()}",
+                    "External ID": ext_id_from_sku,
                     "Name": str(src.get("name") or sku),
                     "Product Type": "Goods",
                     "Product Category": str(src.get("category") or "All / ADAMS / Sin categoría"),
