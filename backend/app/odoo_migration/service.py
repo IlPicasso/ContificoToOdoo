@@ -46,7 +46,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.5.0"
+EXPORTER_VERSION = "1.5.1"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -490,12 +490,53 @@ class OdooMigrationService:
                 missing_stock_rows.append({"stock_internal_reference": sku, "location": str(st.get("Location") or ""), "inventory_quantity": str(st.get("Inventory Quantity") or "0.00"), "reason": "Stock SKU not found after Phase 2 mapping"})
                 validation_rows.append({"issue_type":"Stock SKU not found after Phase 2 mapping","product_template_external_id":"","product_template_name":"","internal_reference":sku,"barcode":"","variant_values":"","source_sku":sku,"reason":"Exists in odoo_stock_quant.csv but not in simple/variant references"})
 
-        self._write_csv(folder / "odoo_product_variant_internal_references.csv", ["Internal Reference","Barcode","Name","Variant Values","Sales Price","Cost"], variant_rows)
+        variant_csv_path = folder / "odoo_product_variant_internal_references.csv"
+        self._write_csv(variant_csv_path, ["Internal Reference","Barcode","Name","Variant Values","Sales Price","Cost"], variant_rows)
+        self._validate_phase2_variant_internal_reference_csv(
+            csv_path=variant_csv_path,
+            errors_path=folder / "odoo_phase2_csv_format_errors.csv",
+        )
         no_barcode = [{k:v for k,v in r.items() if k != "Barcode"} for r in variant_rows]
         self._write_csv(folder / "odoo_product_variant_internal_references_no_barcode.csv", ["Internal Reference","Name","Variant Values","Sales Price","Cost"], no_barcode)
         self._write_csv(folder / "odoo_phase2_variant_internal_reference_validation.csv", ["issue_type","product_template_external_id","product_template_name","internal_reference","barcode","variant_values","source_sku","reason"], validation_rows)
         self._write_csv(folder / "odoo_phase2_duplicate_variant_keys.csv", ["product_template_name","variant_values","internal_reference","barcode","source_sku","reason"], duplicate_key_rows)
         self._write_csv(folder / "odoo_phase2_missing_stock_references.csv", ["stock_internal_reference","location","inventory_quantity","reason"], missing_stock_rows)
+
+
+    @staticmethod
+    def _validate_phase2_variant_internal_reference_csv(*, csv_path: Path, errors_path: Path) -> None:
+        expected_header = ["Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
+        errors: list[dict[str, str]] = []
+        lines = csv_path.read_text(encoding="utf-8").splitlines()
+
+        if not lines:
+            errors.append({"row_number": "1", "raw_line": "", "parsed_column_count": "0", "reason": "Empty CSV"})
+        else:
+            with csv_path.open("r", newline="", encoding="utf-8") as f:
+                reader = csv.reader(f, delimiter=",", quotechar='"')
+                for row_number, parsed in enumerate(reader, start=1):
+                    raw_line = lines[row_number - 1] if row_number - 1 < len(lines) else ""
+                    reasons: list[str] = []
+                    if row_number == 1 and parsed != expected_header:
+                        reasons.append("Invalid header columns")
+                    if len(parsed) != 6:
+                        reasons.append("Row does not have exactly 6 columns")
+                    if ";" in raw_line:
+                        reasons.append("Semicolon delimiter detected")
+                    if len(parsed) == 1 and raw_line.startswith('"') and raw_line.endswith('"'):
+                        reasons.append("Whole row appears wrapped as one quoted field")
+                    if len(parsed) >= 6 and ";;;;;" in (parsed[5] or ""):
+                        reasons.append("Cost contains ;;;;;")
+                    if reasons:
+                        errors.append({
+                            "row_number": str(row_number),
+                            "raw_line": raw_line,
+                            "parsed_column_count": str(len(parsed)),
+                            "reason": " | ".join(reasons),
+                        })
+
+        self_columns = ["row_number", "raw_line", "parsed_column_count", "reason"]
+        OdooMigrationService._write_csv(errors_path, self_columns, errors)
 
 
     @staticmethod
@@ -755,7 +796,18 @@ class OdooMigrationService:
     @staticmethod
     def _write_csv(path: Path, columns: list[str], rows: list[dict[str, Any]]):
         with path.open('w', newline='', encoding='utf-8') as f:
-            w=csv.DictWriter(f, fieldnames=columns, extrasaction="ignore"); w.writeheader(); [w.writerow(r) for r in rows]
+            w = csv.DictWriter(
+                f,
+                fieldnames=columns,
+                extrasaction="ignore",
+                delimiter=",",
+                quotechar='"',
+                quoting=csv.QUOTE_MINIMAL,
+                lineterminator="\n",
+            )
+            w.writeheader()
+            for row in rows:
+                w.writerow(row)
 
     @staticmethod
     def _write_stock_state(path: Path, rows: list[dict[str, Any]]) -> None:
