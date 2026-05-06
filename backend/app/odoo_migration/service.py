@@ -237,7 +237,7 @@ class OdooMigrationService:
                 row["Internal Reference"] = str(row.get("source_sku") or "")
             row["Barcode"] = str(row.get("Barcode") or row.get("barcode") or row.get("Internal Reference") or "")
         simple_columns = ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Internal Reference","Barcode"]
-        attr_columns = ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Product Attributes / Attribute","Product Attributes / Values"]
+        attr_columns = ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Product Attributes / Attribute","Product Attributes / Values","Product Attributes / Create Variants"]
         self._write_csv(folder / "odoo_product_templates_simple.csv", simple_columns, simple_rows)
         self._write_csv(folder / "odoo_product_templates_with_attributes.csv", attr_columns, with_attr_rows)
         simple_part_files = self._split_into_parts(folder=folder, filename_stem="odoo_product_templates_simple", columns=simple_columns, rows=simple_rows, group_key="External ID")
