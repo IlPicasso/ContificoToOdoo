@@ -45,6 +45,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
+ATTRIBUTE_REJECTIONS_COLUMNS = ["source_sku", "source_name", "attempted_attribute", "attempted_value", "reason"]
 
 
 @dataclass
@@ -160,9 +161,11 @@ class OdooMigrationService:
         self._validate_template_external_id_conflicts(o19_product_rows)
         simple_cols = [c for c in ODOO_TEMPLATE_COLUMNS if c not in {"Product Attributes / Attribute", "Product Attributes / Values"}]
         simple_rows, with_attr_rows = self._split_template_rows_for_odoo_import(o19_product_rows)
+        simple_rows, with_attr_rows, attribute_rejections = self._filter_template_attributes_with_master_catalog(simple_rows=simple_rows, with_attr_rows=with_attr_rows)
         self._write_csv(folder / "odoo_product_templates.csv", ODOO_TEMPLATE_COLUMNS, o19_product_rows)
         self._write_csv(folder / "odoo_product_templates_simple.csv", simple_cols, simple_rows)
         self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ODOO_TEMPLATE_COLUMNS, with_attr_rows)
+        self._write_csv(folder / "odoo_attribute_rejections.csv", ATTRIBUTE_REJECTIONS_COLUMNS, attribute_rejections)
         self._write_csv(folder / "odoo_variant_sku_mapping.csv", VARIANT_MAPPING_COLUMNS, o19_variant_map_rows)
         self._write_csv(folder / "odoo_stock_quant.csv", STOCK_QUANT_SIMPLE_COLUMNS, o19_stock_rows)
         self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], validation_rows)
@@ -434,6 +437,82 @@ class OdooMigrationService:
         conflicts = [ext for ext, sigs in by_ext.items() if len(sigs) > 1]
         if conflicts:
             raise ValueError(f"External ID conflictivo detectado en templates: {', '.join(conflicts[:10])}")
+
+    @staticmethod
+    def _attribute_catalog_paths() -> list[Path]:
+        root = Path(__file__).resolve().parents[3] / "config"
+        return [
+            root / "Product Attribute (product.attribute).csv",
+            root / "Product Attribute (product.attribute) (2).csv",
+        ]
+
+    @staticmethod
+    def _load_attribute_master_catalog() -> dict[str, set[str]]:
+        catalog: dict[str, set[str]] = {}
+        for path in OdooMigrationService._attribute_catalog_paths():
+            if not path.exists():
+                continue
+            with path.open("r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    normalized = {str(k or "").strip().lower(): str(v or "").strip() for k, v in row.items()}
+                    attr = normalized.get("attribute") or normalized.get("atributo") or normalized.get("product attributes / attribute") or normalized.get("name")
+                    value = normalized.get("values / value") or normalized.get("value") or normalized.get("valor") or normalized.get("product attributes / values")
+                    if not attr:
+                        continue
+                    catalog.setdefault(attr, set())
+                    if value:
+                        for part in [x.strip() for x in value.split(",") if x.strip()]:
+                            catalog[attr].add(part)
+        return catalog
+
+    @staticmethod
+    def _filter_template_attributes_with_master_catalog(*, simple_rows: list[dict[str, str]], with_attr_rows: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
+        catalog = OdooMigrationService._load_attribute_master_catalog()
+        rejections: list[dict[str, str]] = []
+        by_external: dict[str, dict[str, Any]] = {}
+        for row in simple_rows:
+            ext = str(row.get("External ID") or "").strip()
+            by_external.setdefault(ext, {"base": row, "attrs": {}})
+        for row in with_attr_rows:
+            ext = str(row.get("External ID") or "").strip()
+            base = {k: v for k, v in row.items() if k not in {"Product Attributes / Attribute", "Product Attributes / Values"}}
+            attr = str(row.get("Product Attributes / Attribute") or "").strip()
+            values = [v.strip() for v in str(row.get("Product Attributes / Values") or "").split(",") if v.strip()]
+            entry = by_external.setdefault(ext, {"base": base, "attrs": {}})
+            if not attr and not values:
+                rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": "", "attempted_value": "", "reason": "Empty attribute"})
+                continue
+            if attr and not values:
+                rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": attr, "attempted_value": "", "reason": "Empty value"})
+                continue
+            if values and not attr:
+                rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": "", "attempted_value": ",".join(values), "reason": "Empty attribute"})
+                continue
+            allowed_values = catalog.get(attr)
+            if allowed_values is None:
+                for val in values:
+                    rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": attr, "attempted_value": val, "reason": "Attribute not found in Odoo attribute catalog"})
+                continue
+            accepted = [v for v in values if v in allowed_values]
+            rejected = [v for v in values if v not in allowed_values]
+            for val in rejected:
+                rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": attr, "attempted_value": val, "reason": "Value not found for this attribute in Odoo attribute catalog"})
+            if accepted:
+                entry["attrs"].setdefault(attr, set()).update(accepted)
+            elif values:
+                rejections.append({"source_sku": ext, "source_name": str(base.get("Name") or ""), "attempted_attribute": attr, "attempted_value": ",".join(values), "reason": "Product had suspected attributes but none matched Odoo catalog"})
+
+        out_simple: list[dict[str, str]] = []
+        out_with_attrs: list[dict[str, str]] = []
+        for ext, payload in by_external.items():
+            attrs = payload["attrs"]
+            if not attrs:
+                out_simple.append(payload["base"])
+                continue
+            for attr, values in sorted(attrs.items()):
+                out_with_attrs.append({**payload["base"], "Product Attributes / Attribute": attr, "Product Attributes / Values": ",".join(sorted(values))})
+        return out_simple, out_with_attrs, rejections
 
     @staticmethod
     def _slugify(text: str) -> str:

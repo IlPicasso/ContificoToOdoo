@@ -19,7 +19,7 @@ STOCK_QUANT_SIMPLE_COLUMNS = ["Product / Internal Reference", "Location", "Inven
 VALIDATION_COLUMNS = ["level", "rule", "entity", "message"]
 STOCK_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
 SLEEVE_MAP = {"S1": "S1 - 32/33", "S2": "S2 - 34/35"}
-ODOO_CSV_EXPORT_VERSION = "1.2.0"
+ODOO_CSV_EXPORT_VERSION = "1.3.0"
 
 
 def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
@@ -351,7 +351,7 @@ def _apply_tie_attribute_rules(attrs: dict[str, Any], name: str, category: str) 
             if not ancho:
                 ancho = talla
             normalized["Talla"] = ""
-        normalized["Ancho Corbata"] = _format_cm_value(ancho) if _is_reasonable_tie_width_cm(ancho) else ""
+        normalized["Ancho Corbata"] = _format_cm_value(ancho) if ancho else ""
         normalized["Talla"] = ""
     else:
         normalized["Ancho Corbata"] = _format_cm_value(normalized["Ancho Corbata"]) if normalized["Ancho Corbata"] and _is_reasonable_tie_width_cm(normalized["Ancho Corbata"]) else ""
@@ -385,7 +385,7 @@ def _clean_candidate_attrs(sku: str, parsed_attrs: dict[str, Any], raw_attrs: di
     sku_u = normalize_product_name(sku).upper()
     talla = normalize_product_name(str(parsed_attrs.get("Talla") or raw_attrs.get("Talla") or ""))
     ancho = normalize_product_name(str(parsed_attrs.get("Ancho Corbata") or raw_attrs.get("Ancho Corbata") or ""))
-    if (not _looks_like_valid_size(talla)) or (not _is_reasonable_size_value(talla)) or normalize_product_name(talla).upper() == sku_u or "/" in talla:
+    if (not _looks_like_valid_size(talla)) or normalize_product_name(talla).upper() == sku_u or "/" in talla:
         talla = ""
     # Ancho Corbata only accepts numeric-ish values, never full SKUs/codes
     if ancho and not re.match(r"^\d+(?:[\.,]\d+)?(?:\s*cm)?$", ancho, flags=re.IGNORECASE):
