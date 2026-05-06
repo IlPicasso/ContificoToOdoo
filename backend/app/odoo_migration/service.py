@@ -46,7 +46,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.5.1"
+EXPORTER_VERSION = "1.5.2"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -434,13 +434,28 @@ class OdooMigrationService:
         variant_rows: list[dict[str, str]] = []
         validation_rows: list[dict[str, str]] = []
 
+        def _normalize_variant_attr_value(attr: str, raw_value: str) -> str:
+            parts = [normalize.strip() for normalize in re.split(r"\s*,\s*", str(raw_value or "")) if normalize.strip()]
+            cleaned: list[str] = []
+            seen: set[str] = set()
+            for part in parts or [str(raw_value or "").strip()]:
+                value = re.sub(r"^\s*[^:]+:\s*", "", part).strip()
+                if not value:
+                    continue
+                key = value.casefold()
+                if key in seen:
+                    continue
+                seen.add(key)
+                cleaned.append(value)
+            return ", ".join(cleaned)
+
         for row in variant_map_rows:
-            sku = str(row.get("Internal Reference") or "").strip()
+            sku = str(row.get("Internal Reference") or row.get("source_sku") or row.get("Source SKU") or row.get("Barcode") or "").strip()
             barcode = str(row.get("Barcode") or "").strip() or sku
             name = str(row.get("Product Template Name") or "").strip()
             values = []
             for attr in attr_order:
-                v = str(row.get(attr) or "").strip()
+                v = _normalize_variant_attr_value(attr, str(row.get(attr) or ""))
                 if v:
                     values.append(f"{attr}: {v}")
             variant_values = ", ".join(values)

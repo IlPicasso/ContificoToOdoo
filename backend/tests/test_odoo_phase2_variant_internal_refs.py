@@ -76,3 +76,31 @@ def test_phase2_variant_csv_format_validation_has_no_errors_for_valid_output(tmp
 
     errors = _read_csv(tmp_path / "odoo_phase2_csv_format_errors.csv")
     assert errors == []
+
+
+def test_phase2_variant_values_dedupe_and_internal_reference_fallback(tmp_path: Path):
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [{
+        "Product Template External ID": "product_template_blusa",
+        "Product Template Name": "BLUSA M/3/4 P/DAMA BLANCA AZUL",
+        "Internal Reference": "",
+        "source_sku": "BLU-34-AZ-XS",
+        "Barcode": "",
+        "Talla": "XS,Talla: XS",
+        "Color": "Azul",
+        "Sales Price": "19.90",
+        "Cost": "9.50",
+    }]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=[{"Name": "BLUSA M/3/4 P/DAMA BLANCA AZUL"}],
+        simple_rows=[],
+        stock_rows=[],
+    )
+
+    out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
+    assert out[0]["Internal Reference"] == "BLU-34-AZ-XS"
+    assert out[0]["Barcode"] == "BLU-34-AZ-XS"
+    assert out[0]["Variant Values"] == "Talla: XS, Color: Azul"
