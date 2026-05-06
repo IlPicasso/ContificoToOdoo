@@ -511,7 +511,7 @@ def split_templates_by_catalog(
             by_external[ext_id] = sig
         attrs: dict[str, set[str]] = payload["attrs"]
         if not attrs:
-            simple_rows.append(common)
+            simple_rows.append({**common, "Internal Reference": str(seed.get("sku") or ""), "Barcode": str(seed.get("barcode") or str(seed.get("sku") or ""))})
             continue
         for attr_name, values in attrs.items():
             if not values:
