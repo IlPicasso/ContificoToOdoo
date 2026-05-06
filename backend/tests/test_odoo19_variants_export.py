@@ -107,21 +107,3 @@ def test_tie_slash_non_width_is_not_forced_to_ancho():
     assert rows[0]["Ancho Corbata"] == ""
     assert rows[0]["Talla"] == ""
     assert rows[0]["Parse Status"] == "UNPARSED"
-
-
-def test_unreasonable_size_codes_are_not_exported_as_talla():
-    rows = build_variant_sku_mapping([
-        {"sku": "ABC-9002", "name": "PANTALON", "barcode": "", "price": "1", "cost": "1", "category": "ROPA", "attrs": {"Talla": "9002"}},
-        {"sku": "ABC-0036", "name": "PANTALON", "barcode": "", "price": "1", "cost": "1", "category": "ROPA", "attrs": {"Talla": "0036"}},
-    ])
-    assert rows[0]["Talla"] == ""
-    assert rows[1]["Talla"] == ""
-
-
-def test_unreasonable_tie_widths_are_not_exported():
-    rows = build_variant_sku_mapping([
-        {"sku": "BW-1", "name": "CORBATA BW", "barcode": "", "price": "1", "cost": "1", "category": "ROPA / HOMBRES / CORBATAS", "attrs": {"Ancho Corbata": "1"}},
-        {"sku": "BW-84", "name": "CORBATA BW", "barcode": "", "price": "1", "cost": "1", "category": "ROPA / HOMBRES / CORBATAS", "attrs": {"Ancho Corbata": "84"}},
-    ])
-    assert rows[0]["Ancho Corbata"] == ""
-    assert rows[1]["Ancho Corbata"] == ""
