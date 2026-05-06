@@ -7,3 +7,7 @@
 
 # Generated migration output (always regenerated from pipeline)
 output/
+
+# Python cache
+__pycache__/
+*.py[cod]
