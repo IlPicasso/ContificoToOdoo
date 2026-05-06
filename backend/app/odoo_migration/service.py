@@ -46,7 +46,6 @@ VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant Ex
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
 ATTRIBUTE_REJECTIONS_COLUMNS = ["source_sku", "source_name", "attempted_attribute", "attempted_value", "reason"]
-TEMPLATE_CONFLICT_COLUMNS = ["external_id", "source_name", "sales_price", "product_category", "reason"]
 
 
 @dataclass
@@ -159,32 +158,14 @@ class OdooMigrationService:
                 if any(m.get("Internal Reference", "") in stock_positive_skus for m in matches):
                     duplicate_skus_with_stock.update({m.get("Internal Reference", "") for m in matches})
         self._validate_template_attribute_consistency(o19_product_rows=o19_product_rows, o19_variant_map_rows=o19_variant_map_rows)
-        conflict_external_ids, conflict_rows = self._collect_template_external_id_conflicts(o19_product_rows)
-        if conflict_external_ids:
-            o19_product_rows = [r for r in o19_product_rows if str(r.get("External ID") or "").strip() not in conflict_external_ids]
-            for c in conflict_rows:
-                attribute_rejections_seed = {
-                    "source_sku": c.get("external_id", ""),
-                    "source_name": c.get("source_name", ""),
-                    "attempted_attribute": "",
-                    "attempted_value": "",
-                    "reason": c.get("reason", "External ID conflict"),
-                }
-                validation_rows.append({"level": "warning", "rule": "template_external_id_conflict", "entity": c.get("external_id", ""), "message": c.get("reason", "")})
-                # temporary stash in validation_rows and later merged into rejection file
-                validation_rows.append({"level": "info", "rule": "__attribute_rejection_seed__", "entity": json.dumps(attribute_rejections_seed, ensure_ascii=False), "message": ""})
+        self._validate_template_external_id_conflicts(o19_product_rows)
         simple_cols = [c for c in ODOO_TEMPLATE_COLUMNS if c not in {"Product Attributes / Attribute", "Product Attributes / Values"}]
         simple_rows, with_attr_rows = self._split_template_rows_for_odoo_import(o19_product_rows)
         simple_rows, with_attr_rows, attribute_rejections = self._filter_template_attributes_with_master_catalog(simple_rows=simple_rows, with_attr_rows=with_attr_rows)
-        for v in validation_rows:
-            if v.get("rule") == "__attribute_rejection_seed__":
-                attribute_rejections.append(json.loads(str(v.get("entity") or "{}")))
-        validation_rows = [v for v in validation_rows if v.get("rule") != "__attribute_rejection_seed__"]
         self._write_csv(folder / "odoo_product_templates.csv", ODOO_TEMPLATE_COLUMNS, o19_product_rows)
         self._write_csv(folder / "odoo_product_templates_simple.csv", simple_cols, simple_rows)
         self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ODOO_TEMPLATE_COLUMNS, with_attr_rows)
         self._write_csv(folder / "odoo_attribute_rejections.csv", ATTRIBUTE_REJECTIONS_COLUMNS, attribute_rejections)
-        self._write_csv(folder / "odoo_template_conflicts.csv", TEMPLATE_CONFLICT_COLUMNS, conflict_rows)
         self._write_csv(folder / "odoo_variant_sku_mapping.csv", VARIANT_MAPPING_COLUMNS, o19_variant_map_rows)
         self._write_csv(folder / "odoo_stock_quant.csv", STOCK_QUANT_SIMPLE_COLUMNS, o19_stock_rows)
         self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], validation_rows)
@@ -441,9 +422,8 @@ class OdooMigrationService:
         return simple_rows, with_attr_rows
 
     @staticmethod
-    def _collect_template_external_id_conflicts(rows: list[dict[str, str]]) -> tuple[set[str], list[dict[str, str]]]:
+    def _validate_template_external_id_conflicts(rows: list[dict[str, str]]) -> None:
         by_ext: dict[str, set[tuple[str, str, str]]] = {}
-        sample_rows_by_ext: dict[str, list[tuple[str, str, str]]] = {}
         for row in rows:
             ext = str(row.get("External ID") or "").strip()
             if not ext:
@@ -454,24 +434,9 @@ class OdooMigrationService:
                 str(row.get("Product Category") or "").strip(),
             )
             by_ext.setdefault(ext, set()).add(signature)
-            sample_rows_by_ext.setdefault(ext, []).append(signature)
-        conflicts = {ext for ext, sigs in by_ext.items() if len(sigs) > 1}
-        rows_out: list[dict[str, str]] = []
-        for ext in sorted(conflicts):
-            seen = set()
-            for name, price, category in sample_rows_by_ext.get(ext, []):
-                key = (name, price, category)
-                if key in seen:
-                    continue
-                seen.add(key)
-                rows_out.append({
-                    "external_id": ext,
-                    "source_name": name,
-                    "sales_price": price,
-                    "product_category": category,
-                    "reason": "External ID conflictivo: mismo External ID representa múltiples firmas (Name/Sales Price/Product Category)",
-                })
-        return conflicts, rows_out
+        conflicts = [ext for ext, sigs in by_ext.items() if len(sigs) > 1]
+        if conflicts:
+            raise ValueError(f"External ID conflictivo detectado en templates: {', '.join(conflicts[:10])}")
 
     @staticmethod
     def _attribute_catalog_paths() -> list[Path]:
