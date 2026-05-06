@@ -5,6 +5,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import re
 from typing import Any
+import unicodedata
 
 ATTR_COLUMNS = ["Attribute", "Display Type", "Variant Creation Mode", "Values / Value"]
 PRODUCTS_COLUMNS = [
@@ -19,6 +20,13 @@ STOCK_QUANT_SIMPLE_COLUMNS = ["Product / Internal Reference", "Location", "Inven
 VALIDATION_COLUMNS = ["level", "rule", "entity", "message"]
 STOCK_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
 SLEEVE_MAP = {"S1": "S1 - 32/33", "S2": "S2 - 34/35"}
+ODOO_ATTRIBUTE_CATALOG: dict[str, list[str]] = {
+    "Ancho Corbata": ["6 cm", "6.5 cm", "7 cm", "7.5 cm"],
+    "Color": ["Azul", "Blanco", "Negro", "Gris", "Azul Marino", "Vino", "Rojo", "Verde", "Multicolor"],
+    "Marca": ["Bruno Cassini", "TED Lapidus", "Original Penguin", "Perry Ellis", "BFL", "Antony Morato"],
+    "Talla": ["XS", "S", "M", "L", "XL", "XXL", "46", "48", "50", "52", "54", "56", "58", "60", "62", "64", "66", "68", "70", "14.5", "15", "15.5", "16", "16.5", "17", "17.5", "18", "18.5", "19", "19.5", "20", "5.5", "6", "6.5", "7", "7.5", "8", "8.5", "9", "9.5", "10", "28", "30", "32", "34", "36", "38", "40", "42", "44", "31", "33", "29", "14", "12"],
+    "Manga de Camisa": ["S1 - 32/33", "S2 - 34/35"],
+}
 
 
 def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
@@ -110,6 +118,21 @@ def normalize_bool(value: Any, default: bool = True) -> str:
 
 def normalize_product_name(name: str) -> str:
     return re.sub(r"\s+", " ", (name or "").strip())
+
+
+def _norm_match(text: str) -> str:
+    base = normalize_product_name(text).casefold()
+    return "".join(ch for ch in unicodedata.normalize("NFD", base) if unicodedata.category(ch) != "Mn")
+
+
+def _catalog_index() -> dict[str, dict[str, str]]:
+    idx: dict[str, dict[str, str]] = {}
+    for attr, values in ODOO_ATTRIBUTE_CATALOG.items():
+        deduped: dict[str, str] = {}
+        for v in values:
+            deduped[_norm_match(v)] = v
+        idx[_norm_match(attr)] = {"__name__": attr, **deduped}
+    return idx
 
 
 def normalize_brand_name(name: str) -> str:
@@ -430,3 +453,71 @@ def build_variant_sku_mapping(variant_rows: list[dict[str, Any]]) -> list[dict[s
             "Warnings": "|".join(parsed.get("warnings") or []),
         })
     return rows
+
+
+def split_templates_by_catalog(
+    variant_rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
+    catalog = _catalog_index()
+    simple_rows: list[dict[str, str]] = []
+    with_attrs_rows: list[dict[str, str]] = []
+    rejection_rows: list[dict[str, str]] = []
+    conflict_rows: list[dict[str, str]] = []
+    by_external: dict[str, dict[str, str]] = {}
+
+    template_map: dict[str, dict[str, Any]] = {}
+    for row in variant_rows:
+        sku = str(row.get("sku") or "").strip()
+        parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
+        ext_id = parsed.get("template_external_id") or normalize_external_id(sku, "product_template")
+        entry = template_map.setdefault(ext_id, {"seed": row, "attrs": {}})
+        merged = _clean_candidate_attrs(sku, parsed.get("attrs") or {}, row.get("attrs") or {})
+        final_attrs = _apply_tie_attribute_rules(merged, str(row.get("name") or ""), str(row.get("category") or ""))
+        for raw_attr, raw_val in final_attrs.items():
+            attr_name = normalize_product_name(raw_attr)
+            value = normalize_product_name(str(raw_val or ""))
+            if not attr_name and value:
+                rejection_rows.append({"source_sku": sku, "source_id": str(row.get("source_id") or row.get("id") or ""), "source_name": str(row.get("name") or ""), "attempted_attribute": "", "attempted_value": value, "reason": "Empty attribute"})
+                continue
+            if attr_name and not value:
+                continue
+            if not attr_name and not value:
+                continue
+            attr_bucket = catalog.get(_norm_match(attr_name))
+            if not attr_bucket:
+                rejection_rows.append({"source_sku": sku, "source_id": str(row.get("source_id") or row.get("id") or ""), "source_name": str(row.get("name") or ""), "attempted_attribute": attr_name, "attempted_value": value, "reason": "Attribute not found in Odoo catalog"})
+                continue
+            value_exact = attr_bucket.get(_norm_match(value), "")
+            if not value_exact:
+                rejection_rows.append({"source_sku": sku, "source_id": str(row.get("source_id") or row.get("id") or ""), "source_name": str(row.get("name") or ""), "attempted_attribute": attr_bucket["__name__"], "attempted_value": value, "reason": "Value not found in Odoo catalog"})
+                continue
+            entry["attrs"].setdefault(attr_bucket["__name__"], set()).add(value_exact)
+
+    for ext_id, payload in template_map.items():
+        seed = payload["seed"]
+        common = {
+            "External ID": ext_id,
+            "Name": normalize_product_name(str(seed.get("name") or "")),
+            "Product Type": "Goods",
+            "Product Category": normalize_product_name(str(seed.get("category") or "All / ADAMS / Sin categoría")),
+            "Sales Price": normalize_price(seed.get("price")),
+            "Cost": normalize_price(seed.get("cost")),
+            "Can be Sold": "True",
+            "Can be Purchased": "True",
+            "Available in POS": "True",
+            "Customer Taxes": "IVA 0%",
+        }
+        sig = {k: common[k] for k in ("Name", "Product Category", "Sales Price")}
+        if ext_id in by_external and by_external[ext_id] != sig:
+            conflict_rows.append({"external_id": ext_id, "source_sku": str(seed.get("sku") or ""), "source_id": str(seed.get("source_id") or seed.get("id") or ""), "source_name": common["Name"], "category": common["Product Category"], "price": common["Sales Price"], "classification": "variant", "reason": "Same template External ID has inconsistent name/category/price"})
+        else:
+            by_external[ext_id] = sig
+        attrs: dict[str, set[str]] = payload["attrs"]
+        if not attrs:
+            simple_rows.append(common)
+            continue
+        for attr_name, values in attrs.items():
+            if not values:
+                continue
+            with_attrs_rows.append({**common, "Product Attributes / Attribute": attr_name, "Product Attributes / Values": ",".join(sorted(values, key=_natural_key))})
+    return simple_rows, with_attrs_rows, rejection_rows, conflict_rows

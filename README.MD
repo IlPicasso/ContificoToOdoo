@@ -287,6 +287,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.55 (2026-05-06)**: Se rehizo la lógica conservadora del exportador para separar productos simples y con atributos usando un catálogo maestro fijo Odoo (sin heurísticas ni creación automática), con nuevas salidas `odoo_product_templates_simple.csv`, `odoo_product_templates_with_attributes.csv`, `odoo_attribute_rejections.csv` y `odoo_external_id_conflicts.csv`; además, ahora la corrida falla explícitamente cuando hay conflictos reales de External ID.
 - **1.0.54 (2026-05-05)**: Se restauró deduplicación determinística en `odoo_variant_sku_mapping.csv` por combinación de atributos dentro del template para evitar errores de Odoo `product_product_combination_unique`; los SKUs repetidos por combinación ahora se reportan en `odoo_duplicate_variant_combinations.csv` con referencias descartadas para revisión.
 - **1.0.53 (2026-05-05)**: Se corrigió el manejo de corbatas con sufijo slash no-ancho (ej. `CORBATA-BC/2013`) para no forzar `Talla`/`Ancho Corbata`; ahora se marcan `UNPARSED` y no contaminan validación template/variantes. También se aplica la misma regla de normalización de corbatas al construir templates para mantener consistencia con variant mapping.
 - **1.0.52 (2026-05-05)**: Se saneó la fusión de atributos parseados/raw para evitar contaminar `Talla` y `Ancho Corbata` con SKUs completos o códigos inválidos (ej. `CIN-C-ML`, `MR-10845-1/7`), corrigiendo fallos de validación `template/variantes` en ejecución de API.
