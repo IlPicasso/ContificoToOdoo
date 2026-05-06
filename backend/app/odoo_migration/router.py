@@ -39,32 +39,31 @@ def _set_job(job_id: str, payload: dict) -> None:
 
 
 def _build_files(run_id: str) -> dict[str, str]:
+    base = f"/odoo-migration/runs/{run_id}/files"
     return {
-        "product_product_csv": f"/odoo-migration/runs/{run_id}/files/product_product.csv",
-        "initial_stock_csv": f"/odoo-migration/runs/{run_id}/files/initial_stock.csv",
-        "stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/stock_quant_legacy.csv",
-        "odoo_product_templates_csv": f"/odoo-migration/runs/{run_id}/files/odoo_product_templates.csv",
-        "odoo_variant_sku_mapping_csv": f"/odoo-migration/runs/{run_id}/files/odoo_variant_sku_mapping.csv",
-        "odoo_stock_quant_csv": f"/odoo-migration/runs/{run_id}/files/odoo_stock_quant.csv",
-        "odoo_product_templates_simple_csv": f"/odoo-migration/runs/{run_id}/files/odoo_product_templates_simple.csv",
-        "odoo_product_templates_with_attributes_csv": f"/odoo-migration/runs/{run_id}/files/odoo_product_templates_with_attributes.csv",
-        "odoo_attribute_rejections_csv": f"/odoo-migration/runs/{run_id}/files/odoo_attribute_rejections.csv",
-        "odoo_external_id_conflicts_csv": f"/odoo-migration/runs/{run_id}/files/odoo_external_id_conflicts.csv",
-        "odoo_barcode_conflicts_csv": f"/odoo-migration/runs/{run_id}/files/odoo_barcode_conflicts.csv",
-        "product_internal_reference_update_csv": f"/odoo-migration/runs/{run_id}/files/product_internal_reference_update.csv",
-        "product_internal_reference_barcode_conflicts_csv": f"/odoo-migration/runs/{run_id}/files/product_internal_reference_barcode_conflicts.csv",
-        "odoo_import_validation_report_csv": f"/odoo-migration/runs/{run_id}/files/odoo_import_validation_report.csv",
-        "migration_errors_csv": f"/odoo-migration/runs/{run_id}/files/migration_errors.csv",
-        "mapping_report_csv": f"/odoo-migration/runs/{run_id}/files/mapping_report.csv",
-        "excluded_zero_stock_csv": f"/odoo-migration/runs/{run_id}/files/excluded_zero_stock.csv",
-        "templates_with_existing_attributes_csv": f"/odoo-migration/runs/{run_id}/files/01_product_templates_with_existing_attributes.csv",
-        "variant_update_map_csv": f"/odoo-migration/runs/{run_id}/files/02_variant_update_map.csv",
-        "stock_quant_by_variant_csv": f"/odoo-migration/runs/{run_id}/files/03_stock_quant_by_variant.csv",
-        "missing_attribute_values_csv": f"/odoo-migration/runs/{run_id}/files/04_missing_attribute_values_report.csv",
-        "products_variants_report_md": f"/odoo-migration/runs/{run_id}/files/import_products_and_variants_report.md",
-        "debug_log": f"/odoo-migration/runs/{run_id}/files/debug.log",
-        "raw_log": f"/odoo-migration/runs/{run_id}/files/raw.log",
-        "run_summary_json": f"/odoo-migration/runs/{run_id}/files/run_summary.json",
+        # === Fase 1: importar en Odoo (en este orden) ===
+        "fase1_1_simple_products_csv": f"{base}/odoo_product_templates_simple.csv",
+        "fase1_2_templates_with_attributes_csv": f"{base}/odoo_product_templates_with_attributes.csv",
+        # === Fase 2: actualizar Internal Reference / SKU ===
+        "fase2_1_variant_internal_references_csv": f"{base}/odoo_product_variant_internal_references.csv",
+        "fase2_2_internal_reference_update_csv": f"{base}/product_internal_reference_update.csv",
+        # === Fase 3: stock ===
+        "fase3_stock_quant_csv": f"{base}/odoo_stock_quant.csv",
+        # === Reportes de calidad (no importar) ===
+        "reporte_errores_csv": f"{base}/migration_errors.csv",
+        "reporte_mapping_csv": f"{base}/mapping_report.csv",
+        "reporte_atributos_rechazados_csv": f"{base}/odoo_attribute_rejections.csv",
+        "reporte_barcode_conflicts_csv": f"{base}/odoo_barcode_conflicts.csv",
+        "reporte_barcode_conflicts_fase2_csv": f"{base}/product_internal_reference_barcode_conflicts.csv",
+        "reporte_duplicados_variantes_csv": f"{base}/odoo_duplicate_variant_combinations.csv",
+        "reporte_missing_stock_csv": f"{base}/odoo_missing_products_for_stock.csv",
+        "reporte_validacion_fase2_csv": f"{base}/odoo_phase2_variant_internal_reference_validation.csv",
+        "reporte_excluded_zero_csv": f"{base}/excluded_zero_stock.csv",
+        "reporte_unmapped_categories_csv": f"{base}/unmapped_categories.csv",
+        # === Logs y resumen ===
+        "debug_log": f"{base}/debug.log",
+        "raw_log": f"{base}/raw.log",
+        "run_summary_json": f"{base}/run_summary.json",
     }
 
 

@@ -376,14 +376,50 @@ El módulo Odoo de staging/importación se mantiene en un repositorio independie
 Este repositorio (`ContificoToOdoo`) queda dedicado al pipeline de extracción y generación de CSV revisables.
 
 
-## Exportación Odoo 19 (productos con variantes)
+## Archivos generados por corrida y orden de importación en Odoo
 
-Desde la versión 1.0.46 se generan adicionalmente tres CSV en cada RUN:
-1. `attributes_values.csv`
-2. `products_with_variants.csv`
-3. `stock_quant.csv`
+Cada corrida genera los siguientes archivos en `backend/data/odoo_migration/<timestamp>/`.
+El frontend los agrupa por fase y muestra advertencias de calidad antes de descargarlos.
 
-Orden de importación recomendado en Odoo:
-1) Attributes/Values, 2) Products with variants, 3) Stock por ajuste físico.
+### Fase 1 — Importar productos en Odoo
 
-Nota: si necesitas controlar SKU/barcode/precio estrictamente por variante en Odoo, puede requerirse una cuarta importación futura específica de variantes.
+> Prerequisito: verificar en Odoo que los atributos `Talla`, `Color`, `Manga de Camisa` y `Ancho Corbata` existan con sus valores correctos (`Inventario → Configuración → Atributos`).
+
+| Orden | Archivo | Modelo Odoo | Notas |
+|-------|---------|-------------|-------|
+| 1 | `odoo_product_templates_simple.csv` | `product.template` | Productos sin variantes. Incluye `Internal Reference` y `Barcode`. |
+| 2 | `odoo_product_templates_with_attributes.csv` | `product.template` | Templates con variantes. **No** incluye `Internal Reference` ni `Barcode` (se actualizan en Fase 2). |
+
+### Fase 2 — Actualizar Internal Reference / SKU
+
+> Ejecutar **después** de que Odoo haya creado las variantes. Odoo identifica los registros por `Name + Variant Values`.
+
+| Orden | Archivo | Modelo Odoo | Notas |
+|-------|---------|-------------|-------|
+| 3 | `odoo_product_variant_internal_references.csv` | `product.product` | Setea SKU y Barcode en variantes. Identificación: `Name + Variant Values`. |
+| 4 | `product_internal_reference_update.csv` | `product.product` / `product.template` | Update unificado (simples + variantes) con `External ID`. |
+
+### Fase 3 — Stock
+
+> Ejecutar **después** de la Fase 2. Requiere que los `Internal Reference` estén seteados.
+
+| Orden | Archivo | Modelo Odoo | Notas |
+|-------|---------|-------------|-------|
+| 5 | `odoo_stock_quant.csv` | Ajuste físico de inventario | Columna `Product / Internal Reference` identifica el producto. |
+
+### Reportes (solo lectura, no importar en Odoo)
+
+| Archivo | Descripción |
+|---------|-------------|
+| `migration_errors.csv` | SKUs con error (vacío, barcode duplicado en Contifico) |
+| `odoo_attribute_rejections.csv` | SKUs rechazados por atributos fuera del catálogo Odoo → reclasificados como simples |
+| `odoo_barcode_conflicts.csv` | Barcodes compartidos entre varios SKUs |
+| `product_internal_reference_barcode_conflicts.csv` | Barcodes conflictivos en Fase 2 (barcode limpiado) |
+| `odoo_duplicate_variant_combinations.csv` | Combinaciones de variante duplicadas |
+| `odoo_missing_products_for_stock.csv` | SKUs con stock en Contifico sin mapping en Odoo |
+| `odoo_phase2_variant_internal_reference_validation.csv` | Validación cruzada Fase 1 ↔ Fase 2 |
+| `excluded_zero_stock.csv` | Productos excluidos por tener stock total = 0 |
+| `unmapped_categories.csv` | Categorías de Contifico sin mapeo a Odoo |
+| `mapping_report.csv` | Detalle de clasificación por SKU |
+| `debug.log` / `raw.log` | Trazas de fetch paginado |
+| `run_summary.json` | Resumen con conteos de calidad (errores, rechazos, conflictos) |

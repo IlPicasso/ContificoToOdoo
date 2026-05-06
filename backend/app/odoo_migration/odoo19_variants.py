@@ -10,7 +10,7 @@ import unicodedata
 ATTR_COLUMNS = ["Attribute", "Display Type", "Variant Creation Mode", "Values / Value"]
 PRODUCTS_COLUMNS = [
     "External ID", "Name", "Product Type", "Product Category", "Sales Price", "Cost", "Can be Sold",
-    "Can be Purchased", "is_storable", "available_in_pos", "Customer Taxes", "Product Attributes / Attribute", "Product Attributes / Values",
+    "Can be Purchased", "is_storable", "available_in_pos", "Product Attributes / Attribute", "Product Attributes / Values",
 ]
 VARIANT_MAPPING_COLUMNS = [
     "Product Template External ID", "Product Template Name", "Internal Reference", "Barcode", "Talla", "Color",
@@ -277,7 +277,6 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             "Can be Purchased": "True",
             "is_storable": "True",
             "available_in_pos": normalize_bool(items[0].get("para_pos"), default=False),
-            "Customer Taxes": "IVA 0%",
         }
         attr_values: dict[str, list[str]] = {}
         if sizes:
@@ -502,7 +501,6 @@ def split_templates_by_catalog(
             "Can be Purchased": "True",
             "is_storable": "True",
             "available_in_pos": normalize_bool(seed.get("para_pos"), default=False),
-            "Customer Taxes": "IVA 0%",
             "Internal Reference": str(seed.get("sku") or ""),
             "Barcode": str(seed.get("barcode") or str(seed.get("sku") or "")),
         }

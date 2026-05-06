@@ -117,18 +117,87 @@ $('loadInvoiceByNumber').addEventListener('click', async () => {
 })();
 
 
+const FILE_PHASES = {
+  fase1_1_simple_products_csv:              { phase: 'Fase 1 · Importar en Odoo', label: '① Productos simples (odoo_product_templates_simple.csv)', import: true },
+  fase1_2_templates_with_attributes_csv:    { phase: 'Fase 1 · Importar en Odoo', label: '② Templates con atributos (odoo_product_templates_with_attributes.csv)', import: true },
+  fase2_1_variant_internal_references_csv:  { phase: 'Fase 2 · Actualizar SKU en variantes', label: '③ Internal References variantes (odoo_product_variant_internal_references.csv)', import: true },
+  fase2_2_internal_reference_update_csv:    { phase: 'Fase 2 · Actualizar SKU en variantes', label: '④ Update SKU simples+variantes (product_internal_reference_update.csv)', import: true },
+  fase3_stock_quant_csv:                    { phase: 'Fase 3 · Stock', label: '⑤ Ajuste de inventario (odoo_stock_quant.csv)', import: true },
+  reporte_errores_csv:                      { phase: 'Reportes · Solo lectura', label: 'Errores de migración', import: false },
+  reporte_mapping_csv:                      { phase: 'Reportes · Solo lectura', label: 'Mapping report', import: false },
+  reporte_atributos_rechazados_csv:         { phase: 'Reportes · Solo lectura', label: 'Atributos rechazados', import: false },
+  reporte_barcode_conflicts_csv:            { phase: 'Reportes · Solo lectura', label: 'Conflictos de barcode', import: false },
+  reporte_barcode_conflicts_fase2_csv:      { phase: 'Reportes · Solo lectura', label: 'Conflictos barcode Fase 2', import: false },
+  reporte_duplicados_variantes_csv:         { phase: 'Reportes · Solo lectura', label: 'Combinaciones variantes duplicadas', import: false },
+  reporte_missing_stock_csv:                { phase: 'Reportes · Solo lectura', label: 'Productos sin stock asignado', import: false },
+  reporte_validacion_fase2_csv:             { phase: 'Reportes · Solo lectura', label: 'Validación Fase 2', import: false },
+  reporte_excluded_zero_csv:                { phase: 'Reportes · Solo lectura', label: 'Excluidos por stock 0', import: false },
+  reporte_unmapped_categories_csv:          { phase: 'Reportes · Solo lectura', label: 'Categorías sin mapear', import: false },
+  debug_log:                                { phase: 'Logs', label: 'debug.log', import: false },
+  raw_log:                                  { phase: 'Logs', label: 'raw.log', import: false },
+  run_summary_json:                         { phase: 'Logs', label: 'run_summary.json', import: false },
+};
+
 function renderMigrationLinks(files) {
   const container = $('migrationLinks');
   container.innerHTML = '';
-  Object.entries(files || {}).forEach(([label, path]) => {
-    const a = document.createElement('a');
-    a.href = `${base()}${path}`;
-    a.textContent = `Descargar ${label}`;
-    a.target = '_blank';
-    a.rel = 'noopener';
-    a.className = 'download-link';
-    container.appendChild(a);
+  const byPhase = {};
+  Object.entries(files || {}).forEach(([key, path]) => {
+    const meta = FILE_PHASES[key] || { phase: 'Otros', label: key, import: false };
+    if (!byPhase[meta.phase]) byPhase[meta.phase] = [];
+    byPhase[meta.phase].push({ label: meta.label, path, import: meta.import });
   });
+  Object.entries(byPhase).forEach(([phase, items]) => {
+    const section = document.createElement('div');
+    section.className = 'phase-section';
+    const title = document.createElement('div');
+    title.className = 'phase-title';
+    title.textContent = phase;
+    section.appendChild(title);
+    items.forEach(({ label, path, import: isImport }) => {
+      const a = document.createElement('a');
+      a.href = `${base()}${path}`;
+      a.textContent = `↓ ${label}`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.className = isImport ? 'download-link download-link--import' : 'download-link download-link--report';
+      section.appendChild(a);
+    });
+    container.appendChild(section);
+  });
+}
+
+function renderWarnings(summary) {
+  const panel = $('warningsPanel');
+  if (!panel) return;
+  const warnings = [];
+  if ((summary.total_errores_reales || 0) > 0)
+    warnings.push({ level: 'error', msg: `${summary.total_errores_reales} errores de migración (SKU vacío o barcode duplicado en Contifico)` });
+  if ((summary.total_attribute_rejections || 0) > 0)
+    warnings.push({ level: 'warn', msg: `${summary.total_attribute_rejections} SKUs rechazados por atributos fuera del catálogo Odoo → quedan como simples` });
+  if ((summary.total_barcode_conflicts || 0) > 0)
+    warnings.push({ level: 'warn', msg: `${summary.total_barcode_conflicts} conflictos de barcode detectados → barcode limpiado en esos productos` });
+  if ((summary.total_duplicate_variant_combinations || 0) > 0)
+    warnings.push({ level: 'warn', msg: `${summary.total_duplicate_variant_combinations} combinaciones de variante duplicadas → ver odoo_duplicate_variant_combinations.csv` });
+  if ((summary.total_phase2_orphan_variant_skus || 0) > 0)
+    warnings.push({ level: 'warn', msg: `${summary.total_phase2_orphan_variant_skus} variantes sin template en Fase 1 → no se podrá actualizar su SKU en Odoo` });
+  if ((summary.total_missing_from_stock || 0) > 0)
+    warnings.push({ level: 'info', msg: `${summary.total_missing_from_stock} SKUs con stock en Contifico sin mapping en Odoo` });
+  if ((summary.total_categorias_no_mapeadas || 0) > 0)
+    warnings.push({ level: 'info', msg: `${summary.total_categorias_no_mapeadas} categorías de Contifico sin mapeo a Odoo` });
+  panel.innerHTML = '';
+  if (!warnings.length) {
+    panel.innerHTML = '<div class="warning-item warning-item--ok">✓ Sin advertencias críticas. Puedes importar los archivos en Odoo.</div>';
+    panel.classList.remove('hidden');
+    return;
+  }
+  warnings.forEach(({ level, msg }) => {
+    const div = document.createElement('div');
+    div.className = `warning-item warning-item--${level}`;
+    div.textContent = (level === 'error' ? '✗ ' : level === 'warn' ? '⚠ ' : 'ℹ ') + msg;
+    panel.appendChild(div);
+  });
+  panel.classList.remove('hidden');
 }
 
 $('generateMigrationCsv').addEventListener('click', async () => {
@@ -166,6 +235,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
       if (job.status === 'completed') {
         done = true;
         show('migrationSummaryOut', job);
+        renderWarnings(job.summary || {});
         renderMigrationLinks(job.files);
         const summaryExpected = Number((job.summary || {}).expected_min_items_from_api || 0);
         const summaryFound = Number(job.found_items || (job.summary || {}).total_products || 0);
@@ -218,6 +288,7 @@ $('processRawJson').addEventListener('click', async () => {
       export_stock: false,
     });
     show('migrationSummaryOut', data);
+    renderWarnings(data.summary || {});
     renderMigrationLinks(data.files);
     setMigrationStatus(`Archivo procesado. Productos detectados: ${data.detected_products}.`);
   } catch (e) { showErr(e); }

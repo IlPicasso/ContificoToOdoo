@@ -22,3 +22,19 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .tab-panel.active{display:block}
 .row-btns{display:flex;gap:8px;flex-wrap:wrap}
 .row-btns button{flex:1}
+
+/* Download links grouped by phase */
+.phase-section{margin:10px 0}
+.phase-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:10px 0 4px}
+.download-link--import{color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:5px 10px;border-radius:6px;font-size:13px}
+.download-link--import:hover{background:#dcfce7}
+.download-link--report{color:#1e40af;background:#eff6ff;border:1px solid #bfdbfe;padding:4px 10px;border-radius:6px;font-size:12px}
+.download-link--report:hover{background:#dbeafe}
+
+/* Warnings panel */
+.warnings-panel{margin:10px 0;display:flex;flex-direction:column;gap:4px}
+.warning-item{padding:7px 10px;border-radius:6px;font-size:13px;font-weight:500}
+.warning-item--ok{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.warning-item--error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.warning-item--warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+.warning-item--info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
