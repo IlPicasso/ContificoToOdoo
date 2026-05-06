@@ -38,21 +38,24 @@ def test_split_template_rows_for_odoo_import():
     assert all(r["Product Attributes / Attribute"] and r["Product Attributes / Values"] for r in with_attr_rows)
 
 
-def test_validate_template_external_id_conflicts():
+def test_collect_template_external_id_conflicts():
     rows = [
         {"External ID": "product_template_ok", "Name": "Producto", "Sales Price": "10.00", "Product Category": "Ropa"},
         {"External ID": "product_template_ok", "Name": "Producto", "Sales Price": "10.00", "Product Category": "Ropa"},
     ]
-    OdooMigrationService._validate_template_external_id_conflicts(rows)
+    conflicts, out_rows = OdooMigrationService._collect_template_external_id_conflicts(rows)
+    assert conflicts == set()
+    assert out_rows == []
 
 
-def test_validate_template_external_id_conflicts_raises():
+def test_collect_template_external_id_conflicts_detects():
     rows = [
         {"External ID": "product_template_conflict", "Name": "Producto A", "Sales Price": "10.00", "Product Category": "Ropa"},
         {"External ID": "product_template_conflict", "Name": "Producto B", "Sales Price": "11.00", "Product Category": "Ropa"},
     ]
-    with pytest.raises(ValueError):
-        OdooMigrationService._validate_template_external_id_conflicts(rows)
+    conflicts, out_rows = OdooMigrationService._collect_template_external_id_conflicts(rows)
+    assert "product_template_conflict" in conflicts
+    assert len(out_rows) == 2
 
 
 def test_filter_template_attributes_with_master_catalog(tmp_path, monkeypatch):

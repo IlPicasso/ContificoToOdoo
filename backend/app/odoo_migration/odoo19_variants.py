@@ -19,7 +19,7 @@ STOCK_QUANT_SIMPLE_COLUMNS = ["Product / Internal Reference", "Location", "Inven
 VALIDATION_COLUMNS = ["level", "rule", "entity", "message"]
 STOCK_COLUMNS = ["Product", "Lot/Serial Number", "Quantity", "Counted Quantity", "Difference", "Scheduled Date", "Assigned To"]
 SLEEVE_MAP = {"S1": "S1 - 32/33", "S2": "S2 - 34/35"}
-ODOO_CSV_EXPORT_VERSION = "1.3.0"
+ODOO_CSV_EXPORT_VERSION = "1.4.0"
 
 
 def parse_base_code_and_variant(codigo: str) -> tuple[str, str]:
