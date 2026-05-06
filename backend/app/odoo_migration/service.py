@@ -46,7 +46,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.4.7"
+EXPORTER_VERSION = "1.5.0"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -246,6 +246,7 @@ class OdooMigrationService:
                 missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_PRODUCTS_MAPPING" if (sku not in mapping_skus and sku not in simple_skus) else "MISSING_IN_STOCK_QUANT"})
         self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
         self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
+        self._write_phase2_variant_internal_reference_outputs(folder=folder, variant_map_rows=o19_variant_map_rows, with_attr_rows=with_attr_rows, simple_rows=simple_rows, stock_rows=o19_stock_rows)
         barcode_index: dict[str, list[str]] = {}
         for r in o19_variant_map_rows:
             bc = str(r.get("Barcode") or r.get("Internal Reference") or "").strip()
@@ -426,6 +427,75 @@ class OdooMigrationService:
             for e in examples:
                 report.append(f"  - {e[0]} | {e[1]} | variantes reales={e[2]} | combinaciones fantasma≈{e[3]}")
         (run_folder / "import_products_and_variants_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
+
+    def _write_phase2_variant_internal_reference_outputs(self, folder: Path, variant_map_rows: list[dict[str, str]], with_attr_rows: list[dict[str, str]], simple_rows: list[dict[str, str]], stock_rows: list[dict[str, str]]) -> None:
+        attr_order = ["Talla", "Color", "Manga de Camisa", "Ancho Corbata", "Marca"]
+        template_names = {str(r.get("Name") or "").strip() for r in with_attr_rows if str(r.get("Name") or "").strip()}
+        variant_rows: list[dict[str, str]] = []
+        validation_rows: list[dict[str, str]] = []
+
+        for row in variant_map_rows:
+            sku = str(row.get("Internal Reference") or "").strip()
+            barcode = str(row.get("Barcode") or "").strip() or sku
+            name = str(row.get("Product Template Name") or "").strip()
+            values = []
+            for attr in attr_order:
+                v = str(row.get(attr) or "").strip()
+                if v:
+                    values.append(f"{attr}: {v}")
+            variant_values = ", ".join(values)
+            sales_price = f"{float(row.get('Sales Price') or 0):.2f}"
+            cost = f"{float(row.get('Cost') or 0):.2f}"
+
+            if not sku:
+                validation_rows.append({"issue_type":"Empty Internal Reference","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":"","barcode":barcode,"variant_values":variant_values,"source_sku":"","reason":"Variant row without SKU"})
+                continue
+            if not variant_values:
+                validation_rows.append({"issue_type":"Empty Variant Values","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Variant has no valid attributes"})
+                validation_rows.append({"issue_type":"Variant has no valid attributes","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Excluded from phase 2 variant import"})
+                continue
+            if name and name not in template_names:
+                validation_rows.append({"issue_type":"Product Template Name not found in Fase 1 with attributes","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":variant_values,"source_sku":sku,"reason":"Template name not present in odoo_product_templates_with_attributes.csv"})
+
+            variant_rows.append({"Internal Reference":sku,"Barcode":barcode,"Name":name,"Variant Values":variant_values,"Sales Price":sales_price,"Cost":cost})
+
+        sku_counts = {}
+        barcode_counts = {}
+        key_counts = {}
+        for r in variant_rows:
+            sku_counts[r["Internal Reference"]] = sku_counts.get(r["Internal Reference"], 0) + 1
+            barcode_counts[r["Barcode"]] = barcode_counts.get(r["Barcode"], 0) + 1
+            k=(r["Name"], r["Variant Values"])
+            key_counts[k] = key_counts.get(k, 0) + 1
+
+        duplicate_key_rows = []
+        for r in variant_rows:
+            sku=r["Internal Reference"]; bc=r["Barcode"]; key=(r["Name"], r["Variant Values"])
+            if sku_counts.get(sku,0)>1:
+                validation_rows.append({"issue_type":"Duplicate Internal Reference","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"SKU duplicated in phase 2 output"})
+            if barcode_counts.get(bc,0)>1:
+                validation_rows.append({"issue_type":"Duplicate Barcode","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"Barcode duplicated in phase 2 output"})
+            if key_counts.get(key,0)>1:
+                validation_rows.append({"issue_type":"Duplicate Name + Variant Values","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"Variant key duplicated"})
+                duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":sku,"barcode":bc,"source_sku":sku,"reason":"Duplicate Name + Variant Values"})
+
+        simple_skus = {str(r.get("Internal Reference") or "").strip() for r in simple_rows if str(r.get("Internal Reference") or "").strip()}
+        variant_skus = {r["Internal Reference"] for r in variant_rows}
+        missing_stock_rows = []
+        for st in stock_rows:
+            sku = str(st.get("Product / Internal Reference") or "").strip()
+            if not sku:
+                continue
+            if sku not in simple_skus and sku not in variant_skus:
+                missing_stock_rows.append({"stock_internal_reference": sku, "location": str(st.get("Location") or ""), "inventory_quantity": str(st.get("Inventory Quantity") or "0.00"), "reason": "Stock SKU not found after Phase 2 mapping"})
+                validation_rows.append({"issue_type":"Stock SKU not found after Phase 2 mapping","product_template_external_id":"","product_template_name":"","internal_reference":sku,"barcode":"","variant_values":"","source_sku":sku,"reason":"Exists in odoo_stock_quant.csv but not in simple/variant references"})
+
+        self._write_csv(folder / "odoo_product_variant_internal_references.csv", ["Internal Reference","Barcode","Name","Variant Values","Sales Price","Cost"], variant_rows)
+        no_barcode = [{k:v for k,v in r.items() if k != "Barcode"} for r in variant_rows]
+        self._write_csv(folder / "odoo_product_variant_internal_references_no_barcode.csv", ["Internal Reference","Name","Variant Values","Sales Price","Cost"], no_barcode)
+        self._write_csv(folder / "odoo_phase2_variant_internal_reference_validation.csv", ["issue_type","product_template_external_id","product_template_name","internal_reference","barcode","variant_values","source_sku","reason"], validation_rows)
+        self._write_csv(folder / "odoo_phase2_duplicate_variant_keys.csv", ["product_template_name","variant_values","internal_reference","barcode","source_sku","reason"], duplicate_key_rows)
+        self._write_csv(folder / "odoo_phase2_missing_stock_references.csv", ["stock_internal_reference","location","inventory_quantity","reason"], missing_stock_rows)
 
 
     @staticmethod
