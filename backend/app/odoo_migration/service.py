@@ -263,18 +263,6 @@ class OdooMigrationService:
 
     def _write_variant_import_outputs(self, run_folder: Path, variant_rows: list[dict[str, Any]], include_stock: bool = False) -> None:
         grouped: dict[str, list[dict[str, Any]]] = {}
-        sanitized_attrs_by_sku: dict[str, dict[str, str]] = {}
-        for mapped in build_variant_sku_mapping(variant_rows):
-            sku = str(mapped.get("Internal Reference") or "").strip()
-            if not sku:
-                continue
-            sanitized_attrs_by_sku[sku] = {
-                "Talla": str(mapped.get("Talla") or "").strip(),
-                "Color": str(mapped.get("Color") or "").strip(),
-                "Manga de Camisa": str(mapped.get("Manga de Camisa") or "").strip(),
-                "Ancho Corbata": str(mapped.get("Ancho Corbata") or "").strip(),
-                "Marca": str(mapped.get("Marca") or "").strip(),
-            }
         for row in variant_rows:
             key = self._slugify(row.get("name") or row.get("sku") or "")
             grouped.setdefault(key, []).append(row)
@@ -291,8 +279,7 @@ class OdooMigrationService:
             attr_values: dict[str, set[str]] = {}
             real_combos = set()
             for r in rows:
-                sku = str(r.get("sku") or "").strip()
-                attrs = {k: v for k, v in (sanitized_attrs_by_sku.get(sku) or {}).items() if v}
+                attrs = {k: v for k, v in (r.get("attrs") or {}).items() if v}
                 for a, v in attrs.items():
                     attr_values.setdefault(a, set()).add(v)
                 combo = "|".join([f"{k}={attrs[k]}" for k in sorted(attrs.keys())])
@@ -317,7 +304,7 @@ class OdooMigrationService:
                     "Product Attributes / Attribute": attr, "Product Attributes / Values": values_csv
                 })
                 for v in sorted(values):
-                    missing_rows.append({"Attribute": attr, "Value": v, "Product Count": str(sum(1 for rr in rows if (sanitized_attrs_by_sku.get(str(rr.get('sku') or '').strip()) or {}).get(attr) == v)), "Example Product": first["name"], "Example Internal Reference": rows[0]["sku"]})
+                    missing_rows.append({"Attribute": attr, "Value": v, "Product Count": str(sum(1 for rr in rows if (rr.get('attrs') or {}).get(attr)==v)), "Example Product": first["name"], "Example Internal Reference": rows[0]["sku"]})
             # combinaciones fantasma
             axes = [sorted(vs) for vs in attr_values.values() if vs]
             theoretical = 1
@@ -336,11 +323,11 @@ class OdooMigrationService:
             f"- Total SKUs de origen: {len(variant_rows)}",
             f"- Total productos madre generados: {len({r['External ID'] for r in template_rows})}",
             f"- Total variantes/subproductos reales: {len(variant_map_rows)}",
-            f"- Total productos con Marca: {sum(1 for r in variant_rows if (sanitized_attrs_by_sku.get(str(r.get('sku') or '').strip()) or {}).get('Marca'))}",
-            f"- Total productos con Color: {sum(1 for r in variant_rows if (sanitized_attrs_by_sku.get(str(r.get('sku') or '').strip()) or {}).get('Color'))}",
-            f"- Total productos con Talla: {sum(1 for r in variant_rows if (sanitized_attrs_by_sku.get(str(r.get('sku') or '').strip()) or {}).get('Talla'))}",
-            f"- Total productos con Ancho Corbata: {sum(1 for r in variant_rows if (sanitized_attrs_by_sku.get(str(r.get('sku') or '').strip()) or {}).get('Ancho Corbata'))}",
-            f"- Total productos con Manga de Camisa: {sum(1 for r in variant_rows if (sanitized_attrs_by_sku.get(str(r.get('sku') or '').strip()) or {}).get('Manga de Camisa'))}",
+            f"- Total productos con Marca: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Marca'))}",
+            f"- Total productos con Color: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Color'))}",
+            f"- Total productos con Talla: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Talla'))}",
+            f"- Total productos con Ancho Corbata: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Ancho Corbata'))}",
+            f"- Total productos con Manga de Camisa: {sum(1 for r in variant_rows if (r.get('attrs') or {}).get('Manga de Camisa'))}",
             f"- Productos sin barcode: {sum(1 for r in variant_rows if not r.get('barcode'))}",
             f"- Productos sin Internal Reference: {sum(1 for r in variant_rows if not r.get('sku'))}",
             f"- Confirmación: NO se crean atributos/categorías de variante, solo se usan atributos existentes."
