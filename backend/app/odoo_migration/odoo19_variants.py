@@ -327,6 +327,15 @@ def _format_cm_value(value: str) -> str:
     return f"{num} cm"
 
 
+def _is_reasonable_tie_width_cm(value: str) -> bool:
+    raw = normalize_product_name(value).lower().replace("cm", "").strip().replace(",", ".")
+    try:
+        width = float(raw)
+    except Exception:
+        return False
+    return 5.0 <= width <= 10.0
+
+
 def _apply_tie_attribute_rules(attrs: dict[str, Any], name: str, category: str) -> dict[str, str]:
     normalized = {
         "Talla": attrs.get("Talla", ""),
@@ -345,7 +354,7 @@ def _apply_tie_attribute_rules(attrs: dict[str, Any], name: str, category: str) 
         normalized["Ancho Corbata"] = _format_cm_value(ancho) if ancho else ""
         normalized["Talla"] = ""
     else:
-        normalized["Ancho Corbata"] = _format_cm_value(normalized["Ancho Corbata"]) if normalized["Ancho Corbata"] else ""
+        normalized["Ancho Corbata"] = _format_cm_value(normalized["Ancho Corbata"]) if normalized["Ancho Corbata"] and _is_reasonable_tie_width_cm(normalized["Ancho Corbata"]) else ""
     return normalized
 
 
@@ -354,6 +363,22 @@ def _looks_like_valid_size(value: str) -> bool:
     if not v:
         return False
     return bool(re.match(r"^(XS|S|M|L|XL|XXL|XXXL|SL|ML|\d+(?:\.\d+)?)$", v))
+
+
+def _is_reasonable_size_value(value: str) -> bool:
+    v = normalize_product_name(value).upper()
+    if v in {"XS", "S", "M", "L", "XL", "XXL", "XXXL", "SL", "ML"}:
+        return True
+    if not re.match(r"^\d+(?:\.\d+)?$", v):
+        return False
+    try:
+        num = float(v)
+    except Exception:
+        return False
+    # Restrict to realistic apparel sizes and avoid long numeric codes treated as sizes.
+    if "." in v and not v.endswith(".5"):
+        return False
+    return 4 <= num <= 70 and len(v.split(".")[0]) <= 2
 
 
 def _clean_candidate_attrs(sku: str, parsed_attrs: dict[str, Any], raw_attrs: dict[str, Any]) -> dict[str, Any]:
