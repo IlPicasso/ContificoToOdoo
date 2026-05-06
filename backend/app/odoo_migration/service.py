@@ -45,6 +45,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
+EXPORTER_VERSION = "1.4.1"
 
 
 @dataclass
@@ -113,6 +114,27 @@ class OdooMigrationService:
         o19_product_rows = build_products_with_variants_from_variant_rows(phase1.get("variant_rows", []), warnings=o19_warnings)
         o19_variant_map_raw = build_variant_sku_mapping(phase1.get("variant_rows", []))
         o19_variant_map_rows, duplicate_combinations = dedupe_variant_mapping_rows(o19_variant_map_raw)
+        duplicate_dropped_skus = {sku for d in duplicate_combinations for sku in d.get("dropped_internal_references", []) if sku}
+        moved_to_simple_rows: list[dict[str, str]] = []
+        if duplicate_dropped_skus:
+            o19_variant_map_rows = [r for r in o19_variant_map_rows if r.get("Internal Reference", "") not in duplicate_dropped_skus]
+            by_sku = {str(v.get("sku") or "").strip(): v for v in phase1.get("variant_rows", [])}
+            for sku in sorted(duplicate_dropped_skus):
+                src = by_sku.get(sku, {})
+                moved_to_simple_rows.append({
+                    "External ID": f"product_template_{normalize_sku_for_group(sku).lower()}",
+                    "Name": str(src.get("name") or sku),
+                    "Product Type": "Goods",
+                    "Product Category": str(src.get("category") or "All / ADAMS / Sin categoría"),
+                    "Sales Price": f"{float(src.get('price') or 0):.2f}",
+                    "Cost": f"{float(src.get('cost') or 0):.2f}",
+                    "Can be Sold": "True",
+                    "Can be Purchased": "True",
+                    "Available in POS": "True",
+                    "Customer Taxes": "IVA 0%",
+                    "Internal Reference": sku,
+                    "Barcode": str(src.get("barcode") or sku),
+                })
         validation_rows: list[dict[str, str]] = []
         for dup in duplicate_combinations:
             validation_rows.append({
@@ -163,7 +185,6 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_import_validation_report.csv", ["level", "rule", "entity", "message"], validation_rows)
         self._write_csv(folder / "odoo_duplicate_variant_combinations.csv", ["Product Template External ID","Product Template Name","Internal References involucrados","Talla","Color","Manga de Camisa","Ancho Corbata","Marca","Parser Rule","Parse Status","Reason","Stock Contifico"], duplicate_rows)
 
-        mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
         stock_skus = {r.get("Product / Internal Reference", "") for r in o19_stock_rows}
         missing_rows = []
         for vr in phase1.get("variant_rows", []):
@@ -171,14 +192,35 @@ class OdooMigrationService:
             total_qty = sum(float((vr.get("stock_map") or {}).get(wh, 0) or 0) for wh in WAREHOUSE_TO_LOCATION)
             if total_qty <= 0:
                 continue
-            if sku not in mapping_skus or sku not in stock_skus:
-                missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_VARIANT_MAPPING" if sku not in mapping_skus else "MISSING_IN_STOCK_QUANT"})
+            if (sku not in mapping_skus and sku not in simple_skus) or sku not in stock_skus:
+                missing_rows.append({"Código": sku, "Nombre": vr.get("name", ""), "Categoría": vr.get("category", ""), "Stock": f"{total_qty:.2f}", "Motivo": "MISSING_IN_PRODUCTS_MAPPING" if (sku not in mapping_skus and sku not in simple_skus) else "MISSING_IN_STOCK_QUANT"})
         self._write_csv(folder / "odoo_missing_products_for_stock.csv", ["Código","Nombre","Categoría","Stock","Motivo"], missing_rows)
         simple_rows, with_attr_rows, rejection_rows, external_id_conflicts = split_templates_by_catalog(phase1.get("variant_rows", []))
-        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes"], simple_rows)
+        simple_rows.extend(moved_to_simple_rows)
+        for row in simple_rows:
+            if not row.get("Internal Reference"):
+                row["Internal Reference"] = str(row.get("source_sku") or "")
+            row["Barcode"] = str(row.get("Barcode") or row.get("barcode") or row.get("Internal Reference") or "")
+        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes","Internal Reference","Barcode"], simple_rows)
         self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
         self._write_csv(folder / "odoo_attribute_rejections.csv", ["source_sku","source_id","source_name","attempted_attribute","attempted_value","reason"], rejection_rows)
+        mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
+        simple_skus = {r.get("Internal Reference", "") for r in simple_rows}
         self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
+        barcode_index: dict[str, list[str]] = {}
+        for r in o19_variant_map_rows:
+            bc = str(r.get("Barcode") or r.get("Internal Reference") or "").strip()
+            sku = str(r.get("Internal Reference") or "").strip()
+            if bc and sku:
+                barcode_index.setdefault(bc, []).append(sku)
+        for r in simple_rows:
+            bc = str(r.get("Barcode") or r.get("Internal Reference") or "").strip()
+            sku = str(r.get("Internal Reference") or "").strip()
+            if bc and sku:
+                barcode_index.setdefault(bc, []).append(sku)
+        barcode_conflicts = [{"barcode": bc, "internal_references": ",".join(sorted(set(skus))), "count": str(len(set(skus)))} for bc, skus in barcode_index.items() if len(set(skus)) > 1]
+        self._write_csv(folder / "odoo_barcode_conflicts.csv", ["barcode","internal_references","count"], barcode_conflicts)
+
         if external_id_conflicts:
             raise ValueError("Se detectaron conflictos reales de External ID. Revisar odoo_external_id_conflicts.csv.")
 
@@ -186,7 +228,7 @@ class OdooMigrationService:
         debug_lines += [f"summary={json.dumps(counts)}", f"pages_fetched={pages_fetched}", f"hit_max_pages={hit_max_pages}", f"snapshot={snapshot_path.name}", f"state={state_path.name}"]
         debug_log.write_text("\n".join(debug_lines)+"\n", encoding='utf-8'); raw_log.write_text("\n".join(raw_lines)+"\n", encoding='utf-8')
         duration_seconds = round((datetime.utcnow() - started_at).total_seconds(), 2)
-        summary={"total_products":len(phase1['prows']),"total_categorias_no_mapeadas":len(phase1['unmapped_category_rows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds}
+        summary={"total_products":len(phase1['prows']),"total_categorias_no_mapeadas":len(phase1['unmapped_category_rows']),"total_skus_unicos_product_product":len({r.get('Internal Reference') for r in phase1['prows']}),"total_lineas_initial_stock":0,"total_lineas_stock_quant":0,"total_skus_stock_match_producto":0,"total_skus_stock_no_match_producto":0,"total_ubicaciones_mapeadas":0,"total_ubicaciones_no_mapeadas":0,"total_productos_excluidos_stock_0":len(phase1['zrows']),"total_errores_reales":len(phase1['erows']),"stock_export_enabled": export_stock, "phase_1_completed": True, "phase_2_completed": export_stock, "include_additional_attributes": include_additional_attributes, "include_brand_color_attributes": include_additional_attributes, "expected_min_items_from_api": expected_min_items, "fetched_items_meet_expected_min": (len(products) >= expected_min_items) if expected_min_items is not None else None, "duration_seconds": duration_seconds, "exporter_version": EXPORTER_VERSION}
         if export_stock:
             stock_rows = self._read_csv_rows(stock_csv)
             stock_quant_rows = self._read_csv_rows(stock_quant_csv)
