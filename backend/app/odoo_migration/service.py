@@ -46,7 +46,11 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.4.6"
+EXPORTER_VERSION = "1.4.7"
+
+
+def _to_odoo_bool(value: Any) -> str:
+    return "True" if value is True else "False"
 
 
 @dataclass
@@ -131,7 +135,8 @@ class OdooMigrationService:
                     "Cost": f"{float(src.get('cost') or 0):.2f}",
                     "Can be Sold": "True",
                     "Can be Purchased": "True",
-                    "Available in POS": "True",
+                    "is_storable": "True",
+                    "available_in_pos": _to_odoo_bool(src.get("para_pos")),
                     "Customer Taxes": "IVA 0%",
                     "Internal Reference": sku,
                     "Barcode": str(src.get("barcode") or sku),
@@ -208,7 +213,8 @@ class OdooMigrationService:
                     "Cost": f"{float(src.get('cost') or 0):.2f}",
                     "Can be Sold": "True",
                     "Can be Purchased": "True",
-                    "Available in POS": "True",
+                    "is_storable": "True",
+                    "available_in_pos": _to_odoo_bool(src.get("para_pos")),
                     "Customer Taxes": "IVA 0%",
                     "Internal Reference": sku,
                     "Barcode": str(src.get("barcode") or sku),
@@ -225,8 +231,8 @@ class OdooMigrationService:
             if not row.get("Internal Reference"):
                 row["Internal Reference"] = str(row.get("source_sku") or "")
             row["Barcode"] = str(row.get("Barcode") or row.get("barcode") or row.get("Internal Reference") or "")
-        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes","Internal Reference","Barcode"], simple_rows)
-        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","Available in POS","Customer Taxes","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
+        self._write_csv(folder / "odoo_product_templates_simple.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Customer Taxes","Internal Reference","Barcode"], simple_rows)
+        self._write_csv(folder / "odoo_product_templates_with_attributes.csv", ["External ID","Name","Product Type","Product Category","Sales Price","Cost","Can be Sold","Can be Purchased","is_storable","available_in_pos","Customer Taxes","Product Attributes / Attribute","Product Attributes / Values"], with_attr_rows)
         self._write_csv(folder / "odoo_attribute_rejections.csv", ["source_sku","source_id","source_name","attempted_attribute","attempted_value","reason"], rejection_rows)
         mapping_skus = {r.get("Internal Reference", "") for r in o19_variant_map_rows}
         simple_skus = {r.get("Internal Reference", "") for r in simple_rows}
@@ -333,7 +339,7 @@ class OdooMigrationService:
                 mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado=prod_name,categoria_odoo_detectada=category,talla_detectada=talla,manga_detectada=manga,ancho_corbata_detectado=ancho,marca_detectada=brand,color_detectado=color,barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado=state,confidence=confidence,parser_rule=parser_rule or 'generic'))
                 variant_rows.append({
                     "sku": sku, "name": prod_name, "barcode": barcode, "price": f"{price:.2f}", "cost": f"{cost:.2f}",
-                    "weight": "0.0", "category": category, "stock_map": stock_map,
+                    "weight": "0.0", "category": category, "stock_map": stock_map, "para_pos": item.get("para_pos"),
                     "attrs": {"Marca": brand, "Color": color, "Talla": talla, "Manga de Camisa": manga, "Ancho Corbata": ancho}
                 })
                 payload = {"id": str(item.get('id') or ''), "sku": sku, "cost": cost, "stock_map": stock_map}

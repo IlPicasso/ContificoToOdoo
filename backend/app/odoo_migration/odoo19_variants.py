@@ -10,7 +10,7 @@ import unicodedata
 ATTR_COLUMNS = ["Attribute", "Display Type", "Variant Creation Mode", "Values / Value"]
 PRODUCTS_COLUMNS = [
     "External ID", "Name", "Product Type", "Product Category", "Sales Price", "Cost", "Can be Sold",
-    "Can be Purchased", "Available in POS", "Customer Taxes", "Product Attributes / Attribute", "Product Attributes / Values",
+    "Can be Purchased", "is_storable", "available_in_pos", "Customer Taxes", "Product Attributes / Attribute", "Product Attributes / Values",
 ]
 VARIANT_MAPPING_COLUMNS = [
     "Product Template External ID", "Product Template Name", "Internal Reference", "Barcode", "Talla", "Color",
@@ -200,7 +200,7 @@ def build_products_with_variants(products: list[dict[str, Any]], warnings: list[
         common = {
             "External ID": normalize_external_id(base, "product_template"), "Name": name, "Product Type": "Goods",
             "Product Category": "All / ADAMS / Sin categoría", "Sales Price": price, "Cost": cost,
-            "Can be Sold": "True", "Can be Purchased": "True", "Available in POS": normalize_bool(items[0].get("para_pos")),
+            "Can be Sold": "True", "Can be Purchased": "True", "is_storable": "True", "available_in_pos": normalize_bool(items[0].get("para_pos"), default=False),
             "Internal Reference": base, "Barcode": barcode, "Sales Description": str(items[0].get("descripcion") or ""), "Customer Taxes": _tax_name(items[0].get("porcentaje_iva")),
         }
         if talla_vals:
@@ -275,7 +275,8 @@ def build_products_with_variants_from_variant_rows(variant_rows: list[dict[str, 
             "Cost": normalize_price(items[0].get("cost")),
             "Can be Sold": "True",
             "Can be Purchased": "True",
-            "Available in POS": "True",
+            "is_storable": "True",
+            "available_in_pos": normalize_bool(items[0].get("para_pos"), default=False),
             "Customer Taxes": "IVA 0%",
         }
         attr_values: dict[str, list[str]] = {}
@@ -499,7 +500,8 @@ def split_templates_by_catalog(
             "Cost": normalize_price(seed.get("cost")),
             "Can be Sold": "True",
             "Can be Purchased": "True",
-            "Available in POS": "True",
+            "is_storable": "True",
+            "available_in_pos": normalize_bool(seed.get("para_pos"), default=False),
             "Customer Taxes": "IVA 0%",
             "Internal Reference": str(seed.get("sku") or ""),
             "Barcode": str(seed.get("barcode") or str(seed.get("sku") or "")),
