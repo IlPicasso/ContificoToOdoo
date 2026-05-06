@@ -16,6 +16,7 @@ from .odoo19_variants import (
     build_variant_sku_mapping,
     dedupe_variant_mapping_rows,
     split_templates_by_catalog,
+    derive_parent_and_attrs,
     PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
     VARIANT_MAPPING_COLUMNS,
     STOCK_QUANT_SIMPLE_COLUMNS,
@@ -45,7 +46,7 @@ TEMPLATE_ATTR_COLUMNS = ["External ID","Name","Product Type","Sales Price","Cost
 VARIANT_MAP_COLUMNS = ["Template External ID","Template Name","Source Variant External ID","Variant Attributes Key","Internal Reference","Barcode","Sales Price","Cost","Weight","Original Product Values"]
 STOCK_BY_VARIANT_COLUMNS = ["Product External ID","Location","Quantity"]
 MISSING_ATTR_COLUMNS = ["Attribute","Value","Product Count","Example Product","Example Internal Reference"]
-EXPORTER_VERSION = "1.4.4"
+EXPORTER_VERSION = "1.4.5"
 
 
 @dataclass
@@ -188,6 +189,37 @@ class OdooMigrationService:
         stock_skus = {r.get("Product / Internal Reference", "") for r in o19_stock_rows}
         simple_rows, with_attr_rows, rejection_rows, external_id_conflicts = split_templates_by_catalog(phase1.get("variant_rows", []))
         simple_rows.extend(moved_to_simple_rows)
+
+        rejected_skus = {str(r.get("source_sku") or "").strip() for r in rejection_rows if str(r.get("source_sku") or "").strip()}
+        if rejected_skus:
+            by_sku = {str(v.get("sku") or "").strip(): v for v in phase1.get("variant_rows", [])}
+            rejected_template_ids = set()
+            for sku in rejected_skus:
+                src = by_sku.get(sku, {})
+                parsed = derive_parent_and_attrs(sku, str(src.get("name") or ""), str(src.get("category") or ""))
+                rejected_template_ids.add(parsed.get("template_external_id") or "")
+                simple_rows.append({
+                    "External ID": parsed.get("template_external_id") or f"product_template_{normalize_sku_for_group(sku).lower()}",
+                    "Name": str(src.get("name") or sku),
+                    "Product Type": "Goods",
+                    "Product Category": str(src.get("category") or "All / ADAMS / Sin categoría"),
+                    "Sales Price": f"{float(src.get('price') or 0):.2f}",
+                    "Cost": f"{float(src.get('cost') or 0):.2f}",
+                    "Can be Sold": "True",
+                    "Can be Purchased": "True",
+                    "Available in POS": "True",
+                    "Customer Taxes": "IVA 0%",
+                    "Internal Reference": sku,
+                    "Barcode": str(src.get("barcode") or sku),
+                })
+            with_attr_rows = [r for r in with_attr_rows if r.get("External ID", "") not in rejected_template_ids]
+
+        dedup_simple_by_sku = {}
+        for r in simple_rows:
+            key = str(r.get("Internal Reference") or "").strip()
+            if key and key not in dedup_simple_by_sku:
+                dedup_simple_by_sku[key] = r
+        simple_rows = list(dedup_simple_by_sku.values())
         for row in simple_rows:
             if not row.get("Internal Reference"):
                 row["Internal Reference"] = str(row.get("source_sku") or "")
