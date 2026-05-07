@@ -475,7 +475,8 @@ class OdooMigrationService:
         (run_folder / "import_products_and_variants_report.md").write_text("\n".join(report) + "\n", encoding="utf-8")
 
     def _write_phase2_variant_internal_reference_outputs(self, folder: Path, variant_map_rows: list[dict[str, str]], with_attr_rows: list[dict[str, str]], simple_rows: list[dict[str, str]], stock_rows: list[dict[str, str]]) -> None:
-        attr_order = ["Talla", "Color", "Manga de Camisa", "Ancho Corbata", "Marca"]
+        # Solo atributos que crean variantes (always). Color y Marca son no_variant → no aparecen en Variant Values
+        attr_order = ["Talla", "Manga de Camisa", "Ancho Corbata"]
         template_names = {str(r.get("Name") or "").strip() for r in with_attr_rows if str(r.get("Name") or "").strip()}
         variant_rows: list[dict[str, str]] = []
         validation_rows: list[dict[str, str]] = []
@@ -578,7 +579,8 @@ class OdooMigrationService:
         (never creates new ones). Barcodes that appear on multiple SKUs are cleared and reported
         separately so the import is not forced through a conflict.
         """
-        attr_order = ["Talla", "Color", "Manga de Camisa", "Ancho Corbata", "Marca"]
+        # Solo atributos que crean variantes (always). Color y Marca son no_variant → no aparecen en Variant Values
+        attr_order = ["Talla", "Manga de Camisa", "Ancho Corbata"]
 
         # Build para_pos lookup from raw phase-1 variant rows
         para_pos_by_sku: dict[str, Any] = {
