@@ -199,6 +199,21 @@ class OdooMigrationService:
 
         stock_skus = {r.get("Product / Internal Reference", "") for r in o19_stock_rows}
         simple_rows, with_attr_rows, rejection_rows, external_id_conflicts = split_templates_by_catalog(phase1.get("variant_rows", []))
+
+        # Deduplicate template names in Phase 1: when two External IDs share the same name,
+        # suffix the later ones with their External ID slug so Odoo creates distinct templates.
+        _seen_tmpl_names: dict[str, str] = {}
+        for _r in with_attr_rows:
+            _ext = str(_r.get("External ID") or "").strip()
+            _nm = str(_r.get("Name") or "").strip()
+            if not _ext or not _nm:
+                continue
+            if _nm not in _seen_tmpl_names:
+                _seen_tmpl_names[_nm] = _ext
+            elif _seen_tmpl_names[_nm] != _ext:
+                _suffix = _ext.removeprefix("product_template_")
+                _r["Name"] = f"{_nm} ({_suffix})"
+
         simple_rows.extend(moved_to_simple_rows)
 
         dedup_simple_by_sku = {}
