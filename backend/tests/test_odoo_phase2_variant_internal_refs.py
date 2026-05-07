@@ -387,3 +387,61 @@ def test_phase2_variant_deduplicates_sku_appearing_in_multiple_contifico_records
     deduped_warnings = [r for r in validation if r["issue_type"] == "Duplicate SKU deduplicated"]
     assert len(deduped_warnings) == 1, "Debe haber un warning de deduplicación"
     assert deduped_warnings[0]["internal_reference"] == "HT8811-3-16-S1"
+
+
+def test_phase2_duplicate_template_names_auto_suffixed(tmp_path: Path):
+    """Cuando dos External IDs distintos comparten el mismo nombre canónico en Odoo,
+    el segundo recibe un sufijo automático (ej. ' (ht2231_7)') para que Phase 2 pueda
+    distinguirlos. Se genera odoo_phase1_template_renames.csv con los renames necesarios."""
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [
+        {
+            "Product Template External ID": "product_template_ht8811_1",
+            "Product Template Name": "H. CAMISA P/S WHITE BRUNO CASSINI 32-33",
+            "Internal Reference": "HT8811-1-16-S1",
+            "Barcode": "BC1",
+            "Talla": "16",
+            "Manga de Camisa": "S1 - 32/33",
+            "Ancho Corbata": "",
+            "Sales Price": "56.43",
+            "Cost": "0.00",
+        },
+        {
+            "Product Template External ID": "product_template_ht2231_7",
+            "Product Template Name": "H. CAMISA P/S WHITE BRUNO CASSINI 32-33",
+            "Internal Reference": "HT2231-7-16-S1",
+            "Barcode": "BC2",
+            "Talla": "16",
+            "Manga de Camisa": "S1 - 32/33",
+            "Ancho Corbata": "",
+            "Sales Price": "56.43",
+            "Cost": "0.00",
+        },
+    ]
+    with_attr_rows = [
+        {"External ID": "product_template_ht8811_1", "Name": "H. CAMISA P/S WHITE BRUNO CASSINI 32-33"},
+        {"External ID": "product_template_ht2231_7", "Name": "H. CAMISA P/S WHITE BRUNO CASSINI 32-33"},
+    ]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=with_attr_rows,
+        simple_rows=[],
+        stock_rows=[],
+    )
+
+    out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
+    assert len(out) == 2, "Ambos SKUs deben estar en el CSV"
+
+    ht8811 = next(r for r in out if r["Internal Reference"] == "HT8811-1-16-S1")
+    ht2231 = next(r for r in out if r["Internal Reference"] == "HT2231-7-16-S1")
+
+    assert ht8811["Name"] == "H. CAMISA P/S WHITE BRUNO CASSINI 32-33"
+    assert ht2231["Name"] == "H. CAMISA P/S WHITE BRUNO CASSINI 32-33 (ht2231_7)"
+
+    renames = _read_csv(tmp_path / "odoo_phase1_template_renames.csv")
+    assert len(renames) == 1
+    assert renames[0]["external_id"] == "product_template_ht2231_7"
+    assert renames[0]["old_name"] == "H. CAMISA P/S WHITE BRUNO CASSINI 32-33"
+    assert renames[0]["new_name"] == "H. CAMISA P/S WHITE BRUNO CASSINI 32-33 (ht2231_7)"
