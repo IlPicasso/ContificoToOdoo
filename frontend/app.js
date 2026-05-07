@@ -163,20 +163,6 @@ function renderMigrationLinks(files, summary) {
   const runIdMatch = anyPath.match(/\/runs\/([^/]+)\//);
   const runId = runIdMatch ? runIdMatch[1] : null;
 
-  // Inject part files into Phase 1 section
-  if (runId && summary) {
-    const phase1key = 'Fase 1 · Importar en Odoo';
-    if (!byPhase[phase1key]) byPhase[phase1key] = [];
-    (summary.simple_part_files || []).forEach((fname, i) => {
-      const path = `/odoo-migration/runs/${runId}/files/${fname}`;
-      byPhase[phase1key].push({ label: `① Simples — parte ${i + 1} (${fname})`, path, import: true, partOrder: i });
-    });
-    (summary.attr_part_files || []).forEach((fname, i) => {
-      const path = `/odoo-migration/runs/${runId}/files/${fname}`;
-      byPhase[phase1key].push({ label: `② Con atributos — parte ${i + 1} (${fname})`, path, import: true, partOrder: i });
-    });
-  }
-
   Object.entries(byPhase).forEach(([phase, items]) => {
     const section = document.createElement('div');
     section.className = 'phase-section';

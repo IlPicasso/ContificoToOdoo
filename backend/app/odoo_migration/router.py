@@ -337,11 +337,7 @@ def download_file(run_id: str, filename: str):
         "product_internal_reference_update.csv",
         "product_internal_reference_barcode_conflicts.csv",
     }
-    is_part_file = (
-        filename.startswith("odoo_product_templates_simple_part") or
-        filename.startswith("odoo_product_templates_with_attributes_part")
-    ) and filename.endswith(".csv")
-    if filename not in allowed and not is_part_file:
+    if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
     file_path = _output_root() / run_id / filename
     if not file_path.exists() or not file_path.is_file():
