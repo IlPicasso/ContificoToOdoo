@@ -510,6 +510,17 @@ class OdooMigrationService:
             import_name = canonical_name or name
             variant_rows.append({"Internal Reference":sku,"Barcode":barcode,"Name":import_name,"Variant Values":variant_values,"Sales Price":sales_price,"Cost":cost})
 
+        # Deduplicate by Internal Reference (same SKU may appear in both S1 and S2 Contifico records)
+        seen_skus: dict[str, dict] = {}
+        deduped_rows = []
+        for r in variant_rows:
+            if r["Internal Reference"] not in seen_skus:
+                seen_skus[r["Internal Reference"]] = r
+                deduped_rows.append(r)
+            else:
+                validation_rows.append({"issue_type":"Duplicate SKU deduplicated","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":r["Internal Reference"],"barcode":r["Barcode"],"variant_values":r["Variant Values"],"source_sku":r["Internal Reference"],"reason":"SKU appeared in multiple Contifico records; first occurrence kept"})
+        variant_rows = deduped_rows
+
         sku_counts = {}
         barcode_counts = {}
         key_counts = {}

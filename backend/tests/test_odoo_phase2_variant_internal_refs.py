@@ -337,3 +337,53 @@ def test_phase2_variant_canonical_name_used_when_contifico_names_differ_by_sleev
 
     assert "Manga de Camisa: S1 - 32/33" in s1["Variant Values"]
     assert "Manga de Camisa: S2 - 34/35" in s2["Variant Values"]
+
+
+def test_phase2_variant_deduplicates_sku_appearing_in_multiple_contifico_records(tmp_path: Path):
+    """Cuando el mismo SKU aparece en dos registros Contifico distintos (ej. variante S1
+    presente tanto en el producto '32-33' como en el '34-35'), debe aparecer UNA sola
+    vez en el CSV de importación."""
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [
+        {
+            "Product Template External ID": "product_template_ht8811_3",
+            "Product Template Name": "H. CAMISA P/S BLUE BRUNO CASSINI 32-33",
+            "Internal Reference": "HT8811-3-16-S1",
+            "Barcode": "BC1",
+            "Talla": "16",
+            "Manga de Camisa": "S1 - 32/33",
+            "Ancho Corbata": "",
+            "Sales Price": "56.43",
+            "Cost": "0.00",
+        },
+        # Same SKU from the S2 Contifico record
+        {
+            "Product Template External ID": "product_template_ht8811_3",
+            "Product Template Name": "H. CAMISA P/S BLUE BRUNO CASSINI 34-35",
+            "Internal Reference": "HT8811-3-16-S1",
+            "Barcode": "BC1",
+            "Talla": "16",
+            "Manga de Camisa": "S1 - 32/33",
+            "Ancho Corbata": "",
+            "Sales Price": "56.43",
+            "Cost": "0.00",
+        },
+    ]
+    with_attr_rows = [{"External ID": "product_template_ht8811_3", "Name": "H. CAMISA P/S BLUE BRUNO CASSINI 32-33"}]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=with_attr_rows,
+        simple_rows=[],
+        stock_rows=[],
+    )
+
+    out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
+    assert len(out) == 1, "SKU duplicado debe aparecer solo una vez en el CSV de importación"
+    assert out[0]["Internal Reference"] == "HT8811-3-16-S1"
+
+    validation = _read_csv(tmp_path / "odoo_phase2_variant_internal_reference_validation.csv")
+    deduped_warnings = [r for r in validation if r["issue_type"] == "Duplicate SKU deduplicated"]
+    assert len(deduped_warnings) == 1, "Debe haber un warning de deduplicación"
+    assert deduped_warnings[0]["internal_reference"] == "HT8811-3-16-S1"
