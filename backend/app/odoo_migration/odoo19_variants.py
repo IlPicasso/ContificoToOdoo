@@ -466,7 +466,8 @@ def split_templates_by_catalog(
         sku = str(row.get("sku") or "").strip()
         parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
         ext_id = parsed.get("template_external_id") or normalize_external_id(sku, "product_template")
-        entry = template_map.setdefault(ext_id, {"seed": row, "attrs": {}})
+        entry = template_map.setdefault(ext_id, {"seed": row, "rows": [], "attrs": {}})
+        entry["rows"].append(row)
         merged = _clean_candidate_attrs(sku, parsed.get("attrs") or {}, row.get("attrs") or {})
         final_attrs = _apply_tie_attribute_rules(merged, str(row.get("name") or ""), str(row.get("category") or ""))
         for raw_attr, raw_val in final_attrs.items():
@@ -512,7 +513,23 @@ def split_templates_by_catalog(
             by_external[ext_id] = sig
         attrs: dict[str, set[str]] = payload["attrs"]
         if not attrs:
-            simple_rows.append({**common, "Internal Reference": str(seed.get("sku") or ""), "Barcode": str(seed.get("barcode") or str(seed.get("sku") or ""))})
+            # All attribute values were rejected — emit each source row as its own simple product
+            for r in payload["rows"]:
+                r_sku = str(r.get("sku") or "")
+                simple_rows.append({
+                    "External ID": normalize_external_id(r_sku, "product_template"),
+                    "Name": normalize_product_name(str(r.get("name") or "")),
+                    "Product Type": "Goods",
+                    "Product Category": normalize_product_name(str(r.get("category") or "All / ADAMS / Sin categoría")),
+                    "Sales Price": normalize_price(r.get("price")),
+                    "Cost": normalize_price(r.get("cost")),
+                    "Can be Sold": "True",
+                    "Can be Purchased": "True",
+                    "is_storable": "True",
+                    "available_in_pos": normalize_bool(r.get("para_pos"), default=False),
+                    "Internal Reference": r_sku,
+                    "Barcode": str(r.get("barcode") or r_sku),
+                })
             continue
         for attr_name, values in attrs.items():
             if not values:
