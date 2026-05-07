@@ -336,6 +336,12 @@ def download_file(run_id: str, filename: str):
         "odoo_product_templates.csv",
         "product_internal_reference_update.csv",
         "product_internal_reference_barcode_conflicts.csv",
+        "odoo_product_variant_internal_references.csv",
+        "odoo_product_variant_internal_references_no_barcode.csv",
+        "odoo_phase2_variant_internal_reference_validation.csv",
+        "odoo_phase2_duplicate_variant_keys.csv",
+        "odoo_phase2_missing_stock_references.csv",
+        "odoo_phase2_csv_format_errors.csv",
     }
     if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
