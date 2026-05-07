@@ -493,6 +493,7 @@ class OdooMigrationService:
                 continue
             if name and name not in template_names:
                 validation_rows.append({"issue_type":"Product Template Name not found in Fase 1 with attributes","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":variant_values,"source_sku":sku,"reason":"Template name not present in odoo_product_templates_with_attributes.csv"})
+                continue
 
             variant_rows.append({"Internal Reference":sku,"Barcode":barcode,"Name":name,"Variant Values":variant_values,"Sales Price":sales_price,"Cost":cost})
 
