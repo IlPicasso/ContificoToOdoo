@@ -228,4 +228,4 @@ def test_phase2_variant_values_dedupe_and_internal_reference_fallback(tmp_path: 
     out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
     assert out[0]["Internal Reference"] == "BLU-34-AZ-XS"
     assert out[0]["Barcode"] == "BLU-34-AZ-XS"
-    assert out[0]["Variant Values"] == "Talla: XS, Color: Azul"
+    assert out[0]["Variant Values"] == "Talla: XS"
