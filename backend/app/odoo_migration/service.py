@@ -453,6 +453,16 @@ class OdooMigrationService:
         # Solo atributos que crean variantes (always). Color y Marca son no_variant → no aparecen en Variant Values
         attr_order = ["Talla", "Manga de Camisa", "Ancho Corbata"]
         template_names = {str(r.get("Name") or "").strip() for r in with_attr_rows if str(r.get("Name") or "").strip()}
+        # ext_id → canonical name: cuando distintas variantes del mismo template
+        # tienen nombres distintos en Contifico (ej. "CAMISA X 32-33" vs "CAMISA X 34-35"),
+        # la búsqueda por nombre falla para las variantes no-seed. Usamos el External ID
+        # para resolver el nombre canónico importado en Fase 1.
+        ext_id_to_canonical_name: dict[str, str] = {}
+        for r in with_attr_rows:
+            ext_id = str(r.get("External ID") or "").strip()
+            name = str(r.get("Name") or "").strip()
+            if ext_id and name and ext_id not in ext_id_to_canonical_name:
+                ext_id_to_canonical_name[ext_id] = name
         variant_rows: list[dict[str, str]] = []
         validation_rows: list[dict[str, str]] = []
 
@@ -491,11 +501,14 @@ class OdooMigrationService:
                 validation_rows.append({"issue_type":"Empty Variant Values","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Variant has no valid attributes"})
                 validation_rows.append({"issue_type":"Variant has no valid attributes","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Excluded from phase 2 variant import"})
                 continue
-            if name and name not in template_names:
-                validation_rows.append({"issue_type":"Product Template Name not found in Fase 1 with attributes","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":variant_values,"source_sku":sku,"reason":"Template name not present in odoo_product_templates_with_attributes.csv"})
+            ext_id = str(row.get("Product Template External ID") or "").strip()
+            canonical_name = ext_id_to_canonical_name.get(ext_id, "")
+            if not canonical_name and name not in template_names:
+                validation_rows.append({"issue_type":"Product Template Name not found in Fase 1 with attributes","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":variant_values,"source_sku":sku,"reason":"Template name not present in odoo_product_templates_with_attributes.csv"})
                 continue
 
-            variant_rows.append({"Internal Reference":sku,"Barcode":barcode,"Name":name,"Variant Values":variant_values,"Sales Price":sales_price,"Cost":cost})
+            import_name = canonical_name or name
+            variant_rows.append({"Internal Reference":sku,"Barcode":barcode,"Name":import_name,"Variant Values":variant_values,"Sales Price":sales_price,"Cost":cost})
 
         sku_counts = {}
         barcode_counts = {}

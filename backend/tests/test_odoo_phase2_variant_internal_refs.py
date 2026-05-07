@@ -262,7 +262,7 @@ def test_phase2_variant_with_junk_talla_excluded_from_import(tmp_path: Path):
             "Cost": "8.00",
         },
     ]
-    with_attr_rows = [{"Name": "H. CAMISA D/P BLACK, BRUNO CASSINI"}]
+    with_attr_rows = [{"External ID": "product_template_17605dc", "Name": "H. CAMISA D/P BLACK, BRUNO CASSINI"}]
     simple_rows = [{"Internal Reference": "CEBAT-7568"}]
 
     service._write_phase2_variant_internal_reference_outputs(
@@ -281,3 +281,59 @@ def test_phase2_variant_with_junk_talla_excluded_from_import(tmp_path: Path):
     validation = _read_csv(tmp_path / "odoo_phase2_variant_internal_reference_validation.csv")
     battery_warnings = [r for r in validation if r["internal_reference"] == "CEBAT-7568"]
     assert any(r["issue_type"] == "Product Template Name not found in Fase 1 with attributes" for r in battery_warnings)
+
+
+def test_phase2_variant_canonical_name_used_when_contifico_names_differ_by_sleeve(tmp_path: Path):
+    """En Contifico, las variantes S1 y S2 de una misma camisa pueden tener nombres
+    distintos (ej. 'CAMISA X 32-33' vs 'CAMISA X 34-35'). El seed del template usa
+    el nombre S1, por lo que las variantes S2 no coinciden por nombre. El fix resuelve
+    el nombre canónico via External ID y lo usa en el CSV de importación."""
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [
+        {
+            "Product Template External ID": "product_template_17605dc",
+            "Product Template Name": "H. CAMISA D/P BLACK BRUNO CASSINI 32-33",
+            "Internal Reference": "17605DC-16.5-S1",
+            "Barcode": "BC1",
+            "Talla": "16.5",
+            "Manga de Camisa": "S1 - 32/33",
+            "Ancho Corbata": "",
+            "Sales Price": "82.52",
+            "Cost": "0.00",
+        },
+        {
+            "Product Template External ID": "product_template_17605dc",
+            "Product Template Name": "H. CAMISA D/P BLACK BRUNO CASSINI 34-35",
+            "Internal Reference": "17605DC-16.5-S2",
+            "Barcode": "BC2",
+            "Talla": "16.5",
+            "Manga de Camisa": "S2 - 34/35",
+            "Ancho Corbata": "",
+            "Sales Price": "82.52",
+            "Cost": "0.00",
+        },
+    ]
+    # with_attr_rows tiene el nombre del seed (S1), no el S2
+    with_attr_rows = [{"External ID": "product_template_17605dc", "Name": "H. CAMISA D/P BLACK BRUNO CASSINI 32-33"}]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=with_attr_rows,
+        simple_rows=[],
+        stock_rows=[],
+    )
+
+    out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
+    assert len(out) == 2, "Ambas variantes (S1 y S2) deben estar en el CSV"
+
+    s1 = next(r for r in out if r["Internal Reference"] == "17605DC-16.5-S1")
+    s2 = next(r for r in out if r["Internal Reference"] == "17605DC-16.5-S2")
+
+    # Ambas deben usar el nombre canónico del seed (S1)
+    assert s1["Name"] == "H. CAMISA D/P BLACK BRUNO CASSINI 32-33"
+    assert s2["Name"] == "H. CAMISA D/P BLACK BRUNO CASSINI 32-33", \
+        "La variante S2 debe usar el nombre canónico del template, no su nombre propio de Contifico"
+
+    assert "Manga de Camisa: S1 - 32/33" in s1["Variant Values"]
+    assert "Manga de Camisa: S2 - 34/35" in s2["Variant Values"]
