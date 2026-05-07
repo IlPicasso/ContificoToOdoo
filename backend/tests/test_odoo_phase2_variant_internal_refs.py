@@ -229,3 +229,55 @@ def test_phase2_variant_values_dedupe_and_internal_reference_fallback(tmp_path: 
     assert out[0]["Internal Reference"] == "BLU-34-AZ-XS"
     assert out[0]["Barcode"] == "BLU-34-AZ-XS"
     assert out[0]["Variant Values"] == "Talla: XS"
+
+
+def test_phase2_variant_with_junk_talla_excluded_from_import(tmp_path: Path):
+    """SKUs with talla values that pass _looks_like_valid_size but fail catalog validation
+    end up as simple products. They must NOT appear in the Phase 2 variant import CSV
+    even though build_variant_sku_mapping gives them a non-empty Variant Values."""
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [
+        # Valid camisa variant — template IS in with_attr_rows
+        {
+            "Product Template External ID": "product_template_17605dc",
+            "Product Template Name": "H. CAMISA D/P BLACK, BRUNO CASSINI",
+            "Internal Reference": "17605DC-16.5-S1",
+            "Barcode": "",
+            "Talla": "16.5",
+            "Manga de Camisa": "S1 - 32/33",
+            "Ancho Corbata": "",
+            "Sales Price": "82.52",
+            "Cost": "0.00",
+        },
+        # Battery with junk talla "7568" — template NOT in with_attr_rows (went to simple_rows)
+        {
+            "Product Template External ID": "product_template_cebat",
+            "Product Template Name": "BATERIA CEBAT 7568",
+            "Internal Reference": "CEBAT-7568",
+            "Barcode": "",
+            "Talla": "7568",
+            "Manga de Camisa": "",
+            "Ancho Corbata": "",
+            "Sales Price": "15.00",
+            "Cost": "8.00",
+        },
+    ]
+    with_attr_rows = [{"Name": "H. CAMISA D/P BLACK, BRUNO CASSINI"}]
+    simple_rows = [{"Internal Reference": "CEBAT-7568"}]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=with_attr_rows,
+        simple_rows=simple_rows,
+        stock_rows=[],
+    )
+
+    out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
+    skus = [r["Internal Reference"] for r in out]
+    assert "17605DC-16.5-S1" in skus, "Valid camisa should be in Phase 2 import"
+    assert "CEBAT-7568" not in skus, "Battery with junk talla must be excluded from Phase 2 import"
+
+    validation = _read_csv(tmp_path / "odoo_phase2_variant_internal_reference_validation.csv")
+    battery_warnings = [r for r in validation if r["internal_reference"] == "CEBAT-7568"]
+    assert any(r["issue_type"] == "Product Template Name not found in Fase 1 with attributes" for r in battery_warnings)
