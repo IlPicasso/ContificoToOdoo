@@ -201,31 +201,6 @@ class OdooMigrationService:
         simple_rows, with_attr_rows, rejection_rows, external_id_conflicts = split_templates_by_catalog(phase1.get("variant_rows", []))
         simple_rows.extend(moved_to_simple_rows)
 
-        rejected_skus = {str(r.get("source_sku") or "").strip() for r in rejection_rows if str(r.get("source_sku") or "").strip()}
-        if rejected_skus:
-            by_sku = {str(v.get("sku") or "").strip(): v for v in phase1.get("variant_rows", [])}
-            rejected_template_ids = set()
-            for sku in rejected_skus:
-                src = by_sku.get(sku, {})
-                parsed = derive_parent_and_attrs(sku, str(src.get("name") or ""), str(src.get("category") or ""))
-                ext_id_from_sku = f"product_template_{normalize_sku_for_group(sku).lower()}"
-                rejected_template_ids.add(parsed.get("template_external_id") or "")
-                simple_rows.append({
-                    "External ID": ext_id_from_sku,
-                    "Name": str(src.get("name") or sku),
-                    "Product Type": "Goods",
-                    "Product Category": str(src.get("category") or "All / ADAMS / Sin categoría"),
-                    "Sales Price": f"{float(src.get('price') or 0):.2f}",
-                    "Cost": f"{float(src.get('cost') or 0):.2f}",
-                    "Can be Sold": "True",
-                    "Can be Purchased": "True",
-                    "is_storable": "True",
-                    "available_in_pos": _to_odoo_bool(src.get("para_pos")),
-                    "Internal Reference": sku,
-                    "Barcode": str(src.get("barcode") or sku),
-                })
-            with_attr_rows = [r for r in with_attr_rows if r.get("External ID", "") not in rejected_template_ids]
-
         dedup_simple_by_sku = {}
         for r in simple_rows:
             key = str(r.get("Internal Reference") or "").strip()
