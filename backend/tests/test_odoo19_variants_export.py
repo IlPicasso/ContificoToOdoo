@@ -4,6 +4,7 @@ from app.odoo_migration.odoo19_variants import (
     build_products_with_variants_from_variant_rows,
     build_variant_sku_mapping,
     dedupe_variant_mapping_rows,
+    split_templates_by_catalog,
 )
 
 
@@ -109,3 +110,43 @@ def test_tie_slash_non_width_is_not_forced_to_ancho():
     assert rows[0]["Ancho Corbata"] == ""
     assert rows[0]["Talla"] == ""
     assert rows[0]["Parse Status"] == "UNPARSED"
+
+
+def test_split_templates_orphaned_skus_become_simple_products():
+    """When a template has SOME valid SKUs (SL-007, 7 cm) and SOME invalid ones
+    (SL-023, 23 cm / SL-084, 84 cm), the invalid ones must appear in simple_rows
+    as standalone products so they are imported in Phase 1 rather than being lost.
+
+    split_templates_by_catalog expects raw variant_rows (nested attrs dict),
+    not the output of build_variant_sku_mapping."""
+    base = {
+        "name": "H CORBATA NAVY", "price": "21.65", "cost": "8.00",
+        "category": "Ropa / Hombres / Corbatas", "barcode": "",
+        "stock_map": {"BPU": 0}, "para_pos": None,
+    }
+    raw_rows = [
+        {**base, "sku": "SL-007", "attrs": {"Ancho Corbata": "7", "Marca": "BFL", "Color": "", "Talla": "", "Manga de Camisa": ""}},
+        {**base, "sku": "SL-023", "attrs": {"Ancho Corbata": "23", "Marca": "BFL", "Color": "", "Talla": "", "Manga de Camisa": ""}},
+        {**base, "sku": "SL-084", "attrs": {"Ancho Corbata": "84", "Marca": "BFL", "Color": "", "Talla": "", "Manga de Camisa": ""}},
+    ]
+    simple_rows, with_attrs_rows, rejection_rows, _ = split_templates_by_catalog(raw_rows)
+
+    simple_skus = {r["Internal Reference"] for r in simple_rows}
+
+    # SL-007 is valid → its template is in with_attrs_rows (template rows have no Internal Reference)
+    assert any(r.get("External ID", "") for r in with_attrs_rows), \
+        "Template for SL-007 must be in with_attrs_rows"
+    assert any("Ancho Corbata" in r.get("Product Attributes / Attribute", "") for r in with_attrs_rows), \
+        "Template row must declare the Ancho Corbata attribute"
+
+    # SL-023 and SL-084 have invalid widths → must be emitted as simple products
+    assert "SL-023" in simple_skus, "SL-023 (23 cm invalid) must be a simple product in Phase 1"
+    assert "SL-084" in simple_skus, "SL-084 (84 cm invalid) must be a simple product in Phase 1"
+
+    # SL-007 itself must NOT be in simple_rows (it becomes a variant of the template)
+    assert "SL-007" not in simple_skus, "SL-007 (valid) must not appear as a simple product"
+
+    # rejection_rows should record the invalid widths
+    rejected_skus = {r["source_sku"] for r in rejection_rows}
+    assert "SL-023" in rejected_skus
+    assert "SL-084" in rejected_skus
