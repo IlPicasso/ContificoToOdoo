@@ -45,6 +45,7 @@ def test_phase2_variant_outputs_are_generated(tmp_path: Path):
     assert out[0]["Barcode"] == "17601-17.5-S2"
     assert out[0]["Name"] == "CAMISA BRUNO CASSINI"
     assert "Talla: 17.5" in out[0]["Variant Values"]
+    assert out[0]["product_tmpl_id/id"] == "__import__.product_template_camisa"
 
     missing = _read_csv(tmp_path / "odoo_phase2_missing_stock_references.csv")
     assert missing[0]["stock_internal_reference"] == "MISSING-SKU"
@@ -229,6 +230,7 @@ def test_phase2_variant_values_dedupe_and_internal_reference_fallback(tmp_path: 
     assert out[0]["Internal Reference"] == "BLU-34-AZ-XS"
     assert out[0]["Barcode"] == "BLU-34-AZ-XS"
     assert out[0]["Variant Values"] == "Talla: XS"
+    assert out[0]["product_tmpl_id/id"] == "__import__.product_template_blusa"
 
 
 def test_phase2_variant_with_junk_talla_excluded_from_import(tmp_path: Path):
@@ -278,9 +280,99 @@ def test_phase2_variant_with_junk_talla_excluded_from_import(tmp_path: Path):
     assert "17605DC-16.5-S1" in skus, "Valid camisa should be in Phase 2 import"
     assert "CEBAT-7568" not in skus, "Battery with junk talla must be excluded from Phase 2 import"
 
+    camisa = next(r for r in out if r["Internal Reference"] == "17605DC-16.5-S1")
+    assert camisa["product_tmpl_id/id"] == "__import__.product_template_17605dc"
+
     validation = _read_csv(tmp_path / "odoo_phase2_variant_internal_reference_validation.csv")
     battery_warnings = [r for r in validation if r["internal_reference"] == "CEBAT-7568"]
-    assert any(r["issue_type"] == "Product Template Name not found in Fase 1 with attributes" for r in battery_warnings)
+    # Battery excluded due to invalid catalog value (7568 not in Talla catalog)
+    assert any(
+        r["issue_type"] in ("Variant has no valid attributes", "Invalid attribute value — not in Odoo catalog")
+        for r in battery_warnings
+    ), f"Expected exclusion warning for CEBAT-7568, got: {battery_warnings}"
+
+
+def test_phase2_invalid_corbata_width_excluded_produces_orphan_report(tmp_path: Path):
+    """Corbata SKUs with widths outside the catalog (e.g. SL-023 = 23 cm, SL-084 = 84 cm)
+    must be excluded from Phase 2. Valid ones (SL-007 = 7 cm) must be included.
+    Orphaned SKUs whose template IS known (because valid siblings exist) are reported
+    in odoo_phase2_orphaned_skus.csv."""
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    variant_map_rows = [
+        # Valid corbata — 7 cm is in catalog
+        {
+            "Product Template External ID": "product_template_sl",
+            "Product Template Name": "H CORBATA P/CABALLERO NAVY LABRADO PUNTO",
+            "Internal Reference": "SL-007",
+            "Barcode": "SL-007",
+            "Talla": "",
+            "Manga de Camisa": "",
+            "Ancho Corbata": "7 cm",
+            "Sales Price": "21.65",
+            "Cost": "0.00",
+        },
+        # Invalid corbata — 23 cm is NOT in catalog
+        {
+            "Product Template External ID": "product_template_sl",
+            "Product Template Name": "H CORBATA P/CABALLERO NAVY LABRADO PUNTO",
+            "Internal Reference": "SL-023",
+            "Barcode": "SL-023",
+            "Talla": "",
+            "Manga de Camisa": "",
+            "Ancho Corbata": "23 cm",
+            "Sales Price": "21.65",
+            "Cost": "0.00",
+        },
+        # Invalid corbata — 84 cm is NOT in catalog
+        {
+            "Product Template External ID": "product_template_sl",
+            "Product Template Name": "H CORBATA P/CABALLERO NAVY LABRADO PUNTO",
+            "Internal Reference": "SL-084",
+            "Barcode": "SL-084",
+            "Talla": "",
+            "Manga de Camisa": "",
+            "Ancho Corbata": "84 cm",
+            "Sales Price": "21.65",
+            "Cost": "0.00",
+        },
+    ]
+    # Template IS in with_attr_rows because SL-007 makes it valid
+    with_attr_rows = [
+        {"External ID": "product_template_sl", "Name": "H CORBATA P/CABALLERO NAVY LABRADO PUNTO"}
+    ]
+
+    service._write_phase2_variant_internal_reference_outputs(
+        folder=tmp_path,
+        variant_map_rows=variant_map_rows,
+        with_attr_rows=with_attr_rows,
+        simple_rows=[],
+        stock_rows=[],
+    )
+
+    out = _read_csv(tmp_path / "odoo_product_variant_internal_references.csv")
+    skus = [r["Internal Reference"] for r in out]
+    assert "SL-007" in skus, "SL-007 (valid 7 cm) must be in Phase 2 import"
+    assert "SL-023" not in skus, "SL-023 (invalid 23 cm) must be excluded"
+    assert "SL-084" not in skus, "SL-084 (invalid 84 cm) must be excluded"
+
+    # Valid corbata should have product_tmpl_id/id
+    sl007 = next(r for r in out if r["Internal Reference"] == "SL-007")
+    assert sl007["product_tmpl_id/id"] == "__import__.product_template_sl"
+    assert sl007["Variant Values"] == "Ancho Corbata: 7 cm"
+
+    # Invalid values should appear in the validation report
+    validation = _read_csv(tmp_path / "odoo_phase2_variant_internal_reference_validation.csv")
+    invalid_rows = [r for r in validation if r["issue_type"] == "Invalid attribute value — not in Odoo catalog"]
+    invalid_skus = {r["internal_reference"] for r in invalid_rows}
+    assert "SL-023" in invalid_skus, "SL-023 should have an invalid-attribute-value validation row"
+    assert "SL-084" in invalid_skus, "SL-084 should have an invalid-attribute-value validation row"
+
+    # Orphaned SKUs report: SL-023 and SL-084 have known template but invalid attrs
+    orphans = _read_csv(tmp_path / "odoo_phase2_orphaned_skus.csv")
+    orphan_skus = {r["Internal Reference"] for r in orphans}
+    assert "SL-023" in orphan_skus, "SL-023 should be in orphaned skus report"
+    assert "SL-084" in orphan_skus, "SL-084 should be in orphaned skus report"
+    assert "SL-007" not in orphan_skus, "SL-007 (valid) must not be in orphaned skus"
 
 
 def test_phase2_variant_canonical_name_used_when_contifico_names_differ_by_sleeve(tmp_path: Path):
@@ -337,6 +429,10 @@ def test_phase2_variant_canonical_name_used_when_contifico_names_differ_by_sleev
 
     assert "Manga de Camisa: S1 - 32/33" in s1["Variant Values"]
     assert "Manga de Camisa: S2 - 34/35" in s2["Variant Values"]
+
+    # Both should have the same product_tmpl_id/id
+    assert s1["product_tmpl_id/id"] == "__import__.product_template_17605dc"
+    assert s2["product_tmpl_id/id"] == "__import__.product_template_17605dc"
 
 
 def test_phase2_variant_deduplicates_sku_appearing_in_multiple_contifico_records(tmp_path: Path):
@@ -439,6 +535,9 @@ def test_phase2_duplicate_template_names_auto_suffixed(tmp_path: Path):
 
     assert ht8811["Name"] == "H. CAMISA P/S WHITE BRUNO CASSINI 32-33"
     assert ht2231["Name"] == "H. CAMISA P/S WHITE BRUNO CASSINI 32-33 (ht2231_7)"
+
+    assert ht8811["product_tmpl_id/id"] == "__import__.product_template_ht8811_1"
+    assert ht2231["product_tmpl_id/id"] == "__import__.product_template_ht2231_7"
 
     renames = _read_csv(tmp_path / "odoo_phase1_template_renames.csv")
     assert len(renames) == 1
