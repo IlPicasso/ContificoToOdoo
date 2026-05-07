@@ -463,6 +463,22 @@ class OdooMigrationService:
             name = str(r.get("Name") or "").strip()
             if ext_id and name and ext_id not in ext_id_to_canonical_name:
                 ext_id_to_canonical_name[ext_id] = name
+
+        # Detect duplicate canonical names: when two ext_ids share the same name, suffix
+        # the later ones so Odoo can distinguish templates during Phase 2 import.
+        name_to_first_ext_id: dict[str, str] = {}
+        template_rename_rows: list[dict[str, str]] = []
+        for ext_id, name in list(ext_id_to_canonical_name.items()):
+            if name not in name_to_first_ext_id:
+                name_to_first_ext_id[name] = ext_id
+            else:
+                suffix = ext_id.removeprefix("product_template_")
+                new_name = f"{name} ({suffix})"
+                ext_id_to_canonical_name[ext_id] = new_name
+                template_rename_rows.append({"external_id": ext_id, "old_name": name, "new_name": new_name})
+        # Extend template_names with suffixed canonical names
+        template_names = template_names | {n for n in ext_id_to_canonical_name.values()}
+
         variant_rows: list[dict[str, str]] = []
         validation_rows: list[dict[str, str]] = []
 
@@ -563,6 +579,7 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_phase2_variant_internal_reference_validation.csv", ["issue_type","product_template_external_id","product_template_name","internal_reference","barcode","variant_values","source_sku","reason"], validation_rows)
         self._write_csv(folder / "odoo_phase2_duplicate_variant_keys.csv", ["product_template_name","variant_values","internal_reference","barcode","source_sku","reason"], duplicate_key_rows)
         self._write_csv(folder / "odoo_phase2_missing_stock_references.csv", ["stock_internal_reference","location","inventory_quantity","reason"], missing_stock_rows)
+        self._write_csv(folder / "odoo_phase1_template_renames.csv", ["external_id","old_name","new_name"], template_rename_rows)
 
 
     def _write_internal_reference_update_csv(
