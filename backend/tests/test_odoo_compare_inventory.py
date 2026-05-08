@@ -148,6 +148,77 @@ def test_compare_case_insensitive(tmp_path: Path):
     assert result["only_in_odoo"] == 0
 
 
+def test_generate_missing_filters_simples(tmp_path: Path):
+    """generate_missing_import_csvs filters simple products from compare results."""
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+
+    _write_csv(run_folder / "odoo_compare_only_in_contifico.csv",
+               ["Internal Reference", "Name", "Source"],
+               [{"Internal Reference": "S2", "Name": "Prod S2", "Source": "simple"}])
+    _write_csv(run_folder / "odoo_product_templates_simple.csv", SIMPLE_COLS, [
+        {"External ID": "tmpl_s1", "Name": "Prod S1", "Internal Reference": "S1", "Barcode": "", "Product Type": "storable"},
+        {"External ID": "tmpl_s2", "Name": "Prod S2", "Internal Reference": "S2", "Barcode": "", "Product Type": "storable"},
+    ])
+    _write_csv(run_folder / "odoo_product_templates_with_attributes.csv",
+               ["External ID", "Name", "Product Attributes / Attribute", "Product Attributes / Values", "Product Attributes / Create Variants"],
+               [])
+    _write_csv(run_folder / "odoo_product_variant_internal_references.csv", VARIANT_COLS, [])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.generate_missing_import_csvs(run_folder=run_folder, output_folder=tmp_path)
+
+    assert result["simple_rows_exported"] == 1
+    rows = _read_csv(tmp_path / "odoo_missing_simple_for_import.csv")
+    assert len(rows) == 1
+    assert rows[0]["Internal Reference"] == "S2"
+
+
+def test_generate_missing_filters_variant_templates(tmp_path: Path):
+    """generate_missing_import_csvs includes template rows for missing variants only."""
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+
+    _write_csv(run_folder / "odoo_compare_only_in_contifico.csv",
+               ["Internal Reference", "Name", "Source"],
+               [{"Internal Reference": "VAR-B-M", "Name": "Template B", "Source": "variant"}])
+    _write_csv(run_folder / "odoo_product_templates_simple.csv", SIMPLE_COLS, [])
+
+    tmpl_cols = ["External ID", "Name", "Product Attributes / Attribute", "Product Attributes / Values", "Product Attributes / Create Variants"]
+    _write_csv(run_folder / "odoo_product_templates_with_attributes.csv", tmpl_cols, [
+        {"External ID": "product_template_a", "Name": "Template A", "Product Attributes / Attribute": "Talla", "Product Attributes / Values": "S,M", "Product Attributes / Create Variants": "Always"},
+        {"External ID": "product_template_b", "Name": "Template B", "Product Attributes / Attribute": "Talla", "Product Attributes / Values": "S,M", "Product Attributes / Create Variants": "Always"},
+    ])
+    _write_csv(run_folder / "odoo_product_variant_internal_references.csv", VARIANT_COLS, [
+        {"product_tmpl_id/id": "__import__.product_template_a", "Internal Reference": "VAR-A-S", "Barcode": "", "Name": "Template A", "Variant Values": "Talla: S", "Sales Price": "10", "Cost": "5"},
+        {"product_tmpl_id/id": "__import__.product_template_b", "Internal Reference": "VAR-B-M", "Barcode": "", "Name": "Template B", "Variant Values": "Talla: M", "Sales Price": "10", "Cost": "5"},
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.generate_missing_import_csvs(run_folder=run_folder, output_folder=tmp_path)
+
+    assert result["needed_templates"] == 1
+    tmpl_rows = _read_csv(tmp_path / "odoo_missing_templates_with_attributes.csv")
+    ext_ids = {r["External ID"] for r in tmpl_rows}
+    assert "product_template_b" in ext_ids
+    assert "product_template_a" not in ext_ids
+
+    variant_rows = _read_csv(tmp_path / "odoo_missing_variants_phase2.csv")
+    skus = {r["Internal Reference"] for r in variant_rows}
+    assert "VAR-B-M" in skus
+    assert "VAR-A-S" not in skus
+
+
+def test_generate_missing_raises_if_no_compare_csv(tmp_path: Path):
+    """Raises FileNotFoundError if compare CSV doesn't exist yet."""
+    import pytest
+    run_folder = tmp_path / "run"
+    run_folder.mkdir()
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    with pytest.raises(FileNotFoundError):
+        service.generate_missing_import_csvs(run_folder=run_folder, output_folder=tmp_path)
+
+
 def test_compare_preview_capped_at_30(tmp_path: Path):
     """Preview lists must be capped at 30 items each."""
     skus = [f"SKU-{i:03d}" for i in range(50)]

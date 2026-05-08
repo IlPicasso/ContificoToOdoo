@@ -1085,6 +1085,76 @@ class OdooMigrationService:
         if not path.exists(): return []
         return json.loads(path.read_text(encoding='utf-8'))
 
+    def generate_missing_import_csvs(
+        self,
+        *,
+        run_folder: Path,
+        output_folder: Path,
+    ) -> dict[str, Any]:
+        """Generate filtered Phase 1/Phase 2 import CSVs containing only products
+        that are missing from Odoo (as determined by a prior compare_inventory run).
+
+        Reads odoo_compare_only_in_contifico.csv from the run folder, then filters:
+          - odoo_product_templates_simple.csv → odoo_missing_simple_for_import.csv
+          - odoo_product_templates_with_attributes.csv → odoo_missing_templates_with_attributes.csv
+          - odoo_product_variant_internal_references.csv → odoo_missing_variants_phase2.csv
+        """
+        compare_csv = run_folder / "odoo_compare_only_in_contifico.csv"
+        if not compare_csv.exists():
+            raise FileNotFoundError("odoo_compare_only_in_contifico.csv no encontrado — ejecuta primero el comparador.")
+
+        missing_rows = self._read_csv_rows(compare_csv)
+        missing_simple_skus: set[str] = set()
+        missing_variant_skus: set[str] = set()
+        for r in missing_rows:
+            sku = str(r.get("Internal Reference") or "").strip()
+            source = str(r.get("Source") or "").strip().lower()
+            if not sku:
+                continue
+            if source == "simple":
+                missing_simple_skus.add(sku)
+            else:
+                missing_variant_skus.add(sku)
+
+        # ── Simple products ──────────────────────────────────────────────────
+        simple_all = self._read_csv_rows(run_folder / "odoo_product_templates_simple.csv")
+        simple_cols = list(simple_all[0].keys()) if simple_all else []
+        simple_filtered = [r for r in simple_all if str(r.get("Internal Reference") or "").strip() in missing_simple_skus]
+
+        # ── Variant templates (with attributes) ──────────────────────────────
+        # Find which template External IDs are needed for missing variants
+        variant_refs = self._read_csv_rows(run_folder / "odoo_product_variant_internal_references.csv")
+        needed_template_ext_ids: set[str] = set()
+        for r in variant_refs:
+            sku = str(r.get("Internal Reference") or "").strip()
+            if sku in missing_variant_skus:
+                ext_id = str(r.get("product_tmpl_id/id") or "").strip()
+                # Strip __import__. prefix for comparison with the templates CSV External ID column
+                raw_ext_id = ext_id.removeprefix("__import__.")
+                if raw_ext_id:
+                    needed_template_ext_ids.add(raw_ext_id)
+
+        templates_all = self._read_csv_rows(run_folder / "odoo_product_templates_with_attributes.csv")
+        tmpl_cols = list(templates_all[0].keys()) if templates_all else []
+        templates_filtered = [r for r in templates_all if str(r.get("External ID") or "").strip() in needed_template_ext_ids]
+
+        # ── Variant Phase 2 CSV ───────────────────────────────────────────────
+        variant_cols = list(variant_refs[0].keys()) if variant_refs else []
+        variants_filtered = [r for r in variant_refs if str(r.get("Internal Reference") or "").strip() in missing_variant_skus]
+
+        self._write_csv(output_folder / "odoo_missing_simple_for_import.csv", simple_cols, simple_filtered)
+        self._write_csv(output_folder / "odoo_missing_templates_with_attributes.csv", tmpl_cols, templates_filtered)
+        self._write_csv(output_folder / "odoo_missing_variants_phase2.csv", variant_cols, variants_filtered)
+
+        return {
+            "missing_simple_total": len(missing_simple_skus),
+            "missing_variants_total": len(missing_variant_skus),
+            "simple_rows_exported": len(simple_filtered),
+            "template_rows_exported": len(templates_filtered),
+            "variant_rows_exported": len(variants_filtered),
+            "needed_templates": len(needed_template_ext_ids),
+        }
+
     def compare_inventory_with_odoo_export(
         self,
         *,
