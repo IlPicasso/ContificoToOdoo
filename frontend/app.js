@@ -251,6 +251,7 @@ $('generateMigrationCsv').addEventListener('click', async () => {
         if (job.run_id) {
           if (!$('mergerRunId').value.trim()) $('mergerRunId').value = job.run_id;
           if (!$('stockRunId').value.trim()) $('stockRunId').value = job.run_id;
+          if (!$('compareRunId').value.trim()) $('compareRunId').value = job.run_id;
         }
         const summaryExpected = Number((job.summary || {}).expected_min_items_from_api || 0);
         const summaryFound = Number(job.found_items || (job.summary || {}).total_products || 0);
@@ -308,6 +309,7 @@ $('processRawJson').addEventListener('click', async () => {
     if (data.run_id) {
       if (!$('mergerRunId').value.trim()) $('mergerRunId').value = data.run_id;
       if (!$('stockRunId').value.trim()) $('stockRunId').value = data.run_id;
+      if (!$('compareRunId').value.trim()) $('compareRunId').value = data.run_id;
     }
     setMigrationStatus(`Archivo procesado. Productos detectados: ${data.detected_products}.`);
   } catch (e) { showErr(e); }
@@ -328,6 +330,97 @@ function activateTab(name) {
   document.querySelectorAll('.tab-panel').forEach((p)=>p.classList.toggle('active', p.id===`tab-${name}`));
 }
 document.querySelectorAll('.tab-btn').forEach((btn)=>btn.addEventListener('click',()=>activateTab(btn.dataset.tab)));
+
+// ── Comparador de inventario ────────────────────────────────────────────────
+
+function setCompareStatus(msg) { const el=$('compareStatus'); if(el) el.textContent=msg||''; }
+
+function renderCompareStats(data) {
+  const el = $('compareStats');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="stat-card stat-card--total"><div class="stat-num">${data.contifico_total}</div><div class="stat-lbl">Contífico</div></div>
+    <div class="stat-card stat-card--total"><div class="stat-num">${data.odoo_total}</div><div class="stat-lbl">Odoo</div></div>
+    <div class="stat-card stat-card--both"><div class="stat-num">${data.in_both}</div><div class="stat-lbl">Coinciden</div></div>
+    <div class="stat-card stat-card--contifico"><div class="stat-num">${data.only_in_contifico}</div><div class="stat-lbl">Solo Contífico</div></div>
+    <div class="stat-card stat-card--odoo"><div class="stat-num">${data.only_in_odoo}</div><div class="stat-lbl">Solo Odoo</div></div>
+  `;
+  el.classList.remove('hidden');
+}
+
+function renderComparePreviews(data) {
+  const el = $('comparePreviews');
+  if (!el) return;
+  el.innerHTML = '';
+  const sections = [
+    { key: 'preview_only_contifico', label: `Solo en Contífico — ${data.only_in_contifico} SKUs (en extracción pero no en Odoo)`, cls: 'stat-card--contifico' },
+    { key: 'preview_only_odoo',      label: `Solo en Odoo — ${data.only_in_odoo} SKUs (en Odoo pero no en extracción)`,   cls: 'stat-card--odoo' },
+    { key: 'preview_in_both',        label: `Coinciden — ${data.in_both} SKUs`,                                             cls: 'stat-card--both' },
+  ];
+  sections.forEach(({ key, label, cls }) => {
+    const items = data[key] || [];
+    if (!items.length) return;
+    const details = document.createElement('details');
+    details.className = 'compare-preview';
+    const summary = document.createElement('summary');
+    summary.textContent = label + (items.length === 30 ? ' (mostrando primeros 30)' : '');
+    details.appendChild(summary);
+    const ul = document.createElement('ul');
+    items.forEach(sku => { const li = document.createElement('li'); li.textContent = sku; ul.appendChild(li); });
+    details.appendChild(ul);
+    el.appendChild(details);
+  });
+}
+
+function renderCompareLinks(files) {
+  const el = $('compareLinks');
+  if (!el || !files) return;
+  el.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'phase-title';
+  title.textContent = 'Descargar resultados';
+  el.appendChild(title);
+  const COMPARE_FILES = [
+    { key: 'only_in_contifico', label: 'Solo en Contífico (faltan importar en Odoo)', isImport: false },
+    { key: 'only_in_odoo',      label: 'Solo en Odoo (no vienen de esta extracción)',  isImport: false },
+    { key: 'in_both',           label: 'Coinciden en ambos sistemas',                  isImport: false },
+  ];
+  COMPARE_FILES.forEach(({ key, label, isImport }) => {
+    const path = files[key];
+    if (!path) return;
+    el.appendChild(makeLink(`${base()}${path}`, label, isImport));
+  });
+}
+
+$('executeCompare').addEventListener('click', async () => {
+  try {
+    const runId = $('compareRunId').value.trim();
+    if (!runId) throw new Error('Debes ingresar el Run ID de la extracción.');
+    const input = $('compareOdooFile');
+    if (!input?.files?.[0]) throw new Error('Debes seleccionar el CSV exportado de Odoo.');
+    $('executeCompare').disabled = true;
+    $('compareStats').classList.add('hidden');
+    $('comparePreviews').innerHTML = '';
+    $('compareLinks').innerHTML = '';
+    setCompareStatus('Comparando inventarios...');
+    const url = new URL(`${base()}/odoo-migration/runs/${encodeURIComponent(runId)}/compare-inventory`);
+    const form = new FormData();
+    form.append('file', input.files[0]);
+    const resp = await fetch(url, { method: 'POST', body: form });
+    const text = await resp.text();
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+    renderCompareStats(data);
+    renderComparePreviews(data);
+    renderCompareLinks(data.files);
+    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Solo Contífico: ${data.only_in_contifico} · Solo Odoo: ${data.only_in_odoo}`);
+  } catch(e) {
+    setCompareStatus(`Error: ${e.message}`);
+    showErr(e);
+  } finally {
+    $('executeCompare').disabled = false;
+  }
+});
 
 // ── Merger Variantes ────────────────────────────────────────────────────────
 

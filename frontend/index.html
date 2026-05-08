@@ -15,6 +15,7 @@
         <button class="tab-btn active" data-tab="export">Exportar</button>
         <button class="tab-btn" data-tab="merger">Merger Variantes</button>
         <button class="tab-btn" data-tab="stock">Stock</button>
+        <button class="tab-btn" data-tab="compare">Comparador</button>
         <button class="tab-btn" data-tab="preview">Preview Contífico</button>
       </section>
 
@@ -67,6 +68,20 @@
         </div>
         <p id="stockStatusText" class="muted"></p>
         <pre id="stockStatusOut"></pre>
+      </section>
+
+      <section id="tab-compare" class="tab-panel card">
+        <h2>Comparador de Inventario</h2>
+        <p class="muted">Sube el export de <code>product.product</code> de Odoo (<code>default_code | name | barcode | qty_available</code>) para comparar contra los SKUs de la extracción de Contífico.</p>
+        <label>Run ID de la extracción Contífico</label>
+        <input id="compareRunId" placeholder="Run ID generado en Exportar" />
+        <label>Export de Odoo (product.product CSV)</label>
+        <input id="compareOdooFile" type="file" accept=".csv,text/csv" />
+        <button id="executeCompare">Comparar inventarios</button>
+        <p id="compareStatus" class="muted"></p>
+        <div id="compareStats" class="compare-stats hidden"></div>
+        <div id="compareLinks" class="phase-section"></div>
+        <div id="comparePreviews"></div>
       </section>
 
       <section id="tab-preview" class="tab-panel">

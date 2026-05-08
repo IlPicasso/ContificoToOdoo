@@ -346,6 +346,9 @@ def download_file(run_id: str, filename: str):
         "odoo_phase2_duplicate_variant_keys.csv",
         "odoo_phase2_missing_stock_references.csv",
         "odoo_phase2_csv_format_errors.csv",
+        "odoo_compare_only_in_contifico.csv",
+        "odoo_compare_only_in_odoo.csv",
+        "odoo_compare_in_both.csv",
         "odoo_phase2_with_odoo_ids.csv",
         "odoo_phase2_with_odoo_ids_minimal.csv",
         "odoo_phase2_merger_unmatched.csv",
@@ -360,6 +363,40 @@ def download_file(run_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     media_type = "text/plain; charset=utf-8" if filename.endswith(('.log', '.md')) else "text/csv; charset=utf-8"
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
+
+
+@router.post('/runs/{run_id}/compare-inventory')
+async def compare_inventory(run_id: str, file: UploadFile = File(...)):
+    """Upload the Odoo product.product inventory export to compare SKUs against the
+    Contifico extraction for this run.
+
+    Expected Odoo export columns (product.product export):
+      id | is_favorite | default_code | barcode | name | product_template_variant_value_ids | lst_price | standard_price | qty_available
+    """
+    run_folder = _output_root() / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run no encontrado")
+
+    odoo_export_path = run_folder / "odoo_inventory_export.csv"
+    odoo_export_path.write_bytes(await file.read())
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.compare_inventory_with_odoo_export(
+        run_folder=run_folder,
+        odoo_export_csv=odoo_export_path,
+        output_folder=run_folder,
+    )
+
+    base = f"/odoo-migration/runs/{run_id}/files"
+    return {
+        "run_id": run_id,
+        **result,
+        "files": {
+            "only_in_contifico": f"{base}/odoo_compare_only_in_contifico.csv",
+            "only_in_odoo": f"{base}/odoo_compare_only_in_odoo.csv",
+            "in_both": f"{base}/odoo_compare_in_both.csv",
+        },
+    }
 
 
 @router.post('/runs/{run_id}/phase2/merge')
