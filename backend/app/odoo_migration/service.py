@@ -1257,20 +1257,20 @@ class OdooMigrationService:
         odoo_export_csv: Path,
         phase2_csv: Path,
         output_folder: Path,
+        simple_csv: "Path | None" = None,
     ) -> dict[str, Any]:
-        """Enrich Phase 2 variant CSV with product.product External IDs from Odoo export.
-
-        After Phase 1 import Odoo auto-creates product.product variants. This method
-        matches each variant in our Phase 2 CSV to its Odoo record using
-        (template name, variant values) as the join key, then emits a new CSV with
-        the 'id' column populated so Odoo will UPDATE the record instead of creating
-        a duplicate.
+        """Enrich Phase 2 variant CSV (and optionally simple template CSV) with
+        product.product External IDs from Odoo export, so Odoo will UPDATE existing
+        records instead of creating duplicates.
 
         Odoo export expected columns:
-          id | id (dup) | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
+          id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
 
         Phase 2 CSV expected columns:
           product_tmpl_id/id | Internal Reference | Barcode | Name | Variant Values | Sales Price | Cost
+
+        simple_csv (optional) expected columns:
+          External ID | Name | Internal Reference | Barcode | Product Type
         """
         def _norm_variant_values(variant_values: str) -> frozenset:
             return frozenset(
@@ -1350,22 +1350,51 @@ class OdooMigrationService:
                 else:
                     unmatched_rows.append({**row, "match_failure_reason": "No matching variant in Odoo export"})
 
-        # Odoo rows that didn't match any Phase 2 row
+        # ── Simple products pass ───────────────────────────────────────────────
+        # Odoo doesn't propagate product.template.default_code → product.product
+        # during CSV import, so simple products also need a Phase-2 style update.
+        # Match by __import__.{template_ext_id} (empty variant values).
+        simple_matched_rows: list[dict[str, str]] = []
+        simple_unmatched_rows: list[dict[str, str]] = []
+
+        if simple_csv and simple_csv.exists():
+            with simple_csv.open("r", newline="", encoding="utf-8-sig") as f:
+                for row in csv.DictReader(f):
+                    ext_id = str(row.get("External ID") or "").strip()
+                    ir = str(row.get("Internal Reference") or "").strip()
+                    barcode = str(row.get("Barcode") or "").strip()
+                    if not ext_id or not ir:
+                        continue
+                    # Odoo stores the imported External ID as __import__.{ext_id}
+                    odoo_tmpl_id = f"__import__.{ext_id}"
+                    primary_key = (_norm_tmpl_id(odoo_tmpl_id), frozenset())
+                    pp_ext_id = tmpl_id_lookup.get(primary_key)
+                    if pp_ext_id:
+                        odoo_keys_used.add(pp_ext_id)
+                        simple_matched_rows.append({"id": pp_ext_id, "Internal Reference": ir, "Barcode": barcode})
+                    else:
+                        simple_unmatched_rows.append({"External ID": ext_id, "Internal Reference": ir, "match_failure_reason": "No matching product.product in Odoo export"})
+
+        # Odoo rows that didn't match any Phase 2 or simple row
         unused_odoo_rows: list[dict[str, str]] = [
-            {"odoo_ext_id": r["pp_ext_id"], "tmpl_id": r["tmpl_id"], "tmpl_name": r["tmpl_name"], "variant_values": r["variant_values"], "reason": "Not present in Phase 2 CSV"}
+            {"odoo_ext_id": r["pp_ext_id"], "tmpl_id": r["tmpl_id"], "tmpl_name": r["tmpl_name"], "variant_values": r["variant_values"], "reason": "Not present in Phase 2 or simple CSV"}
             for r in all_odoo_rows
             if r["pp_ext_id"] not in odoo_keys_used
         ]
 
         matched_cols = ["id", "match_method", "product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
         minimal_cols = ["id", "Internal Reference", "Barcode", "Sales Price", "Cost"]
+        simples_minimal_cols = ["id", "Internal Reference", "Barcode"]
         unmatched_cols = ["product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost", "match_failure_reason"]
+        simples_unmatched_cols = ["External ID", "Internal Reference", "match_failure_reason"]
         unused_cols = ["odoo_ext_id", "tmpl_id", "tmpl_name", "variant_values", "reason"]
 
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
         # Minimal CSV: only id + fields to update — no Name/Variant Values to avoid Odoo relational field validation
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids_minimal.csv", minimal_cols, matched_rows)
+        self._write_csv(output_folder / "odoo_phase2_simples_minimal.csv", simples_minimal_cols, simple_matched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
+        self._write_csv(output_folder / "odoo_phase2_simples_unmatched.csv", simples_unmatched_cols, simple_unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unused_odoo.csv", unused_cols, unused_odoo_rows)
 
         return {
@@ -1376,6 +1405,8 @@ class OdooMigrationService:
             "matched_by_name": matched_by_name,
             "total_odoo_rows": len(all_odoo_rows),
             "unused_odoo_rows": len(unused_odoo_rows),
+            "simple_matched": len(simple_matched_rows),
+            "simple_unmatched": len(simple_unmatched_rows),
         }
 
     @staticmethod

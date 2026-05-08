@@ -306,6 +306,94 @@ def test_merger_case_insensitive_name_match(tmp_path: Path):
     assert result["matched"] == 1
 
 
+SIMPLE_COLS = ["External ID", "Name", "Internal Reference", "Barcode", "Product Type"]
+
+
+def _make_simple_csv(tmp_path: Path, rows: list[dict]) -> Path:
+    path = tmp_path / "odoo_product_templates_simple.csv"
+    _write_csv(path, SIMPLE_COLS, rows)
+    return path
+
+
+def test_merger_simple_products_matched(tmp_path: Path):
+    """Simple products (no variant values) are matched via product_tmpl_id/id."""
+    odoo_export = _make_odoo_export(tmp_path, [
+        {
+            "id": "__export__.product_product_95867",
+            "product_tmpl_id/id": "__import__.product_template_ykltb_sq10_2w_wht",
+            "product_tmpl_id/name": "3 STEP GLASS DOWN LIGHT",
+            "product_template_variant_value_ids": "",
+        },
+    ])
+    phase2_csv = _make_phase2_csv(tmp_path, [])
+    simple_csv = _make_simple_csv(tmp_path, [
+        {"External ID": "product_template_ykltb_sq10_2w_wht", "Name": "3 STEP GLASS DOWN LIGHT",
+         "Internal Reference": "ykltb_sq10_2w_wht", "Barcode": "", "Product Type": "storable"},
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+        simple_csv=simple_csv,
+    )
+
+    assert result["simple_matched"] == 1
+    assert result["simple_unmatched"] == 0
+    assert result["matched"] == 0  # no variants
+
+    rows = _read_csv(tmp_path / "odoo_phase2_simples_minimal.csv")
+    assert len(rows) == 1
+    assert rows[0]["id"] == "__export__.product_product_95867"
+    assert rows[0]["Internal Reference"] == "ykltb_sq10_2w_wht"
+    assert "Name" not in rows[0]
+    assert "Variant Values" not in rows[0]
+
+
+def test_merger_simple_unmatched_reported(tmp_path: Path):
+    """Simple products not found in Odoo export go to simples_unmatched."""
+    odoo_export = _make_odoo_export(tmp_path, [])
+    phase2_csv = _make_phase2_csv(tmp_path, [])
+    simple_csv = _make_simple_csv(tmp_path, [
+        {"External ID": "product_template_xyz", "Name": "PROD XYZ",
+         "Internal Reference": "XYZ-001", "Barcode": "", "Product Type": "storable"},
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+        simple_csv=simple_csv,
+    )
+
+    assert result["simple_matched"] == 0
+    assert result["simple_unmatched"] == 1
+
+    rows = _read_csv(tmp_path / "odoo_phase2_simples_unmatched.csv")
+    assert rows[0]["Internal Reference"] == "XYZ-001"
+
+
+def test_merger_without_simple_csv_returns_zero_simple_counts(tmp_path: Path):
+    """When no simple_csv is passed, simple counts are zero and no error is raised."""
+    odoo_export = _make_odoo_export(tmp_path, [
+        {"id": "__export__.pp_1", "product_tmpl_id/id": "__export__.tmpl_1",
+         "product_tmpl_id/name": "PROD", "product_template_variant_value_ids": "Talla: M"},
+    ])
+    phase2_csv = _make_phase2_csv(tmp_path, [])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+    )
+
+    assert result["simple_matched"] == 0
+    assert result["simple_unmatched"] == 0
+
+
 def test_merger_primary_key_by_tmpl_id(tmp_path: Path):
     """When Phase 2 CSV and Odoo export share __import__.* template IDs, match by that key."""
     odoo_export = _make_odoo_export(tmp_path, [

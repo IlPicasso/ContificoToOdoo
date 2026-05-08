@@ -354,7 +354,9 @@ def download_file(run_id: str, filename: str):
         "odoo_missing_variants_phase2.csv",
         "odoo_phase2_with_odoo_ids.csv",
         "odoo_phase2_with_odoo_ids_minimal.csv",
+        "odoo_phase2_simples_minimal.csv",
         "odoo_phase2_merger_unmatched.csv",
+        "odoo_phase2_simples_unmatched.csv",
         "odoo_phase2_merger_unused_odoo.csv",
         "odoo_phase1_template_renames.csv",
         "odoo_phase2_orphaned_skus.csv",
@@ -450,11 +452,14 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
     odoo_export_path = run_folder / "odoo_product_product_export.csv"
     odoo_export_path.write_bytes(await file.read())
 
+    simple_csv = run_folder / "odoo_product_templates_simple.csv"
+
     service = OdooMigrationService(client=None)  # type: ignore[arg-type]
     result = service.merge_phase2_with_odoo_export(
         odoo_export_csv=odoo_export_path,
         phase2_csv=phase2_csv,
         output_folder=run_folder,
+        simple_csv=simple_csv if simple_csv.exists() else None,
     )
 
     base = f"/odoo-migration/runs/{run_id}/files"
@@ -464,7 +469,9 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
         "files": {
             "phase2_with_odoo_ids": f"{base}/odoo_phase2_with_odoo_ids.csv",
             "phase2_with_odoo_ids_minimal": f"{base}/odoo_phase2_with_odoo_ids_minimal.csv",
+            "simples_minimal": f"{base}/odoo_phase2_simples_minimal.csv",
             "unmatched": f"{base}/odoo_phase2_merger_unmatched.csv",
+            "simples_unmatched": f"{base}/odoo_phase2_simples_unmatched.csv",
             "unused_odoo": f"{base}/odoo_phase2_merger_unused_odoo.csv",
         },
     }

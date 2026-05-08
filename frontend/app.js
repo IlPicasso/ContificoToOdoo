@@ -471,10 +471,12 @@ function renderMergerLinks(runId, files) {
   title.textContent = 'Archivos generados por el merger';
   section.appendChild(title);
   const MERGER_FILES = [
-    { key: 'phase2_with_odoo_ids_minimal', label: '⭐ IMPORTAR ESTE — odoo_phase2_with_odoo_ids_minimal.csv (id + SKU + Barcode, sin campos relacionales)', isImport: true },
-    { key: 'phase2_with_odoo_ids',         label: 'Versión completa con Name/Variant Values (solo referencia)', isImport: false },
+    { key: 'phase2_with_odoo_ids_minimal', label: '⭐ IMPORTAR (variantes) — odoo_phase2_with_odoo_ids_minimal.csv (id + SKU + Barcode + Precio)', isImport: true },
+    { key: 'simples_minimal',              label: '⭐ IMPORTAR (simples) — odoo_phase2_simples_minimal.csv (id + SKU + Barcode)', isImport: true },
+    { key: 'phase2_with_odoo_ids',         label: 'Variantes versión completa con Name/Variant Values (solo referencia)', isImport: false },
     { key: 'unmatched',                    label: 'Variantes sin par en Odoo (merger_unmatched)', isImport: false },
-    { key: 'unused_odoo',                  label: 'Variantes Odoo sin par en Fase 2 (merger_unused_odoo)', isImport: false },
+    { key: 'simples_unmatched',            label: 'Simples sin par en Odoo (simples_unmatched)', isImport: false },
+    { key: 'unused_odoo',                  label: 'Registros Odoo sin par en Fase 2 (merger_unused_odoo)', isImport: false },
   ];
   MERGER_FILES.forEach(({ key, label, isImport }) => {
     const path = files[key];
@@ -503,7 +505,8 @@ $('executeMerger').addEventListener('click', async () => {
     renderMergerLinks(runId, data.files);
     const byId = data.matched_by_tmpl_id ?? 0;
     const byName = data.matched_by_name ?? 0;
-    setMergerStatus(`Merger completado. Matcheados: ${data.matched} (${byId} por ID, ${byName} por nombre) · Sin par: ${data.unmatched} · Odoo sin usar: ${data.unused_odoo_rows}`);
+    const simples = data.simple_matched ?? 0;
+    setMergerStatus(`Merger completado. Variantes: ${data.matched} (${byId} por ID, ${byName} por nombre) · Simples: ${simples} · Sin par: ${data.unmatched} · Odoo sin usar: ${data.unused_odoo_rows}`);
     // Pre-fill run_id en Stock si está vacío
     if (!$('stockRunId').value.trim()) $('stockRunId').value = runId;
   } catch(e) {
