@@ -349,6 +349,9 @@ def download_file(run_id: str, filename: str):
         "odoo_compare_only_in_contifico.csv",
         "odoo_compare_only_in_odoo.csv",
         "odoo_compare_in_both.csv",
+        "odoo_missing_simple_for_import.csv",
+        "odoo_missing_templates_with_attributes.csv",
+        "odoo_missing_variants_phase2.csv",
         "odoo_phase2_with_odoo_ids.csv",
         "odoo_phase2_with_odoo_ids_minimal.csv",
         "odoo_phase2_merger_unmatched.csv",
@@ -363,6 +366,35 @@ def download_file(run_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     media_type = "text/plain; charset=utf-8" if filename.endswith(('.log', '.md')) else "text/csv; charset=utf-8"
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
+
+
+@router.get('/runs/{run_id}/compare-inventory/generate-missing')
+def generate_missing_import(run_id: str):
+    """Using the results of a prior compare-inventory run, generate filtered Phase 1/2
+    import CSVs containing only the products that are missing from Odoo."""
+    run_folder = _output_root() / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run no encontrado")
+    compare_csv = run_folder / "odoo_compare_only_in_contifico.csv"
+    if not compare_csv.exists():
+        raise HTTPException(status_code=404, detail="Comparación no encontrada — ejecuta primero el comparador.")
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    try:
+        result = service.generate_missing_import_csvs(run_folder=run_folder, output_folder=run_folder)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    base = f"/odoo-migration/runs/{run_id}/files"
+    return {
+        "run_id": run_id,
+        **result,
+        "files": {
+            "missing_simple": f"{base}/odoo_missing_simple_for_import.csv",
+            "missing_templates": f"{base}/odoo_missing_templates_with_attributes.csv",
+            "missing_variants_phase2": f"{base}/odoo_missing_variants_phase2.csv",
+        },
+    }
 
 
 @router.post('/runs/{run_id}/compare-inventory')

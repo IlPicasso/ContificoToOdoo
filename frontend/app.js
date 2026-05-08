@@ -414,11 +414,45 @@ $('executeCompare').addEventListener('click', async () => {
     renderComparePreviews(data);
     renderCompareLinks(data.files);
     setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Solo Contífico: ${data.only_in_contifico} · Solo Odoo: ${data.only_in_odoo}`);
+    if (data.only_in_contifico > 0) $('generateMissingSection').classList.remove('hidden');
   } catch(e) {
     setCompareStatus(`Error: ${e.message}`);
     showErr(e);
   } finally {
     $('executeCompare').disabled = false;
+  }
+});
+
+$('generateMissingImport').addEventListener('click', async () => {
+  try {
+    const runId = $('compareRunId').value.trim();
+    if (!runId) throw new Error('Debes ingresar el Run ID.');
+    $('generateMissingImport').disabled = true;
+    $('generateMissingStatus').textContent = 'Generando CSVs...';
+    $('generateMissingLinks').innerHTML = '';
+    const data = await apiGet(`/odoo-migration/runs/${encodeURIComponent(runId)}/compare-inventory/generate-missing`);
+    const el = $('generateMissingLinks');
+    el.innerHTML = '';
+    const title = document.createElement('div');
+    title.className = 'phase-title';
+    title.textContent = 'Archivos generados (importar en este orden)';
+    el.appendChild(title);
+    const MISSING_FILES = [
+      { key: 'missing_simple',           label: `① Simples faltantes — ${data.simple_rows_exported} productos (odoo_missing_simple_for_import.csv)`,           isImport: true },
+      { key: 'missing_templates',        label: `② Templates con atributos — ${data.template_rows_exported} filas / ${data.needed_templates} templates (odoo_missing_templates_with_attributes.csv)`, isImport: true },
+      { key: 'missing_variants_phase2',  label: `③ Variantes Phase 2 — ${data.variant_rows_exported} SKUs (odoo_missing_variants_phase2.csv)`,                isImport: true },
+    ];
+    MISSING_FILES.forEach(({ key, label, isImport }) => {
+      const path = (data.files || {})[key];
+      if (!path) return;
+      el.appendChild(makeLink(`${base()}${path}`, label, isImport));
+    });
+    $('generateMissingStatus').textContent = `CSVs generados. Simples: ${data.missing_simple_total} · Variantes: ${data.missing_variants_total} · Templates necesarios: ${data.needed_templates}`;
+  } catch(e) {
+    $('generateMissingStatus').textContent = `Error: ${e.message}`;
+    showErr(e);
+  } finally {
+    $('generateMissingImport').disabled = false;
   }
 });
 
