@@ -2,6 +2,7 @@ from __future__ import annotations
 import csv
 import random
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -1083,6 +1084,91 @@ class OdooMigrationService:
     def _read_stock_state(path: Path) -> list[dict[str, Any]]:
         if not path.exists(): return []
         return json.loads(path.read_text(encoding='utf-8'))
+
+    def merge_phase2_with_odoo_export(
+        self,
+        *,
+        odoo_export_csv: Path,
+        phase2_csv: Path,
+        output_folder: Path,
+    ) -> dict[str, Any]:
+        """Enrich Phase 2 variant CSV with product.product External IDs from Odoo export.
+
+        After Phase 1 import Odoo auto-creates product.product variants. This method
+        matches each variant in our Phase 2 CSV to its Odoo record using
+        (template name, variant values) as the join key, then emits a new CSV with
+        the 'id' column populated so Odoo will UPDATE the record instead of creating
+        a duplicate.
+
+        Odoo export expected columns:
+          id | id (dup) | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
+
+        Phase 2 CSV expected columns:
+          product_tmpl_id/id | Internal Reference | Barcode | Name | Variant Values | Sales Price | Cost
+        """
+        def _norm_key(name: str, variant_values: str) -> tuple[str, frozenset]:
+            norm_name = unicodedata.normalize("NFC", name.strip().casefold())
+            parts: frozenset = frozenset(
+                unicodedata.normalize("NFC", p.strip().casefold())
+                for p in re.split(r"\s*,\s*", variant_values)
+                if p.strip()
+            )
+            return (norm_name, parts)
+
+        # Build lookup from Odoo export: join key → product.product External ID
+        odoo_lookup: dict[tuple, str] = {}
+        odoo_keys_used: set[tuple] = set()
+        all_odoo_rows: list[dict[str, str]] = []
+
+        with odoo_export_csv.open("r", newline="", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                pp_ext_id = str(row.get("id") or "").strip()
+                tmpl_name = str(row.get("product_tmpl_id/name") or "").strip()
+                variant_vals = str(row.get("product_template_variant_value_ids") or "").strip()
+                if not pp_ext_id or not tmpl_name:
+                    continue
+                key = _norm_key(tmpl_name, variant_vals)
+                odoo_lookup[key] = pp_ext_id
+                all_odoo_rows.append({"pp_ext_id": pp_ext_id, "tmpl_name": tmpl_name, "variant_values": variant_vals, "_key": str(key)})
+
+        # Process Phase 2 CSV and match each row
+        matched_rows: list[dict[str, str]] = []
+        unmatched_rows: list[dict[str, str]] = []
+
+        with phase2_csv.open("r", newline="", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                name = str(row.get("Name") or "").strip()
+                variant_values = str(row.get("Variant Values") or "").strip()
+                key = _norm_key(name, variant_values)
+                pp_ext_id = odoo_lookup.get(key)
+                if pp_ext_id:
+                    odoo_keys_used.add(key)
+                    matched_rows.append({"id": pp_ext_id, **row})
+                else:
+                    unmatched_rows.append({**row, "match_failure_reason": "No matching variant in Odoo export"})
+
+        # Odoo rows that didn't match any Phase 2 row
+        unused_odoo_rows: list[dict[str, str]] = [
+            {"odoo_ext_id": r["pp_ext_id"], "tmpl_name": r["tmpl_name"], "variant_values": r["variant_values"], "reason": "Not present in Phase 2 CSV"}
+            for r in all_odoo_rows
+            if _norm_key(r["tmpl_name"], r["variant_values"]) not in odoo_keys_used
+        ]
+
+        matched_cols = ["id", "product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
+        unmatched_cols = ["product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost", "match_failure_reason"]
+        unused_cols = ["odoo_ext_id", "tmpl_name", "variant_values", "reason"]
+
+        self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
+        self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
+        self._write_csv(output_folder / "odoo_phase2_merger_unused_odoo.csv", unused_cols, unused_odoo_rows)
+
+        return {
+            "total_phase2_rows": len(matched_rows) + len(unmatched_rows),
+            "matched": len(matched_rows),
+            "unmatched": len(unmatched_rows),
+            "total_odoo_rows": len(all_odoo_rows),
+            "unused_odoo_rows": len(unused_odoo_rows),
+        }
 
     @staticmethod
     def _read_csv_rows(path: Path) -> list[dict[str, str]]:

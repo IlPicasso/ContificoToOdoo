@@ -49,6 +49,10 @@ def _build_files(run_id: str) -> dict[str, str]:
         "fase2_2_internal_reference_update_csv": f"{base}/product_internal_reference_update.csv",
         # === Fase 3: stock ===
         "fase3_stock_quant_csv": f"{base}/odoo_stock_quant.csv",
+        # === Fase 2 enriquecida con IDs de Odoo (post-merge) ===
+        "fase2_merged_with_odoo_ids_csv": f"{base}/odoo_phase2_with_odoo_ids.csv",
+        "fase2_merged_unmatched_csv": f"{base}/odoo_phase2_merger_unmatched.csv",
+        "fase2_merged_unused_odoo_csv": f"{base}/odoo_phase2_merger_unused_odoo.csv",
         # === Reportes de calidad (no importar) ===
         "reporte_errores_csv": f"{base}/migration_errors.csv",
         "reporte_mapping_csv": f"{base}/mapping_report.csv",
@@ -342,6 +346,11 @@ def download_file(run_id: str, filename: str):
         "odoo_phase2_duplicate_variant_keys.csv",
         "odoo_phase2_missing_stock_references.csv",
         "odoo_phase2_csv_format_errors.csv",
+        "odoo_phase2_with_odoo_ids.csv",
+        "odoo_phase2_merger_unmatched.csv",
+        "odoo_phase2_merger_unused_odoo.csv",
+        "odoo_phase1_template_renames.csv",
+        "odoo_phase2_orphaned_skus.csv",
     }
     if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
@@ -350,6 +359,44 @@ def download_file(run_id: str, filename: str):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     media_type = "text/plain; charset=utf-8" if filename.endswith(('.log', '.md')) else "text/csv; charset=utf-8"
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
+
+
+@router.post('/runs/{run_id}/phase2/merge')
+async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...)):
+    """Upload the Odoo product.product export CSV to enrich the Phase 2 variant CSV with
+    the 'id' column (product.product External ID), so Odoo can UPDATE existing variants
+    instead of creating duplicates.
+
+    Expected Odoo export columns:
+      id | id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
+    """
+    run_folder = _output_root() / run_id
+    if not run_folder.exists():
+        raise HTTPException(status_code=404, detail="Run no encontrado")
+    phase2_csv = run_folder / "odoo_product_variant_internal_references.csv"
+    if not phase2_csv.exists():
+        raise HTTPException(status_code=404, detail="Phase 2 CSV no encontrado en este run — genera la exportación primero")
+
+    odoo_export_path = run_folder / "odoo_product_product_export.csv"
+    odoo_export_path.write_bytes(await file.read())
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export_path,
+        phase2_csv=phase2_csv,
+        output_folder=run_folder,
+    )
+
+    base = f"/odoo-migration/runs/{run_id}/files"
+    return {
+        "run_id": run_id,
+        **result,
+        "files": {
+            "phase2_with_odoo_ids": f"{base}/odoo_phase2_with_odoo_ids.csv",
+            "unmatched": f"{base}/odoo_phase2_merger_unmatched.csv",
+            "unused_odoo": f"{base}/odoo_phase2_merger_unused_odoo.csv",
+        },
+    }
 
 
 @router.post('/runs/{run_id}/stock/start')
