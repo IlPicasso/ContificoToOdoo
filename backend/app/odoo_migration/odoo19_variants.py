@@ -466,7 +466,7 @@ def split_templates_by_catalog(
         sku = str(row.get("sku") or "").strip()
         parsed = derive_parent_and_attrs(sku, str(row.get("name") or ""), str(row.get("category") or ""))
         ext_id = parsed.get("template_external_id") or normalize_external_id(sku, "product_template")
-        entry = template_map.setdefault(ext_id, {"seed": row, "rows": [], "attrs": {}})
+        entry = template_map.setdefault(ext_id, {"seed": row, "rows": [], "attrs": {}, "valid_skus": set()})
         entry["rows"].append(row)
         merged = _clean_candidate_attrs(sku, parsed.get("attrs") or {}, row.get("attrs") or {})
         final_attrs = _apply_tie_attribute_rules(merged, str(row.get("name") or ""), str(row.get("category") or ""))
@@ -489,6 +489,9 @@ def split_templates_by_catalog(
                 rejection_rows.append({"source_sku": sku, "source_id": str(row.get("source_id") or row.get("id") or ""), "source_name": str(row.get("name") or ""), "attempted_attribute": attr_bucket["__name__"], "attempted_value": value, "reason": "Value not found in Odoo catalog"})
                 continue
             entry["attrs"].setdefault(attr_bucket["__name__"], set()).add(value_exact)
+            # Only variant-creating ("always") attrs determine if a SKU has a matching Odoo variant
+            if attr_bucket["__name__"] not in ("Marca", "Color"):
+                entry["valid_skus"].add(sku)
 
     for ext_id, payload in template_map.items():
         seed = payload["seed"]
@@ -531,6 +534,29 @@ def split_templates_by_catalog(
                     "Barcode": str(r.get("barcode") or r_sku),
                 })
             continue
+        # Emit rows whose SKU had ALL variant-creating ("always") attribute values rejected
+        # as standalone simple products. Only applies when the template has at least one
+        # "always" attr — templates with only no_variant attrs (Marca/Color) produce a
+        # single variant per template and orphaned-simple logic doesn't apply.
+        has_always_attrs = any(a not in ("Marca", "Color") for a in attrs)
+        valid_skus: set[str] = payload.get("valid_skus", set())
+        for r in payload["rows"]:
+            r_sku = str(r.get("sku") or "")
+            if has_always_attrs and r_sku not in valid_skus:
+                simple_rows.append({
+                    "External ID": normalize_external_id(r_sku, "product_template"),
+                    "Name": normalize_product_name(str(r.get("name") or "")),
+                    "Product Type": "Goods",
+                    "Product Category": normalize_product_name(str(r.get("category") or "All / ADAMS / Sin categoría")),
+                    "Sales Price": normalize_price(r.get("price")),
+                    "Cost": normalize_price(r.get("cost")),
+                    "Can be Sold": "True",
+                    "Can be Purchased": "True",
+                    "is_storable": "True",
+                    "available_in_pos": normalize_bool(r.get("para_pos"), default=False),
+                    "Internal Reference": r_sku,
+                    "Barcode": str(r.get("barcode") or r_sku),
+                })
         for attr_name, values in attrs.items():
             if not values:
                 continue

@@ -21,6 +21,8 @@ from .odoo19_variants import (
     PRODUCTS_COLUMNS as ODOO_TEMPLATE_COLUMNS,
     VARIANT_MAPPING_COLUMNS,
     STOCK_QUANT_SIMPLE_COLUMNS,
+    _catalog_index,
+    _norm_match,
 )
 from .rules import (
     detect_brand, detect_color, detect_category, calculate_total_stock, should_exclude_zero_stock,
@@ -496,6 +498,8 @@ class OdooMigrationService:
 
         variant_rows: list[dict[str, str]] = []
         validation_rows: list[dict[str, str]] = []
+        orphaned_skus: list[dict[str, str]] = []
+        catalog_idx = _catalog_index()
 
         def _normalize_variant_attr_value(attr: str, raw_value: str) -> str:
             parts = [normalize.strip() for normalize in re.split(r"\s*,\s*", str(raw_value or "")) if normalize.strip()]
@@ -516,30 +520,39 @@ class OdooMigrationService:
             sku = str(row.get("Internal Reference") or row.get("source_sku") or row.get("Source SKU") or row.get("Barcode") or "").strip()
             barcode = str(row.get("Barcode") or "").strip() or sku
             name = str(row.get("Product Template Name") or "").strip()
-            values = []
+            ext_id = str(row.get("Product Template External ID") or "").strip()
+            canonical_name = ext_id_to_canonical_name.get(ext_id, "")
+            import_name = canonical_name or name
+
+            values: list[str] = []
+            invalid_attrs: list[str] = []
             for attr in attr_order:
                 v = _normalize_variant_attr_value(attr, str(row.get(attr) or ""))
                 if v:
+                    attr_bucket = catalog_idx.get(_norm_match(attr))
+                    if not attr_bucket or not attr_bucket.get(_norm_match(v)):
+                        invalid_attrs.append(f"{attr}: {v}")
+                        validation_rows.append({"issue_type": "Invalid attribute value — not in Odoo catalog", "product_template_external_id": ext_id, "product_template_name": name, "internal_reference": sku, "barcode": barcode, "variant_values": f"{attr}: {v}", "source_sku": sku, "reason": f"Value '{v}' for attribute '{attr}' not in ODOO_ATTRIBUTE_CATALOG; omitted from Variant Values"})
+                        continue
                     values.append(f"{attr}: {v}")
             variant_values = ", ".join(values)
             sales_price = f"{float(row.get('Sales Price') or 0):.2f}"
             cost = f"{float(row.get('Cost') or 0):.2f}"
 
             if not sku:
-                validation_rows.append({"issue_type":"Empty Internal Reference","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":"","barcode":barcode,"variant_values":variant_values,"source_sku":"","reason":"Variant row without SKU"})
+                validation_rows.append({"issue_type":"Empty Internal Reference","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":"","barcode":barcode,"variant_values":variant_values,"source_sku":"","reason":"Variant row without SKU"})
                 continue
             if not variant_values:
-                validation_rows.append({"issue_type":"Empty Variant Values","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Variant has no valid attributes"})
-                validation_rows.append({"issue_type":"Variant has no valid attributes","product_template_external_id":str(row.get("Product Template External ID") or ""),"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Excluded from phase 2 variant import"})
+                validation_rows.append({"issue_type":"Empty Variant Values","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Variant has no valid attributes"})
+                validation_rows.append({"issue_type":"Variant has no valid attributes","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Excluded from phase 2 variant import"})
+                if canonical_name or name in template_names:
+                    orphaned_skus.append({"Internal Reference": sku, "Barcode": barcode, "Product Template Name": import_name, "Attempted Variant Values": ", ".join(invalid_attrs) if invalid_attrs else "", "Reason": "All attribute values rejected — not in Odoo catalog" if invalid_attrs else "No attribute values parsed"})
                 continue
-            ext_id = str(row.get("Product Template External ID") or "").strip()
-            canonical_name = ext_id_to_canonical_name.get(ext_id, "")
             if not canonical_name and name not in template_names:
                 validation_rows.append({"issue_type":"Product Template Name not found in Fase 1 with attributes","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":variant_values,"source_sku":sku,"reason":"Template name not present in odoo_product_templates_with_attributes.csv"})
                 continue
 
-            import_name = canonical_name or name
-            variant_rows.append({"Internal Reference":sku,"Barcode":barcode,"Name":import_name,"Variant Values":variant_values,"Sales Price":sales_price,"Cost":cost})
+            variant_rows.append({"product_tmpl_id/id": f"__import__.{ext_id}" if ext_id else "", "Internal Reference": sku, "Barcode": barcode, "Name": import_name, "Variant Values": variant_values, "Sales Price": sales_price, "Cost": cost})
 
         # Deduplicate by Internal Reference (same SKU may appear in both S1 and S2 Contifico records)
         seen_skus: dict[str, dict] = {}
@@ -551,6 +564,14 @@ class OdooMigrationService:
             else:
                 validation_rows.append({"issue_type":"Duplicate SKU deduplicated","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":r["Internal Reference"],"barcode":r["Barcode"],"variant_values":r["Variant Values"],"source_sku":r["Internal Reference"],"reason":"SKU appeared in multiple Contifico records; first occurrence kept"})
         variant_rows = deduped_rows
+        # Deduplicate orphaned SKUs by Internal Reference as well
+        seen_orphan_skus: set[str] = set()
+        deduped_orphans = []
+        for o in orphaned_skus:
+            if o["Internal Reference"] not in seen_orphan_skus:
+                seen_orphan_skus.add(o["Internal Reference"])
+                deduped_orphans.append(o)
+        orphaned_skus = deduped_orphans
 
         sku_counts = {}
         barcode_counts = {}
@@ -584,17 +605,18 @@ class OdooMigrationService:
                 validation_rows.append({"issue_type":"Stock SKU not found after Phase 2 mapping","product_template_external_id":"","product_template_name":"","internal_reference":sku,"barcode":"","variant_values":"","source_sku":sku,"reason":"Exists in odoo_stock_quant.csv but not in simple/variant references"})
 
         variant_csv_path = folder / "odoo_product_variant_internal_references.csv"
-        self._write_csv(variant_csv_path, ["Internal Reference","Barcode","Name","Variant Values","Sales Price","Cost"], variant_rows)
+        self._write_csv(variant_csv_path, ["product_tmpl_id/id","Internal Reference","Barcode","Name","Variant Values","Sales Price","Cost"], variant_rows)
         self._validate_phase2_variant_internal_reference_csv(
             csv_path=variant_csv_path,
             errors_path=folder / "odoo_phase2_csv_format_errors.csv",
         )
         no_barcode = [{k:v for k,v in r.items() if k != "Barcode"} for r in variant_rows]
-        self._write_csv(folder / "odoo_product_variant_internal_references_no_barcode.csv", ["Internal Reference","Name","Variant Values","Sales Price","Cost"], no_barcode)
+        self._write_csv(folder / "odoo_product_variant_internal_references_no_barcode.csv", ["product_tmpl_id/id","Internal Reference","Name","Variant Values","Sales Price","Cost"], no_barcode)
         self._write_csv(folder / "odoo_phase2_variant_internal_reference_validation.csv", ["issue_type","product_template_external_id","product_template_name","internal_reference","barcode","variant_values","source_sku","reason"], validation_rows)
         self._write_csv(folder / "odoo_phase2_duplicate_variant_keys.csv", ["product_template_name","variant_values","internal_reference","barcode","source_sku","reason"], duplicate_key_rows)
         self._write_csv(folder / "odoo_phase2_missing_stock_references.csv", ["stock_internal_reference","location","inventory_quantity","reason"], missing_stock_rows)
         self._write_csv(folder / "odoo_phase1_template_renames.csv", ["external_id","old_name","new_name"], template_rename_rows)
+        self._write_csv(folder / "odoo_phase2_orphaned_skus.csv", ["Internal Reference","Barcode","Product Template Name","Attempted Variant Values","Reason"], orphaned_skus)
 
 
     def _write_internal_reference_update_csv(
@@ -696,7 +718,7 @@ class OdooMigrationService:
 
     @staticmethod
     def _validate_phase2_variant_internal_reference_csv(*, csv_path: Path, errors_path: Path) -> None:
-        expected_header = ["Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
+        expected_header = ["product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
         errors: list[dict[str, str]] = []
         lines = csv_path.read_text(encoding="utf-8-sig").splitlines()
 
@@ -710,13 +732,13 @@ class OdooMigrationService:
                     reasons: list[str] = []
                     if row_number == 1 and parsed != expected_header:
                         reasons.append("Invalid header columns")
-                    if len(parsed) != 6:
-                        reasons.append("Row does not have exactly 6 columns")
+                    if len(parsed) != 7:
+                        reasons.append("Row does not have exactly 7 columns")
                     if ";" in raw_line:
                         reasons.append("Semicolon delimiter detected")
                     if len(parsed) == 1 and raw_line.startswith('"') and raw_line.endswith('"'):
                         reasons.append("Whole row appears wrapped as one quoted field")
-                    if len(parsed) >= 6 and ";;;;;" in (parsed[5] or ""):
+                    if len(parsed) >= 7 and ";;;;;" in (parsed[6] or ""):
                         reasons.append("Cost contains ;;;;;")
                     if reasons:
                         errors.append({
