@@ -1085,6 +1085,102 @@ class OdooMigrationService:
         if not path.exists(): return []
         return json.loads(path.read_text(encoding='utf-8'))
 
+    def compare_inventory_with_odoo_export(
+        self,
+        *,
+        run_folder: Path,
+        odoo_export_csv: Path,
+        output_folder: Path,
+    ) -> dict[str, Any]:
+        """Compare SKUs from a Contifico extraction run against an Odoo inventory export.
+
+        Reads Internal References from the run's simple + variant CSVs, then compares
+        against the Odoo export (expected column: default_code).
+
+        Returns counts and writes three CSVs:
+          - odoo_compare_only_in_contifico.csv
+          - odoo_compare_only_in_odoo.csv
+          - odoo_compare_in_both.csv
+        """
+        # --- Load Contifico SKUs from run outputs ---
+        contifico_rows: list[dict[str, str]] = []
+
+        simple_csv = run_folder / "odoo_product_templates_simple.csv"
+        for row in self._read_csv_rows(simple_csv):
+            sku = str(row.get("Internal Reference") or "").strip()
+            if sku:
+                contifico_rows.append({"sku": sku, "source": "simple", "name": str(row.get("Name") or "").strip()})
+
+        variant_csv = run_folder / "odoo_product_variant_internal_references.csv"
+        for row in self._read_csv_rows(variant_csv):
+            sku = str(row.get("Internal Reference") or "").strip()
+            if sku:
+                contifico_rows.append({"sku": sku, "source": "variant", "name": str(row.get("Name") or "").strip()})
+
+        contifico_by_sku: dict[str, dict] = {}
+        for r in contifico_rows:
+            contifico_by_sku.setdefault(r["sku"].casefold(), r)
+
+        # --- Load Odoo SKUs from upload ---
+        odoo_rows: list[dict[str, str]] = []
+        with odoo_export_csv.open("r", newline="", encoding="utf-8-sig") as f:
+            for row in csv.DictReader(f):
+                sku = str(row.get("default_code") or "").strip()
+                if not sku:
+                    continue
+                odoo_rows.append({
+                    "sku": sku,
+                    "name": str(row.get("name") or "").strip(),
+                    "barcode": str(row.get("barcode") or "").strip(),
+                    "qty_available": str(row.get("qty_available") or "0").strip(),
+                    "lst_price": str(row.get("lst_price") or "").strip(),
+                })
+
+        odoo_by_sku: dict[str, dict] = {}
+        for r in odoo_rows:
+            odoo_by_sku.setdefault(r["sku"].casefold(), r)
+
+        contifico_keys = set(contifico_by_sku.keys())
+        odoo_keys = set(odoo_by_sku.keys())
+
+        only_contifico_keys = contifico_keys - odoo_keys
+        only_odoo_keys = odoo_keys - contifico_keys
+        both_keys = contifico_keys & odoo_keys
+
+        only_contifico_rows = sorted(
+            [{"Internal Reference": contifico_by_sku[k]["sku"], "Name": contifico_by_sku[k]["name"], "Source": contifico_by_sku[k]["source"]}
+             for k in only_contifico_keys],
+            key=lambda r: r["Internal Reference"],
+        )
+        only_odoo_rows = sorted(
+            [{"default_code": odoo_by_sku[k]["sku"], "name": odoo_by_sku[k]["name"], "barcode": odoo_by_sku[k]["barcode"], "qty_available": odoo_by_sku[k]["qty_available"]}
+             for k in only_odoo_keys],
+            key=lambda r: r["default_code"],
+        )
+        in_both_rows = sorted(
+            [{"Internal Reference": contifico_by_sku[k]["sku"], "name_odoo": odoo_by_sku[k]["name"], "qty_available": odoo_by_sku[k]["qty_available"], "barcode": odoo_by_sku[k]["barcode"]}
+             for k in both_keys],
+            key=lambda r: r["Internal Reference"],
+        )
+
+        self._write_csv(output_folder / "odoo_compare_only_in_contifico.csv",
+                        ["Internal Reference", "Name", "Source"], only_contifico_rows)
+        self._write_csv(output_folder / "odoo_compare_only_in_odoo.csv",
+                        ["default_code", "name", "barcode", "qty_available"], only_odoo_rows)
+        self._write_csv(output_folder / "odoo_compare_in_both.csv",
+                        ["Internal Reference", "name_odoo", "qty_available", "barcode"], in_both_rows)
+
+        return {
+            "contifico_total": len(contifico_by_sku),
+            "odoo_total": len(odoo_by_sku),
+            "in_both": len(both_keys),
+            "only_in_contifico": len(only_contifico_keys),
+            "only_in_odoo": len(only_odoo_keys),
+            "preview_only_contifico": [r["Internal Reference"] for r in only_contifico_rows[:30]],
+            "preview_only_odoo": [r["default_code"] for r in only_odoo_rows[:30]],
+            "preview_in_both": [r["Internal Reference"] for r in in_both_rows[:30]],
+        }
+
     def merge_phase2_with_odoo_export(
         self,
         *,
