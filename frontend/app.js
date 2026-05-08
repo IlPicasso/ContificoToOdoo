@@ -247,6 +247,11 @@ $('generateMigrationCsv').addEventListener('click', async () => {
         show('migrationSummaryOut', job);
         renderWarnings(job.summary || {});
         renderMigrationLinks(job.files, job.summary);
+        // Pre-fill run_id en Merger y Stock para el siguiente paso
+        if (job.run_id) {
+          if (!$('mergerRunId').value.trim()) $('mergerRunId').value = job.run_id;
+          if (!$('stockRunId').value.trim()) $('stockRunId').value = job.run_id;
+        }
         const summaryExpected = Number((job.summary || {}).expected_min_items_from_api || 0);
         const summaryFound = Number(job.found_items || (job.summary || {}).total_products || 0);
         const summaryCoverage = summaryExpected > 0 ? ` Cobertura vs count API: ${summaryFound}/${summaryExpected} (${Math.min(100, ((summaryFound / summaryExpected) * 100)).toFixed(2)}%).` : '';
@@ -300,6 +305,10 @@ $('processRawJson').addEventListener('click', async () => {
     show('migrationSummaryOut', data);
     renderWarnings(data.summary || {});
     renderMigrationLinks(data.files, data.summary);
+    if (data.run_id) {
+      if (!$('mergerRunId').value.trim()) $('mergerRunId').value = data.run_id;
+      if (!$('stockRunId').value.trim()) $('stockRunId').value = data.run_id;
+    }
     setMigrationStatus(`Archivo procesado. Productos detectados: ${data.detected_products}.`);
   } catch (e) { showErr(e); }
 });
@@ -320,15 +329,72 @@ function activateTab(name) {
 }
 document.querySelectorAll('.tab-btn').forEach((btn)=>btn.addEventListener('click',()=>activateTab(btn.dataset.tab)));
 
+// ── Merger Variantes ────────────────────────────────────────────────────────
+
+function setMergerStatus(msg) { const el=$('mergerStatus'); if(el) el.textContent=msg||''; }
+
+function renderMergerLinks(runId, files) {
+  const container = $('mergerLinks');
+  if (!container || !files) return;
+  container.innerHTML = '';
+  const section = document.createElement('div');
+  section.className = 'phase-section';
+  const title = document.createElement('div');
+  title.className = 'phase-title';
+  title.textContent = 'Archivos generados por el merger';
+  section.appendChild(title);
+  const MERGER_FILES = [
+    { key: 'phase2_with_odoo_ids', label: '⭐ odoo_phase2_with_odoo_ids.csv — importar en Odoo (UPDATE garantizado)', isImport: true },
+    { key: 'unmatched',            label: 'Variantes sin par en Odoo (merger_unmatched)', isImport: false },
+    { key: 'unused_odoo',          label: 'Variantes Odoo sin par en Fase 2 (merger_unused_odoo)', isImport: false },
+  ];
+  MERGER_FILES.forEach(({ key, label, isImport }) => {
+    const path = files[key];
+    if (!path) return;
+    section.appendChild(makeLink(`${base()}${path}`, label, isImport));
+  });
+  container.appendChild(section);
+}
+
+$('executeMerger').addEventListener('click', async () => {
+  try {
+    const runId = $('mergerRunId').value.trim();
+    if (!runId) throw new Error('Debes ingresar el Run ID de la corrida.');
+    const input = $('mergerOdooExportFile');
+    if (!input?.files?.[0]) throw new Error('Debes seleccionar el CSV exportado de Odoo.');
+    $('executeMerger').disabled = true;
+    setMergerStatus('Ejecutando merger...');
+    const url = new URL(`${base()}/odoo-migration/runs/${encodeURIComponent(runId)}/phase2/merge`);
+    const form = new FormData();
+    form.append('file', input.files[0]);
+    const resp = await fetch(url, { method: 'POST', body: form });
+    const text = await resp.text();
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+    show('mergerSummaryOut', data);
+    renderMergerLinks(runId, data.files);
+    setMergerStatus(`Merger completado. Matcheados: ${data.matched} · Sin par: ${data.unmatched} · Odoo sin usar: ${data.unused_odoo_rows}`);
+    // Pre-fill run_id en Stock si está vacío
+    if (!$('stockRunId').value.trim()) $('stockRunId').value = runId;
+  } catch(e) {
+    setMergerStatus(`Error: ${e.message}`);
+    showErr(e);
+  } finally {
+    $('executeMerger').disabled = false;
+  }
+});
+
+// ── Stock por bodega ────────────────────────────────────────────────────────
+
 function getRunId(){ return $('stockRunId').value.trim(); }
 function setStockStatus(msg){ const el=$('stockStatusText'); if(el) el.textContent=msg||''; }
 
 $('startStockPhase').addEventListener('click', async ()=>{
   try{
     const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id');
-    setStockStatus('Iniciando Fase 2...');
+    setStockStatus('Iniciando stock...');
     const data=await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/start`);
-    show('stockStatusOut', data); setStockStatus('Fase 2 iniciada.');
+    show('stockStatusOut', data); setStockStatus('Stock iniciado.');
   }catch(e){ showErr(e); }
 });
 
@@ -342,10 +408,10 @@ $('checkStockStatus').addEventListener('click', async ()=>{
 });
 
 $('pauseStockPhase').addEventListener('click', async ()=>{
-  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/pause`)); setStockStatus('Fase 2 pausada.'); }catch(e){ showErr(e); }
+  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/pause`)); setStockStatus('Stock pausado.'); }catch(e){ showErr(e); }
 });
 $('resumeStockPhase').addEventListener('click', async ()=>{
-  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/resume`)); setStockStatus('Fase 2 reanudada.'); }catch(e){ showErr(e); }
+  try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/resume`)); setStockStatus('Stock reanudado.'); }catch(e){ showErr(e); }
 });
 $('retryStockFailed').addEventListener('click', async ()=>{
   try{ const runId=getRunId(); if(!runId) throw new Error('Debes ingresar un run_id'); show('stockStatusOut', await apiPost(`/odoo-migration/runs/${encodeURIComponent(runId)}/stock/retry-failed`)); setStockStatus('Reintento de fallidos iniciado.'); }catch(e){ showErr(e); }

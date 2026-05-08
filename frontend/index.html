@@ -12,13 +12,14 @@
       </section>
 
       <section class="tabs">
-        <button class="tab-btn active" data-tab="phase1">Fase 1 · Snapshot</button>
-        <button class="tab-btn" data-tab="phase2">Fase 2 · Stock</button>
+        <button class="tab-btn active" data-tab="export">Exportar</button>
+        <button class="tab-btn" data-tab="merger">Merger Variantes</button>
+        <button class="tab-btn" data-tab="stock">Stock</button>
         <button class="tab-btn" data-tab="preview">Preview Contífico</button>
       </section>
 
-      <section id="tab-phase1" class="tab-panel active card">
-        <h2>Fase 1: Migración Odoo (snapshot CSV)</h2>
+      <section id="tab-export" class="tab-panel active card">
+        <h2>Exportar desde Contífico (Fase 1)</h2>
         <input id="exportPageSize" type="number" value="100" min="1" max="500" placeholder="Page size" />
         <input id="exportMaxPages" type="number" value="300" min="1" max="1000" placeholder="Max pages" />
         <h3>Precheck Odoo (Atributos de producto)</h3>
@@ -30,7 +31,7 @@
         <button id="precheckOdooOffline">Precheck offline (sin API Odoo)</button>
         <input id="rawJsonFile" type="file" accept=".log,.json,.txt" />
         <button id="processRawJson">Procesar raw.log / JSON subido</button>
-        <button id="generateMigrationCsv">Generar corrida Fase 1</button>
+        <button id="generateMigrationCsv">Generar corrida</button>
         <button id="loadRuns">Ver últimas corridas</button>
         <div id="migrationProgress" class="progress hidden"><div id="migrationProgressBar" class="progress-bar"></div></div>
         <p id="migrationStatus" class="muted"></p>
@@ -39,11 +40,24 @@
         <div id="migrationLinks"></div>
       </section>
 
-      <section id="tab-phase2" class="tab-panel card">
-        <h2>Fase 2: Enriquecimiento de stock por bodega</h2>
-        <input id="stockRunId" placeholder="Run ID generado en Fase 1" />
+      <section id="tab-merger" class="tab-panel card">
+        <h2>Merger Variantes (Fase 2)</h2>
+        <p class="muted">Después de importar Fase 1 en Odoo, exporta <code>product.product</code> con columnas <code>id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids</code> y súbelo aquí. El merger genera <strong>odoo_phase2_with_odoo_ids.csv</strong> con el External ID de cada variante para que Odoo haga UPDATE (no crea duplicados).</p>
+        <label>Run ID de la corrida</label>
+        <input id="mergerRunId" placeholder="Run ID generado en Exportar" />
+        <label>Export product.product de Odoo (CSV)</label>
+        <input id="mergerOdooExportFile" type="file" accept=".csv,text/csv" />
+        <button id="executeMerger">Ejecutar merger</button>
+        <p id="mergerStatus" class="muted"></p>
+        <pre id="mergerSummaryOut"></pre>
+        <div id="mergerLinks"></div>
+      </section>
+
+      <section id="tab-stock" class="tab-panel card">
+        <h2>Stock por bodega (Fase 3)</h2>
+        <input id="stockRunId" placeholder="Run ID generado en Exportar" />
         <div class="row-btns">
-          <button id="startStockPhase">Iniciar Fase 2</button>
+          <button id="startStockPhase">Iniciar stock</button>
           <button id="checkStockStatus">Consultar estado</button>
         </div>
         <div class="row-btns">

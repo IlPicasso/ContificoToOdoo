@@ -1,6 +1,6 @@
 # Migrador ContificoToOdoo
 
-Versión 1.0.51
+Versión 1.0.56
 
 Repositorio reorientado para migrar de Contífico a Odoo de manera ordenada. Conserva el frontend y una API FastAPI ya integrada con gran parte de la funcionalidad operativa, y ahora prioriza la extracción, normalización y carga de datos críticos hacia Odoo.
 
@@ -287,6 +287,7 @@ Si necesitas cambiar la URL del backend para el frontend, define `API_BASE_URL` 
 
 ## Historial de cambios
 
+- **1.0.56 (2026-05-08)**: Se añadió el merger de Fase 2 (`merge_phase2_with_odoo_export`): dado el export de `product.product` de Odoo (con columnas `id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids`), el merger hace join por `(nombre del template, valores de atributo)` y genera `odoo_phase2_with_odoo_ids.csv` con la columna `id` del `product.product`, garantizando UPDATE en lugar de creación de duplicados. Se añadió endpoint `POST /runs/{run_id}/phase2/merge`, pestaña **Merger Variantes** en el frontend y 7 tests nuevos.
 - **1.0.55 (2026-05-06)**: Se rehizo la lógica conservadora del exportador para separar productos simples y con atributos usando un catálogo maestro fijo Odoo (sin heurísticas ni creación automática), con nuevas salidas `odoo_product_templates_simple.csv`, `odoo_product_templates_with_attributes.csv`, `odoo_attribute_rejections.csv` y `odoo_external_id_conflicts.csv`; además, ahora la corrida falla explícitamente cuando hay conflictos reales de External ID.
 - **1.0.54 (2026-05-05)**: Se restauró deduplicación determinística en `odoo_variant_sku_mapping.csv` por combinación de atributos dentro del template para evitar errores de Odoo `product_product_combination_unique`; los SKUs repetidos por combinación ahora se reportan en `odoo_duplicate_variant_combinations.csv` con referencias descartadas para revisión.
 - **1.0.53 (2026-05-05)**: Se corrigió el manejo de corbatas con sufijo slash no-ancho (ej. `CORBATA-BC/2013`) para no forzar `Talla`/`Ancho Corbata`; ahora se marcan `UNPARSED` y no contaminan validación template/variantes. También se aplica la misma regla de normalización de corbatas al construir templates para mantener consistencia con variant mapping.
@@ -390,14 +391,43 @@ El frontend los agrupa por fase y muestra advertencias de calidad antes de desca
 | 1 | `odoo_product_templates_simple.csv` | `product.template` | Productos sin variantes. Incluye `Internal Reference` y `Barcode`. |
 | 2 | `odoo_product_templates_with_attributes.csv` | `product.template` | Templates con variantes. **No** incluye `Internal Reference` ni `Barcode` (se actualizan en Fase 2). |
 
-### Fase 2 — Actualizar Internal Reference / SKU
+### Fase 2 — Actualizar Internal Reference / SKU en variantes
 
-> Ejecutar **después** de que Odoo haya creado las variantes. Odoo identifica los registros por `Name + Variant Values`.
+> Ejecutar **después** de que Odoo haya importado los templates y auto-creado las variantes.
+>
+> **Flujo recomendado (con merger):**
+> 1. Importa Fase 1 en Odoo.
+> 2. Exporta `product.product` desde Odoo con columnas: `id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids`.
+> 3. En el frontend (pestaña **Merger Variantes**), sube ese export → el sistema genera `odoo_phase2_with_odoo_ids.csv` con la columna `id` que identifica cada variante en Odoo.
+> 4. Importa en Odoo `odoo_phase2_with_odoo_ids.csv` — Odoo **actualiza** la variante (no crea duplicados).
+>
+> Si no tienes el export de Odoo, puedes importar `odoo_product_variant_internal_references.csv` directamente, pero Odoo intentará hacer match por `Name + Variant Values` y existe riesgo de crear duplicados silenciosos. Prueba primero con 5–10 filas y verifica que el log diga "Updated X records".
 
 | Orden | Archivo | Modelo Odoo | Notas |
 |-------|---------|-------------|-------|
-| 3 | `odoo_product_variant_internal_references.csv` | `product.product` | Setea SKU y Barcode en variantes. Identificación: `Name + Variant Values`. |
+| 3a | `odoo_phase2_with_odoo_ids.csv` ⭐ | `product.product` | **Recomendado.** Generado por el merger. Columna `id` garantiza UPDATE sin duplicados. |
+| 3b | `odoo_product_variant_internal_references.csv` | `product.product` | Alternativa sin merger. Match por `Name + Variant Values`. |
 | 4 | `product_internal_reference_update.csv` | `product.product` / `product.template` | Update unificado (simples + variantes) con `External ID`. |
+
+#### Merger Variantes (paso 3a)
+
+El merger se opera desde el frontend (pestaña **Merger Variantes**) o vía API:
+
+```bash
+# Sube el export de Odoo para el run_id de tu corrida
+curl -X POST "http://127.0.0.1:8000/odoo-migration/runs/<RUN_ID>/phase2/merge" \
+  -F "file=@odoo_product_product_export.csv"
+```
+
+Archivos generados por el merger:
+
+| Archivo | Descripción |
+|---------|-------------|
+| `odoo_phase2_with_odoo_ids.csv` | **Importar en Odoo.** Columna `id` = External ID del `product.product` → UPDATE garantizado. |
+| `odoo_phase2_merger_unmatched.csv` | Variantes de Fase 2 que no encontraron par en el export de Odoo. Revisar antes de importar. |
+| `odoo_phase2_merger_unused_odoo.csv` | Variantes en Odoo que no aparecen en Fase 2 (productos no migrados desde Contifico). |
+
+El join se hace por `(nombre del template, valores de atributo)` con normalización de mayúsculas y espacios.
 
 ### Fase 3 — Stock
 
@@ -418,6 +448,10 @@ El frontend los agrupa por fase y muestra advertencias de calidad antes de desca
 | `odoo_duplicate_variant_combinations.csv` | Combinaciones de variante duplicadas |
 | `odoo_missing_products_for_stock.csv` | SKUs con stock en Contifico sin mapping en Odoo |
 | `odoo_phase2_variant_internal_reference_validation.csv` | Validación cruzada Fase 1 ↔ Fase 2 |
+| `odoo_phase2_merger_unmatched.csv` | Variantes sin par en el export de Odoo (generado por merger) |
+| `odoo_phase2_merger_unused_odoo.csv` | Variantes en Odoo sin par en Fase 2 (generado por merger) |
+| `odoo_phase1_template_renames.csv` | Templates con nombre duplicado que requieren rename en Odoo antes del merger |
+| `odoo_phase2_orphaned_skus.csv` | SKUs con atributos inválidos cuyo template sí existe (candidatos a corrección manual) |
 | `excluded_zero_stock.csv` | Productos excluidos por tener stock total = 0 |
 | `unmapped_categories.csv` | Categorías de Contifico sin mapeo a Odoo |
 | `mapping_report.csv` | Detalle de clasificación por SKU |
