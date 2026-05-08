@@ -1,0 +1,18 @@
+﻿External ID,Name,Product Type,Product Category,Sales Price,Cost,Can be Sold,Can be Purchased,is_storable,available_in_pos,Internal Reference,Barcode
+product_template_5010,CONJUNTO BRAZZIER - INT,Goods,Sin Categoria,44.26,0.00,True,True,True,True,5010,5010
+product_template_t1653,TWIST FRONT SATIN-ROJO S-M-L,Goods,Ropa / Mujeres / Blusas,51.22,0.00,True,True,True,True,T1653,T1653
+product_template_t1532,TOP-BLACK S-M-L,Goods,Ropa / Mujeres / Blusas,46.00,0.00,True,True,True,True,T1532,T1532
+product_template_r679,PANTALON NEGRO - FUSHA S-M-L,Goods,Ropa / Mujeres / Pantalones,49.02,0.00,True,True,True,True,R679,R679
+product_template_y17558,JUMPER ENTERIZO DO+BE,Goods,Sin Categoria,47.23,0.00,True,True,True,True,Y17558,Y17558
+product_template_d5624,VESTIDO C/CINTURON SUGAR LIPS,Goods,Ropa / Mujeres / Vestidos,70.45,0.00,True,True,True,True,D5624,D5624
+product_template_9511tw,BLUSA CQ BY CQ,Goods,Ropa / Mujeres / Blusas,46.88,0.00,True,True,True,True,9511TW,9511TW
+product_template_10896t,BLUSA IDEM DITTO,Goods,Ropa / Mujeres / Blusas,44.26,0.00,True,True,True,True,10896T,10896T
+product_template_bpm7770,JEANS DE HOMBRE 100 ALGODON,Goods,Ropa / Hombres / Jeans,80.27,0.00,True,True,True,True,BPM7770,BPM7770
+product_template_bpm7682,JEANS SAX DE HOMBRE 100 ALGODON,Goods,Ropa / Hombres / Jeans,80.27,0.00,True,True,True,True,BPM7682,BPM7682
+product_template_bpm7473,KING PANTALON,Goods,Ropa / Hombres / Pantalones,80.27,0.00,True,True,True,True,BPM7473,BPM7473
+product_template_bmo6234,H. JEANS MATTHEW BUFFALO,Goods,Ropa / Hombres / Jeans,30.35,0.00,True,True,True,True,BMO6234,BMO6234
+product_template_bm13521,JEANS KOBE HOMBRE 1005 ALGODON,Goods,Ropa / Hombres / Jeans,30.35,0.00,True,True,True,True,BM13521,BM13521
+product_template_bm11115,JEANS KARSE DE HOMBRE,Goods,Ropa / Hombres / Jeans,30.35,0.00,True,True,True,True,BM11115,BM11115
+product_template_fund_adams,FUNDAS PLASTICAS ADAMS,Goods,Sin Categoria,0.01,0.00,True,True,True,True,FUND-ADAMS,FUND-ADAMS
+product_template_lb_601_7w_rd,"ROUND, COB, ADJUSTABLE LIGHT 7W 3000-3500K",Goods,Sin Categoria,18.00,0.00,True,True,True,True,LB-601-7W (RD),LB-601-7W (RD)
+product_template_43500_sal,SALMON 32 BRASIER ESENCIAL ST EVEN,Goods,Sin Categoria,33.83,0.00,True,True,True,True,43500-SAL,43500-SAL

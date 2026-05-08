@@ -1,0 +1,8 @@
+start=2026-05-08T03:30:17.429791Z
+source=uploaded_raw_json
+export_stock=False
+summary={"ok": 5971, "manual_review": 2675, "error": 428, "excluded_zero_stock": 16071}
+pages_fetched=0
+hit_max_pages=False
+snapshot=products_snapshot.jsonl
+state=stock_state.json

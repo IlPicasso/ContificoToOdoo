@@ -1,0 +1,438 @@
+﻿External ID,Name,Product Type,Product Category,Sales Price,Cost,Can be Sold,Can be Purchased,is_storable,available_in_pos,Product Attributes / Attribute,Product Attributes / Values,Product Attributes / Create Variants
+product_template_ve_ela_li,VESTIDO ELA LILA,Goods,Ropa / Mujeres / Vestidos,156.43,0.00,True,True,True,True,Talla,L,always
+product_template_set_meg_ylw,SET MEGHAN YELLOW,Goods,Sin Categoria,208.61,0.00,True,True,True,True,Talla,L,always
+product_template_pt_25c29118_10,Pantalon PT-25C29118-10,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,32,always
+product_template_pt_25c29118_10,Pantalon PT-25C29118-10,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ve_katya_pk,VESTIDO KATYA PINK,Goods,Ropa / Mujeres / Vestidos,133.83,0.00,True,True,True,True,Talla,L,always
+product_template_ve_katya_az,VESTIDO KATYA AZUL,Goods,Ropa / Mujeres / Vestidos,133.83,0.00,True,True,True,True,Talla,XL,always
+product_template_ve_katya_az,VESTIDO KATYA AZUL,Goods,Ropa / Mujeres / Vestidos,133.83,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_pt_24e510097_5,Pantalon PT-24E510097-5,Goods,Ropa / Hombres / Pantalones,65.13,0.00,True,True,True,True,Talla,46,always
+product_template_pt_24e510097_5,Pantalon PT-24E510097-5,Goods,Ropa / Hombres / Pantalones,65.13,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_pt_24e510097_5,Pantalon PT-24E510097-5,Goods,Ropa / Hombres / Pantalones,65.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_24e2712_3,Pantalon PT-24E2712-3,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Talla,36,always
+product_template_pt_24e2712_3,Pantalon PT-24E2712-3,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_pt_24e2712_3,Pantalon PT-24E2712-3,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_25c29118_13,Pantalon PT-25C29118-13,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,38,always
+product_template_pt_25c29118_13,Pantalon PT-25C29118-13,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_pt_25c29118_13,Pantalon PT-25C29118-13,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_25c29118_13,Leva LV-25C29118-13,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Talla,54,always
+product_template_lv_25c29118_13,Leva LV-25C29118-13,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_lv_25c29118_13,Leva LV-25C29118-13,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_5010,Camisa 5010,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,"15,15.5,16,16.5,17,17.5",always
+product_template_5010,Camisa 5010,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_5010,Camisa 5010,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ch_24es296_4,Chaleco CH-24ES296-4,Goods,Sin Categoria,43.39,0.00,True,True,True,True,Talla,50,always
+product_template_ch_24es296_4,Chaleco CH-24ES296-4,Goods,Sin Categoria,43.39,0.00,True,True,True,True,Color,Verde,no_variant
+product_template_ch_24es296_4,Chaleco CH-24ES296-4,Goods,Sin Categoria,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_24b11210_100,Leva LV-24B11210-100,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Talla,50,always
+product_template_lv_24b11210_100,Leva LV-24B11210-100,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_lv_24b11210_100,Leva LV-24B11210-100,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ve_milenag_grn,VESTIDO MILENA GREEN,Goods,Ropa / Mujeres / Vestidos,52.96,0.00,True,True,True,True,Talla,M,always
+product_template_ve_milenag_grn,VESTIDO MILENA GREEN,Goods,Ropa / Mujeres / Vestidos,52.96,0.00,True,True,True,True,Color,Verde,no_variant
+product_template_ve_stela_az,VESTIDO STELA AZUL,Goods,Ropa / Mujeres / Vestidos,147.74,0.00,True,True,True,True,Talla,L,always
+product_template_ve_stela_az,VESTIDO STELA AZUL,Goods,Ropa / Mujeres / Vestidos,147.74,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_ve_ariadna_bge,VESTIDO ARIADNA BEIGE,Goods,Ropa / Mujeres / Vestidos,139.91,0.00,True,True,True,True,Talla,S,always
+product_template_mr_10845_1,Terno MR-10845-1,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_mr_10845_1,Terno MR-10845-1,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_lv_24c28061_76,Leva LV-24C28061-76,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Talla,56,always
+product_template_lv_24c28061_76,Leva LV-24C28061-76,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_lv_24c28061_76,Leva LV-24C28061-76,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_2070_2,Pantalon PT-2070-2,Goods,Ropa / Hombres / Pantalones,39.04,0.00,True,True,True,True,Talla,28,always
+product_template_pt_2070_2,Pantalon PT-2070-2,Goods,Ropa / Hombres / Pantalones,39.04,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_23a29607_32,Leva LV-23A29607-32,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Talla,56,always
+product_template_lv_23a29607_32,Leva LV-23A29607-32,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_lv_23a29607_32,Leva LV-23A29607-32,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ve_paulina_mag,VESTIDO PAULINA MAGENTA,Goods,Ropa / Mujeres / Vestidos,159.04,0.00,True,True,True,True,Talla,S,always
+product_template_lv_008_black_2,Leva LV-008-BLACK-2,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Talla,46,always
+product_template_lv_008_black_2,Leva LV-008-BLACK-2,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_lv_008_black_2,Leva LV-008-BLACK-2,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_23c25168_220,Leva LV-23C25168-220,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Talla,50,always
+product_template_lv_23c25168_220,Leva LV-23C25168-220,Goods,Ropa / Hombres / Levas,173.83,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ref_clara_ve,M. VESTIDO MOPA VERDE,Goods,Ropa / Mujeres / Vestidos,156.43,0.00,True,True,True,True,Talla,M,always
+product_template_ref_clara_ve,M. VESTIDO MOPA VERDE,Goods,Ropa / Mujeres / Vestidos,156.43,0.00,True,True,True,True,Color,Verde,no_variant
+product_template_ref_margarita_rj,M. VESTIDO MOPA ESTAMPADO ROJO,Goods,Ropa / Mujeres / Vestidos,166.00,0.00,True,True,True,True,Talla,S,always
+product_template_ref_margarita_rj,M. VESTIDO MOPA ESTAMPADO ROJO,Goods,Ropa / Mujeres / Vestidos,166.00,0.00,True,True,True,True,Color,Rojo,no_variant
+product_template_ref_elena_az,M. VESTIDO MOPA AZUL (ref_elena_az),Goods,Ropa / Mujeres / Vestidos,139.91,0.00,True,True,True,True,Talla,M,always
+product_template_ref_elena_az,M. VESTIDO MOPA AZUL (ref_elena_az),Goods,Ropa / Mujeres / Vestidos,139.91,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_ve_passion_esl,Terno VE-PASSION-ESL,Goods,Ropa / Mujeres / Vestidos,344.26,0.00,True,True,True,True,Talla,10,always
+product_template_ve_passion_bl_a,Terno VE-PASSION-BL-A,Goods,Ropa / Mujeres / Vestidos,239.91,0.00,True,True,True,True,Talla,10,always
+product_template_ve_passion_bl_a,Terno VE-PASSION-BL-A,Goods,Ropa / Mujeres / Vestidos,239.91,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_ve_passion_dro,Terno VE-PASSION-DRO,Goods,Ropa / Mujeres / Vestidos,292.09,0.00,True,True,True,True,Talla,8,always
+product_template_ve_passion_ol,Terno VE-PASSION-OL,Goods,Ropa / Mujeres / Vestidos,344.26,0.00,True,True,True,True,Talla,8,always
+product_template_23e4246_15,Leva 23E4246-15,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Talla,46,always
+product_template_23e4246_15,Leva 23E4246-15,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_23e4246_15,Leva 23E4246-15,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ve_ginb_fuc,VESTIDO GINEBRA FUCSIA,Goods,Ropa / Mujeres / Vestidos,157.32,0.00,True,True,True,True,Talla,L,always
+product_template_ve_maia_lnt_grn,VESTIDO LENTEJUELA MAIA GREEN,Goods,Ropa / Mujeres / Vestidos,143.39,0.00,True,True,True,True,Talla,M,always
+product_template_ve_maia_lnt_grn,VESTIDO LENTEJUELA MAIA GREEN,Goods,Ropa / Mujeres / Vestidos,143.39,0.00,True,True,True,True,Color,Verde,no_variant
+product_template_sd040_2b_ch,Terno SD040-2B-CH,Goods,Ropa / Niños / Ternos,133.84,0.00,True,True,True,True,Talla,8,always
+product_template_pt_24c29918_16,Pantalon PT-24C29918-16,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,38,always
+product_template_pt_24c29918_16,Pantalon PT-24C29918-16,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_zp_hjvb_gam_gr,Zapato ZP-HJVB-GAM-GR,Goods,Ropa / Hombres / Zapatos,73.83,0.00,True,True,True,True,Talla,42,always
+product_template_zp_hjvb_gam_gr,Zapato ZP-HJVB-GAM-GR,Goods,Ropa / Hombres / Zapatos,73.83,0.00,True,True,True,True,Color,Gris,no_variant
+product_template_vest_anast_bge,VESTIDO ANASTACIA BEIGE,Goods,Ropa / Mujeres / Vestidos,142.52,0.00,True,True,True,True,Talla,M,always
+product_template_zp_gam_ol_s_f_cassini,Zapato ZP-GAM-OL-S/F-CASSINI,Goods,Ropa / Hombres / Zapatos,152.09,0.00,True,True,True,True,Talla,8,always
+product_template_zp_gam_ol_s_f_cassini,Zapato ZP-GAM-OL-S/F-CASSINI,Goods,Ropa / Hombres / Zapatos,152.09,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_vest_rose_bl,VESTIDO MOPA 2023-2 BLACK,Goods,Ropa / Mujeres / Vestidos,117.30,0.00,True,True,True,True,Talla,S,always
+product_template_vest_rose_bl,VESTIDO MOPA 2023-2 BLACK,Goods,Ropa / Mujeres / Vestidos,117.30,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_lv_23e3705_25,Leva LV-23E3705-25,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Talla,46,always
+product_template_lv_23e3705_25,Leva LV-23E3705-25,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_10036a_8_495,Pantalon PT-10036A-8-495,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Talla,38,always
+product_template_pt_10036a_8_495,Pantalon PT-10036A-8-495,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_pt_10036a_8_495,Pantalon PT-10036A-8-495,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_3742_1,Pantalon PT-3742-1,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,20,always
+product_template_pt_3742_1,Pantalon PT-3742-1,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_312010_4,Pantalon PT-312010-4,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,44,always
+product_template_pt_312010_4,Pantalon PT-312010-4,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_pt_312010_4,Pantalon PT-312010-4,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pt_cv_b90_002wi,H. PANTALON P/CABALLERO CARVEN (pt_cv_b90_002wi),Goods,Ropa / Hombres / Pantalones,8.61,0.00,True,True,True,True,Talla,S,always
+product_template_pt_cv_b90_002gu,H. PANTALON P/CABALLERO CARVEN (pt_cv_b90_002gu),Goods,Ropa / Hombres / Pantalones,8.61,0.00,True,True,True,True,Talla,S,always
+product_template_pt_cv_b90_001hgr,H. PANTALON P/CABALLERO CARVEN (pt_cv_b90_001hgr),Goods,Ropa / Hombres / Pantalones,8.61,0.00,True,True,True,True,Talla,S,always
+product_template_cmst_cv_b90_002wi,H. CAMISETA P/CABALLEROS WINE CARVEN,Goods,Ropa / Hombres / Camisetas,8.61,0.00,True,True,True,True,Talla,S,always
+product_template_cmst_cv_b90_002wi,H. CAMISETA P/CABALLEROS WINE CARVEN,Goods,Ropa / Hombres / Camisetas,8.61,0.00,True,True,True,True,Color,Vino,no_variant
+product_template_cmst_cv_b90_002gu,H. CAMISETA P/CABALLEROS CARVEN,Goods,Ropa / Hombres / Camisetas,8.61,0.00,True,True,True,True,Talla,S,always
+product_template_pant_prisila,PANTALON PRISILA,Goods,Ropa / Mujeres / Pantalones,33.83,0.00,True,True,True,True,Talla,S,always
+product_template_a158_4,H. CAMISA P/S BLUE BRUNO CASSINI 32-33 (a158_4),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Talla,14.5,always
+product_template_a158_4,H. CAMISA P/S BLUE BRUNO CASSINI 32-33 (a158_4),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_a158_4,H. CAMISA P/S BLUE BRUNO CASSINI 32-33 (a158_4),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Manga de Camisa,S1 - 32/33,always
+product_template_a158_4,H. CAMISA P/S BLUE BRUNO CASSINI 32-33 (a158_4),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_a158_3,H. CAMISA P/S LIGHT BLUE BRUNO CASSINI 34-35 (a158_3),Goods,Ropa / Hombres / Camisas,47.34,0.00,True,True,True,True,Talla,17,always
+product_template_a158_3,H. CAMISA P/S LIGHT BLUE BRUNO CASSINI 34-35 (a158_3),Goods,Ropa / Hombres / Camisas,47.34,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_a158_3,H. CAMISA P/S LIGHT BLUE BRUNO CASSINI 34-35 (a158_3),Goods,Ropa / Hombres / Camisas,47.34,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_a158_3,H. CAMISA P/S LIGHT BLUE BRUNO CASSINI 34-35 (a158_3),Goods,Ropa / Hombres / Camisas,47.34,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_a115_1,H. CAMISA P/S WHITE BRUNO CASSINI 34-35 (a115_1),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Talla,17.5,always
+product_template_a115_1,H. CAMISA P/S WHITE BRUNO CASSINI 34-35 (a115_1),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_a115_1,H. CAMISA P/S WHITE BRUNO CASSINI 34-35 (a115_1),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Manga de Camisa,S2 - 34/35,always
+product_template_a115_1,H. CAMISA P/S WHITE BRUNO CASSINI 34-35 (a115_1),Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pb,M. BRAZALETES P/DAMA VARIOS MODELOS,Goods,Ropa / Mujeres / Accesorios,16.51,0.00,True,True,True,True,Talla,15,always
+product_template_pt_ni_o,Pantalon PT-NIÑO,Goods,Ropa / Niños / Pantalones,57.99,0.00,True,True,True,True,Talla,20,always
+product_template_lbpc_a31_254r_dknv,H. POLO LONG BEACH M/C P/CABALLERO DARK NAVY,Goods,Ropa / Hombres / Camisetas,34.70,0.00,True,True,True,True,Talla,XL,always
+product_template_lbpc_a31_254r_dknv,H. POLO LONG BEACH M/C P/CABALLERO DARK NAVY,Goods,Ropa / Hombres / Camisetas,34.70,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_set_mili_nara_bl,M. SET P/DAMA ARENA MILI NARA,Goods,Ropa / Mujeres,123.39,0.00,True,True,True,True,Talla,M,always
+product_template_ve_destello,M. VESTIDO AZUL DESTELLO,Goods,Ropa / Mujeres / Vestidos,135.57,0.00,True,True,True,True,Talla,S,always
+product_template_ve_destello,M. VESTIDO AZUL DESTELLO,Goods,Ropa / Mujeres / Vestidos,135.57,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_set_lucero_n,M. SET P/DAMA PISTACHIO LUCERO,Goods,Ropa / Mujeres,138.17,0.00,True,True,True,True,Talla,S,always
+product_template_cv_u11_037_nv,Terno CV-U11-037-NV,Goods,Ropa / Hombres / Ternos,165.13,0.00,True,True,True,True,Talla,42,always
+product_template_cv_u11_037_nv,Terno CV-U11-037-NV,Goods,Ropa / Hombres / Ternos,165.13,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_cv_u11_016_bu,Terno CV-U11-016-BU,Goods,Ropa / Hombres / Ternos,165.13,0.00,True,True,True,True,Talla,36,always
+product_template_cv_u11_016_bu,Terno CV-U11-016-BU,Goods,Ropa / Hombres / Ternos,165.13,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_ern_sabat_1259_wm,BLUSA DE DAMA P/S BRUNO CASSINI WHITE T.S,Goods,Ropa / Mujeres / Blusas,42.52,0.00,True,True,True,True,Talla,S,always
+product_template_ern_sabat_1259_wm,BLUSA DE DAMA P/S BRUNO CASSINI WHITE T.S,Goods,Ropa / Mujeres / Blusas,42.52,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_ern_sabat_1259_wm,BLUSA DE DAMA P/S BRUNO CASSINI WHITE T.S,Goods,Ropa / Mujeres / Blusas,42.52,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_2279dw,VESTIDO CQ BY CQ T.S,Goods,Ropa / Mujeres / Vestidos,160.78,0.00,True,True,True,True,Talla,S,always
+product_template_ve_heidy_consig,VESTIDO AZUL REY,Goods,Ropa / Mujeres / Vestidos,117.30,0.00,True,True,True,True,Talla,L,always
+product_template_ve_heidy_consig,VESTIDO AZUL REY,Goods,Ropa / Mujeres / Vestidos,117.30,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_ve_antonia_consig,VESTIDO ESTAMPADO FUCSIA,Goods,Ropa / Mujeres / Vestidos,124.26,0.00,True,True,True,True,Talla,L,always
+product_template_z_3125_pl,M. ZAPATO P/DAMA PLATA DFV,Goods,Ropa / Mujeres / Zapatos,114.70,0.00,True,True,True,True,Talla,36,always
+product_template_z_3130_pl,M. ZAPATO P/DAMA PLATA DFV (z_3130_pl),Goods,Ropa / Mujeres / Zapatos,114.70,0.00,True,True,True,True,Talla,38,always
+product_template_short_cairo,SHORT LINO P/DAMA BEIGE / LADRILLO /NEGRO /VERDE ESTAMP,Goods,Ropa / Mujeres / Pantalones,47.74,0.00,True,True,True,True,Talla,M,always
+product_template_short_cairo,SHORT LINO P/DAMA BEIGE / LADRILLO /NEGRO /VERDE ESTAMP,Goods,Ropa / Mujeres / Pantalones,47.74,0.00,True,True,True,True,Color,Multicolor,no_variant
+product_template_pt_tl_10_400b_azn,Pantalon PT-TL-10-400B-AZN,Goods,Ropa / Hombres / Pantalones,65.13,0.00,True,True,True,True,Talla,38,always
+product_template_pt_tl_10_400b_azn,Pantalon PT-TL-10-400B-AZN,Goods,Ropa / Hombres / Pantalones,65.13,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_pt_3803_50,Pantalon PT-3803/50,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,46,always
+product_template_pt_3803_50,Pantalon PT-3803/50,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_gb_g11_002,Leva LV-GB-G11-002,Goods,Ropa / Hombres / Levas,69.48,0.00,True,True,True,True,Talla,40,always
+product_template_lv_gb_g11_002,Leva LV-GB-G11-002,Goods,Ropa / Hombres / Levas,69.48,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_tl10_658a,Leva LV-TL10-658A,Goods,Ropa / Hombres / Levas,69.48,0.00,True,True,True,True,Talla,58,always
+product_template_lv_tl10_658a,Leva LV-TL10-658A,Goods,Ropa / Hombres / Levas,69.48,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_lv_17001_9,Leva LV-17001-9,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Talla,56,always
+product_template_lv_17001_9,Leva LV-17001-9,Goods,Ropa / Hombres / Levas,165.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_1_18,H. CAMISA P/S BRUNO CASSINI PURPLE 32-33,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,17,always
+product_template_1_18,H. CAMISA P/S BRUNO CASSINI PURPLE 32-33,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_1_18,H. CAMISA P/S BRUNO CASSINI PURPLE 32-33,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_a151_82bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI BLACK 34-35 (a151_82bg),Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Talla,17.5,always
+product_template_a151_82bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI BLACK 34-35 (a151_82bg),Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_a151_82bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI BLACK 34-35 (a151_82bg),Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_a151_82bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI BLACK 34-35 (a151_82bg),Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_a151_82,H. CAMISA P/S BRUNO CASSINI BLACK 34-35,Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Talla,17.5,always
+product_template_a151_82,H. CAMISA P/S BRUNO CASSINI BLACK 34-35,Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_a151_82,H. CAMISA P/S BRUNO CASSINI BLACK 34-35,Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Manga de Camisa,S2 - 34/35,always
+product_template_a151_82,H. CAMISA P/S BRUNO CASSINI BLACK 34-35,Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_4s22009_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (4s22009_1),Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Talla,17,always
+product_template_4s22009_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (4s22009_1),Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_4s22009_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (4s22009_1),Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_4s22009_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (4s22009_1),Goods,Ropa / Hombres / Camisas,56.44,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_ce_baj_15_3915,H. CAMISA P/S BIG SIZE BRUNO CASSINI SKY BLUE 34-35,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Talla,17.5,always
+product_template_ce_baj_15_3915,H. CAMISA P/S BIG SIZE BRUNO CASSINI SKY BLUE 34-35,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_ce_baj_15_3915,H. CAMISA P/S BIG SIZE BRUNO CASSINI SKY BLUE 34-35,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Manga de Camisa,S2 - 34/35,always
+product_template_ce_baj_15_3915,H. CAMISA P/S BIG SIZE BRUNO CASSINI SKY BLUE 34-35,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_tl_x25_502c_a,H. BERMUDA P/HOMBRE TED LAPIDUS KHAKI,Goods,Ropa / Hombres / Bermudas,34.70,0.00,True,True,True,True,Talla,XL,always
+product_template_tl_x25_502c_a,H. BERMUDA P/HOMBRE TED LAPIDUS KHAKI,Goods,Ropa / Hombres / Bermudas,34.70,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_tl_x25_502b_a,H. BERMUDA P/HOMBRE TED LAPIDUS NAVY,Goods,Ropa / Hombres / Bermudas,34.70,0.00,True,True,True,True,Talla,L,always
+product_template_tl_x25_502b_a,H. BERMUDA P/HOMBRE TED LAPIDUS NAVY,Goods,Ropa / Hombres / Bermudas,34.70,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_tl_x25_502b_a,H. BERMUDA P/HOMBRE TED LAPIDUS NAVY,Goods,Ropa / Hombres / Bermudas,34.70,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_lbpc_a03_217s_rs,H. CAMISA M/C LONG BEACH ROSE,Goods,Ropa / Hombres / Camisas,41.65,0.00,True,True,True,True,Talla,S,always
+product_template_pt_tl_10_656c,Pantalon PT-TL-10-656C,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Talla,50,always
+product_template_pt_tl_10_656c,Pantalon PT-TL-10-656C,Goods,Ropa / Hombres / Pantalones,47.74,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_t1005b_fuc_sep,M. CAMISA P/DAMA FUCHSIA,Goods,Ropa / Mujeres / Blusas,43.39,0.00,True,True,True,True,Talla,L,always
+product_template_t1653,BLUSA TWIST FRONT SATIN ROJO,Goods,Ropa / Mujeres / Blusas,55.57,0.00,True,True,True,True,Talla,"L,M,S",always
+product_template_t1653,BLUSA TWIST FRONT SATIN ROJO,Goods,Ropa / Mujeres / Blusas,55.57,0.00,True,True,True,True,Color,Rojo,no_variant
+product_template_t1532,TOP-BLACK P/DAMAS,Goods,Ropa / Mujeres / Tops,49.02,0.00,True,True,True,True,Talla,"L,M,S",always
+product_template_t1532,TOP-BLACK P/DAMAS,Goods,Ropa / Mujeres / Tops,49.02,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_pt_9a700112_3,Pantalon PT-9A700112-3,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Talla,40,always
+product_template_pt_9a700112_3,Pantalon PT-9A700112-3,Goods,Ropa / Hombres / Pantalones,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_mf8997_11,Corbata MF8997/11,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_mf8997_11,Corbata MF8997/11,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7.5 cm,always
+product_template_mf8997_11,Corbata MF8997/11,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_bw4624_64,Corbata BW4624/64,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_bw4624_64,Corbata BW4624/64,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_bw4624_64,Corbata BW4624/64,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_set_charlotte,"SET CHARLOTTE, VERDE T.S",Goods,Sin Categoria,108.61,0.00,True,True,True,True,Talla,S,always
+product_template_set_charlotte,"SET CHARLOTTE, VERDE T.S",Goods,Sin Categoria,108.61,0.00,True,True,True,True,Color,Verde,no_variant
+product_template_ve_yesica_wh,M. VESTIDO P/DAMA YESICA BLANCO,Goods,Ropa / Mujeres / Vestidos,111.52,0.00,True,True,True,True,Talla,L,always
+product_template_ve_yesica_wh,M. VESTIDO P/DAMA YESICA BLANCO,Goods,Ropa / Mujeres / Vestidos,111.52,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_ve_madison_ve,M. VESTIDO P/DAMA MADISON VERDE,Goods,Ropa / Mujeres / Vestidos,98.13,0.00,True,True,True,True,Talla,S,always
+product_template_ve_madison_ve,M. VESTIDO P/DAMA MADISON VERDE,Goods,Ropa / Mujeres / Vestidos,98.13,0.00,True,True,True,True,Color,Verde,no_variant
+product_template_ve_isa_rj,M. VESTIDO P/DAMA ISA ROJO AZUL,Goods,Ropa / Mujeres / Vestidos,88.30,0.00,True,True,True,True,Talla,M,always
+product_template_ve_isa_rj,M. VESTIDO P/DAMA ISA ROJO AZUL,Goods,Ropa / Mujeres / Vestidos,88.30,0.00,True,True,True,True,Color,Multicolor,no_variant
+product_template_ve_yesica_na,M. VESTIDO YESICA P/DAMA NARANJA,Goods,Ropa / Mujeres / Vestidos,111.52,0.00,True,True,True,True,Talla,M,always
+product_template_bl_dafne_na_ca,BLUSA DAFNE P/DAMA NARANJA CAFE,Goods,Ropa / Mujeres / Blusas,55.57,0.00,True,True,True,True,Talla,S,always
+product_template_z5911_oro,Corbata Z5911-ORO,Goods,Ropa / Mujeres / Zapatos,95.57,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_z5911_oro,Corbata Z5911-ORO,Goods,Ropa / Mujeres / Zapatos,95.57,0.00,True,True,True,True,Talla,8,always
+product_template_z_ch161_davi,Corbata Z-CH161-DAVI,Goods,Ropa / Mujeres / Zapatos,128.61,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_z_ch161_davi,Corbata Z-CH161-DAVI,Goods,Ropa / Mujeres / Zapatos,128.61,0.00,True,True,True,True,Talla,8,always
+product_template_z2625_negro,ZAPATO NEGRO,Goods,Ropa / Mujeres / Zapatos,76.43,0.00,True,True,True,True,Talla,8,always
+product_template_z2625_negro,ZAPATO NEGRO,Goods,Ropa / Mujeres / Zapatos,76.43,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_z2625_negro,ZAPATO NEGRO,Goods,Ropa / Mujeres / Zapatos,76.43,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_z923_negro,ZAPATO NEGRO (z923_negro),Goods,Ropa / Mujeres / Zapatos,123.13,0.00,True,True,True,True,Talla,8,always
+product_template_z923_negro,ZAPATO NEGRO (z923_negro),Goods,Ropa / Mujeres / Zapatos,123.13,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_z923_negro,ZAPATO NEGRO (z923_negro),Goods,Ropa / Mujeres / Zapatos,123.13,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_z723_plata,ZAPATO PLATA,Goods,Ropa / Mujeres / Zapatos,119.91,0.00,True,True,True,True,Talla,8,always
+product_template_z723_plata,ZAPATO PLATA,Goods,Ropa / Mujeres / Zapatos,119.91,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_lv_12342_1,Leva LV-12342-1,Goods,Ropa / Hombres / Levas,69.48,0.00,True,True,True,True,Talla,50,always
+product_template_lv_12342_1,Leva LV-12342-1,Goods,Ropa / Hombres / Levas,69.48,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_442199090_37,H. HORMA P/ZAPATOS BRUNO CASSINI TL 37-38,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Talla,38,always
+product_template_442199090_37,H. HORMA P/ZAPATOS BRUNO CASSINI TL 37-38,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_442199090_39,H. HORMA P/ZAPATOS BRUNO CASSINI TL 39-40,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Talla,40,always
+product_template_442199090_39,H. HORMA P/ZAPATOS BRUNO CASSINI TL 39-40,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_442199090_41,H. HORMA P/ZAPATOS BRUNO CASSINI TL 41-42,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Talla,42,always
+product_template_442199090_41,H. HORMA P/ZAPATOS BRUNO CASSINI TL 41-42,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_442199090_43,H. HORMA P/ZAPATOS BRUNO CASSINI TL 43-44,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Talla,44,always
+product_template_442199090_43,H. HORMA P/ZAPATOS BRUNO CASSINI TL 43-44,Goods,Ropa / Hombres / Zapatos,30.35,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_12001dc,H. CAMISA D/P BRUNO CASSINI WHITE 34-35 (12001dc),Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Talla,16.5,always
+product_template_12001dc,H. CAMISA D/P BRUNO CASSINI WHITE 34-35 (12001dc),Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_12001dc,H. CAMISA D/P BRUNO CASSINI WHITE 34-35 (12001dc),Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_12001dc,H. CAMISA D/P BRUNO CASSINI WHITE 34-35 (12001dc),Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_8831,Camisa 8831,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,16.5,always
+product_template_8831,Camisa 8831,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_8831,Camisa 8831,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_8831,Camisa 8831,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_k818_3,H. CAMISA P/S BRUNO CASSINI BLUE POINT 34-35,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,16.5,always
+product_template_k818_3,H. CAMISA P/S BRUNO CASSINI BLUE POINT 34-35,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_k818_3,H. CAMISA P/S BRUNO CASSINI BLUE POINT 34-35,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_k818_3,H. CAMISA P/S BRUNO CASSINI BLUE POINT 34-35,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_k820_6,H. CAMISA P/S BRUNO CASSINI RED POINT 32-33,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,17,always
+product_template_k820_6,H. CAMISA P/S BRUNO CASSINI RED POINT 32-33,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Rojo,no_variant
+product_template_k820_6,H. CAMISA P/S BRUNO CASSINI RED POINT 32-33,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_k820_6,H. CAMISA P/S BRUNO CASSINI RED POINT 32-33,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_20002,Camisa 20002,Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Talla,16.5,always
+product_template_20002,Camisa 20002,Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_20002,Camisa 20002,Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_20002,Camisa 20002,Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_k818_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (k818_1),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,16.5,always
+product_template_k818_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (k818_1),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_k818_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (k818_1),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_k818_1,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (k818_1),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_jy,M. JOYERO P/DAMA VARIOS MODELOS,Goods,Ropa / Mujeres / Accesorios,34.70,0.00,True,True,True,True,Talla,10,always
+product_template_5000_bg,M. TOP P/DAMA BIEGE,Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_5000_wh,M. TOP P/DAMA WHITE,Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_5000_wh,M. TOP P/DAMA WHITE,Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_1100_bg,M. TOP P/DAMA BEIGE,Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_1100_bl,M. TOP P/DAMA BLACK,Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_1100_bl,M. TOP P/DAMA BLACK,Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_2007_bl,M. TOP P/DAMA BLACK (2007_bl),Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_2007_bl,M. TOP P/DAMA BLACK (2007_bl),Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_2007_bg,M. TOP P/DAMA BEIGE (2007_bg),Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_2007_wh,M. TOP P/DAMA WHITE (2007_wh),Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Talla,M,always
+product_template_2007_wh,M. TOP P/DAMA WHITE (2007_wh),Goods,Ropa / Mujeres / Tops,16.88,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_kan_anhoa,Terno KAN-ANHOA,Goods,Ropa / Mujeres / Pantalones,40.09,0.00,True,True,True,True,Talla,28,always
+product_template_hd42_b122bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (hd42_b122bg),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,19,always
+product_template_hd42_b122bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (hd42_b122bg),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_hd42_b122bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (hd42_b122bg),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_hd42_b122bg,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (hd42_b122bg),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_150bg_3,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (150bg_3),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,18.5,always
+product_template_150bg_3,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (150bg_3),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_150bg_3,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (150bg_3),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_150bg_3,H. CAMISA P/S BIG SIZE BRUNO CASSINI WHITE 34-35 (150bg_3),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_z_1759siuk_az,Terno Z-1759SIUK-AZ,Goods,Ropa / Mujeres / Zapatos,99.05,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_z_1759siuk_az,Terno Z-1759SIUK-AZ,Goods,Ropa / Mujeres / Zapatos,99.05,0.00,True,True,True,True,Talla,38,always
+product_template_11901,Camisa 11901,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,16.5,always
+product_template_11901,Camisa 11901,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_11901,Camisa 11901,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_11901,Camisa 11901,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_150_3,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (150_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,17.5,always
+product_template_150_3,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (150_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_150_3,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (150_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_150_3,H. CAMISA P/S BRUNO CASSINI WHITE 34-35 (150_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_603_3,H. CAMISA P/S BRUNO CASSINI LINEN BLUE 32-33 (603_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,15,always
+product_template_603_3,H. CAMISA P/S BRUNO CASSINI LINEN BLUE 32-33 (603_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_603_3,H. CAMISA P/S BRUNO CASSINI LINEN BLUE 32-33 (603_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_603_3,H. CAMISA P/S BRUNO CASSINI LINEN BLUE 32-33 (603_3),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_hd42_126l,H. CAMISA P/S BRUNO CASSINI LIGHT BLUE 32-33 (hd42_126l),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,17,always
+product_template_hd42_126l,H. CAMISA P/S BRUNO CASSINI LIGHT BLUE 32-33 (hd42_126l),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_hd42_126l,H. CAMISA P/S BRUNO CASSINI LIGHT BLUE 32-33 (hd42_126l),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_hd42_126l,H. CAMISA P/S BRUNO CASSINI LIGHT BLUE 32-33 (hd42_126l),Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_562,Camisa 562,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,15.5,always
+product_template_562,Camisa 562,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_562,Camisa 562,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_562,Camisa 562,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_19203,Camisa 19203,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Talla,15.5,always
+product_template_19203,Camisa 19203,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_19203,Camisa 19203,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_19203,Camisa 19203,Goods,Ropa / Hombres / Camisas,43.39,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_z_3021lamo_ne,Terno Z-3021LAMO-NE,Goods,Ropa / Mujeres / Zapatos,86.87,0.00,True,True,True,True,Talla,38,always
+product_template_z_3021lamo_ne,Terno Z-3021LAMO-NE,Goods,Ropa / Mujeres / Zapatos,86.87,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_z_5325clape_mo,Terno Z-5325CLAPE-MO,Goods,Ropa / Mujeres / Zapatos,95.57,0.00,True,True,True,True,Talla,38,always
+product_template_z_2836_dfv_na,Terno Z-2836-DFV-NA,Goods,Ropa / Mujeres / Zapatos,102.52,0.00,True,True,True,True,Talla,38,always
+product_template_z_2839dfv_gd,Terno Z-2839DFV-GD,Goods,Ropa / Mujeres / Zapatos,102.52,0.00,True,True,True,True,Talla,38,always
+product_template_z_2839dfv_ne,Terno Z-2839DFV-NE,Goods,Ropa / Mujeres / Zapatos,102.52,0.00,True,True,True,True,Talla,38,always
+product_template_z_2839dfv_ne,Terno Z-2839DFV-NE,Goods,Ropa / Mujeres / Zapatos,102.52,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_fund_neg,FUNDA PREMIUN NEGRA P/ACCESORIO,Goods,Sin Categoria,2.00,0.00,True,True,True,True,Talla,16,always
+product_template_z_sd913davi_rd,Terno Z-SD913DAVI-RD,Goods,Ropa / Mujeres / Zapatos,98.13,0.00,True,True,True,True,Talla,38,always
+product_template_z_sd913davi_rd,Terno Z-SD913DAVI-RD,Goods,Ropa / Mujeres / Zapatos,98.13,0.00,True,True,True,True,Color,Rojo,no_variant
+product_template_3_2_d_17_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (3_2_d_17_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,14.5,always
+product_template_3_2_d_17_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (3_2_d_17_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_3_2_d_17_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (3_2_d_17_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,S1 - 32/33,always
+product_template_3_2_d_17_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (3_2_d_17_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_enstdo_4_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (enstdo_4_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,14.5,always
+product_template_enstdo_4_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (enstdo_4_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_enstdo_4_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (enstdo_4_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,S1 - 32/33,always
+product_template_enstdo_4_bu,H. CAMISA P/CABALLERO P/S BLUE 32-33 BRUNO CASSINI (enstdo_4_bu),Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_3_2mh_or,H. CAMISA P/CABALLERO P/S ORANGE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,16.5,always
+product_template_3_2mh_or,H. CAMISA P/CABALLERO P/S ORANGE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_3_2mh_or,H. CAMISA P/CABALLERO P/S ORANGE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_esns_pk,H. CAMISA P/CABALLERO P/S PINK 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,14.5,always
+product_template_esns_pk,H. CAMISA P/CABALLERO P/S PINK 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,S1 - 32/33,always
+product_template_esns_pk,H. CAMISA P/CABALLERO P/S PINK 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_rl_bl,H. CAMISA P/CABALLERO P/S LIGHT BLUE 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Talla,14.5,always
+product_template_rl_bl,H. CAMISA P/CABALLERO P/S LIGHT BLUE 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_rl_bl,H. CAMISA P/CABALLERO P/S LIGHT BLUE 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Manga de Camisa,S1 - 32/33,always
+product_template_rl_bl,H. CAMISA P/CABALLERO P/S LIGHT BLUE 32-33 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,56.43,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_l21sw_1,H. CAMISA P/CABALLERO M/C WHITE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,69.48,0.00,True,True,True,True,Talla,17.5,always
+product_template_l21sw_1,H. CAMISA P/CABALLERO M/C WHITE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,69.48,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_l21sw_1,H. CAMISA P/CABALLERO M/C WHITE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,69.48,0.00,True,True,True,True,Manga de Camisa,S2 - 34/35,always
+product_template_l21sw_1,H. CAMISA P/CABALLERO M/C WHITE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,69.48,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_eft_dc_bu,H. CAMISA P/CABALLERO D/P BLUE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Talla,15.5,always
+product_template_eft_dc_bu,H. CAMISA P/CABALLERO D/P BLUE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_eft_dc_bu,H. CAMISA P/CABALLERO D/P BLUE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Manga de Camisa,"S1 - 32/33,S2 - 34/35",always
+product_template_eft_dc_bu,H. CAMISA P/CABALLERO D/P BLUE 34-35 BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,65.13,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_tl_10_656a,Terno TL-10-656A,Goods,Ropa / Hombres / Ternos,260.78,0.00,True,True,True,True,Talla,56,always
+product_template_tl_10_656a,Terno TL-10-656A,Goods,Ropa / Hombres / Ternos,260.78,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_tl_10_656a,Terno TL-10-656A,Goods,Ropa / Hombres / Ternos,260.78,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_tl_10_658c,Terno TL-10-658C,Goods,Ropa / Hombres / Ternos,260.78,0.00,True,True,True,True,Talla,58,always
+product_template_tl_10_658c,Terno TL-10-658C,Goods,Ropa / Hombres / Ternos,260.78,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_tl_10_658b,Terno TL-10-658B,Goods,Ropa / Hombres / Ternos,86.87,0.00,True,True,True,True,Talla,58,always
+product_template_tl_10_658b,Terno TL-10-658B,Goods,Ropa / Hombres / Ternos,86.87,0.00,True,True,True,True,Color,Azul Marino,no_variant
+product_template_tl_10_658b,Terno TL-10-658B,Goods,Ropa / Hombres / Ternos,86.87,0.00,True,True,True,True,Marca,TED Lapidus,no_variant
+product_template_dfb3011_blanco,M. CONJUNTO PANT+ TOP P/DAMA BLANCO DANFIVE,Goods,Ropa / Mujeres / Tops,60.00,0.00,True,True,True,True,Talla,S,always
+product_template_dfb3011_blanco,M. CONJUNTO PANT+ TOP P/DAMA BLANCO DANFIVE,Goods,Ropa / Mujeres / Tops,60.00,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_2536_kan_tally,Terno 2536-KAN-TALLY,Goods,Ropa / Mujeres / Pantalones,40.09,0.00,True,True,True,True,Talla,28,always
+product_template_ire90495,M. JUMPER ENTERIZO INA,Goods,Sin Categoria,42.77,0.00,True,True,True,True,Talla,S,always
+product_template_kse_5022,Corbata KSE-5022,Goods,Ropa / Mujeres / Accesorios,11.22,0.00,True,True,True,True,Ancho Corbata,6 cm,always
+product_template_mmtr00498_fa800109_w00749_7013_38,Terno MMTR00498-FA800109-W00749-7013-38,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Talla,52,always
+product_template_mmtr00498_fa800109_w00749_7013_38,Terno MMTR00498-FA800109-W00749-7013-38,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_mmtr00498_fa800109_w00749_7013_38,Terno MMTR00498-FA800109-W00749-7013-38,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmtr00498_fa800109_w00749_5065_40,Terno MMTR00498-FA800109-W00749-5065-40,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Talla,54,always
+product_template_mmtr00498_fa800109_w00749_5065_40,Terno MMTR00498-FA800109-W00749-5065-40,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmtr00498_fa800109_w00749_5065_38,Terno MMTR00498-FA800109-W00749-5065-38,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Talla,52,always
+product_template_mmtr00498_fa800109_w00749_5065_38,Terno MMTR00498-FA800109-W00749-5065-38,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmtr00498_fa800109_w00749_5065_36,Terno MMTR00498-FA800109-W00749-5065-36,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Talla,50,always
+product_template_mmtr00498_fa800109_w00749_5065_36,Terno MMTR00498-FA800109-W00749-5065-36,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmtr00498_w00749_5065_34,Terno MMTR00498-W00749-5065-34,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Talla,48,always
+product_template_mmtr00498_w00749_5065_34,Terno MMTR00498-W00749-5065-34,Goods,Ropa / Hombres / Pantalones,86.87,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmsl00529_fa430374_6002_50,SHIRT LONG SLEEVE WITH VENT ON MORATO MULTCOLORE,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Talla,L,always
+product_template_mmsl00529_fa430374_6002_50,SHIRT LONG SLEEVE WITH VENT ON MORATO MULTCOLORE,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmsl00529_fa430374_6002_46,SHIRT LONG SLEEVE WITH VENT ON MORATO MULTCOLORE (mmsl00529_fa430374_6002_46),Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Talla,S,always
+product_template_mmsl00529_fa430374_6002_46,SHIRT LONG SLEEVE WITH VENT ON MORATO MULTCOLORE (mmsl00529_fa430374_6002_46),Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmsl00538_fa430367_7073_46,SHIRT GOLD ON PRINTED FABRIC MORATO BLUE INK,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Talla,S,always
+product_template_mmsl00538_fa430367_7073_46,SHIRT GOLD ON PRINTED FABRIC MORATO BLUE INK,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_mmsl00538_fa430367_7073_46,SHIRT GOLD ON PRINTED FABRIC MORATO BLUE INK,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_mmsl00425_fa430305_9024_46,SHIRT PRINTED FABRIC MORATO STEEL GREY,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Talla,S,always
+product_template_mmsl00425_fa430305_9024_46,SHIRT PRINTED FABRIC MORATO STEEL GREY,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Color,Gris,no_variant
+product_template_mmsl00425_fa430305_9024_46,SHIRT PRINTED FABRIC MORATO STEEL GREY,Goods,Ropa / Hombres / Camisas,73.83,0.00,True,True,True,True,Marca,Antony Morato,no_variant
+product_template_at4266,BLUSA LOVE ENCOUNTER,Goods,Ropa / Mujeres / Blusas,38.17,0.00,True,True,True,True,Talla,L,always
+product_template_9511tw,BLUSA CQ BY CQ TALLA L,Goods,Ropa / Mujeres / Blusas,46.87,0.00,True,True,True,True,Talla,"L,S",always
+product_template_10896t,BLUSA IDEM DITTO TALLA L,Goods,Ropa / Mujeres / Blusas,44.26,0.00,True,True,True,True,Talla,"L,M,S",always
+product_template_j11063_bleach_blue_sh,SHORT P/DAMA OBSENA,Goods,Ropa / Mujeres,11.52,0.00,True,True,True,True,Talla,28,always
+product_template_43sw7026,CAMISA M/C CASUAL HOMBRE,Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Talla,S,always
+product_template_43sw7026,CAMISA M/C CASUAL HOMBRE,Goods,Ropa / Hombres / Camisas,47.74,0.00,True,True,True,True,Marca,Perry Ellis,no_variant
+product_template_bmo6483,H. JEANS BUFFALO-X GARRET,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,29,always
+product_template_omo0944,H. JEANS BUFFALO MAX,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,31,always
+product_template_bpm7770,JEANS DE HOMBRE 100 ALGODON (bpm7770),Goods,Ropa / Hombres / Jeans,120.45,0.00,True,True,True,True,Talla,"28,29,30,31",always
+product_template_bpm7120,JEANS SIMON DE HOMBRE,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,34,always
+product_template_bmo7217,H. JEANS BUFFALO,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,32,always
+product_template_bmo7209,H. JEANS BUFFALO GAME,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,30,always
+product_template_bmo6604,H. JEANS BUFFALO MATHEW,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,30,always
+product_template_bmo6226,H. PANTALON BUFFALO X-PERT,Goods,Ropa / Hombres / Pantalones,39.04,0.00,True,True,True,True,Talla,30,always
+product_template_bmo5961,H. PANTALON BUFFALO JECK,Goods,Ropa / Hombres / Pantalones,39.04,0.00,True,True,True,True,Talla,29,always
+product_template_bm13708,KING PANTALON (bm13708),Goods,Ropa / Hombres / Pantalones,39.04,0.00,True,True,True,True,Talla,28,always
+product_template_bm11131,JEANS DRAYANN DE HOMBRE,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,29,always
+product_template_bm10814,JEANS SIX HOMBRE,Goods,Ropa / Hombres / Jeans,39.04,0.00,True,True,True,True,Talla,32,always
+product_template_opbs5148_468_sh,Terno OPBS5148-468.SH,Goods,Ropa / Hombres / Bermudas,47.74,0.00,True,True,True,True,Talla,31,always
+product_template_opbs5148_468_sh,Terno OPBS5148-468.SH,Goods,Ropa / Hombres / Bermudas,47.74,0.00,True,True,True,True,Marca,Original Penguin,no_variant
+product_template_fund_adams,FUNDAS ADAMS 18FLI,Goods,Sin Categoria,0.02,0.00,True,True,True,True,Talla,"15,18",always
+product_template_pul19_09,ACCESORIO - 2019-09,Goods,Ropa / Mujeres / Accesorios,22.51,0.00,True,True,True,True,Talla,10,always
+product_template_acce19_09,ACCESORIO - 2019-09 (acce19_09),Goods,Ropa / Mujeres / Accesorios,15.57,0.00,True,True,True,True,Talla,"8,9",always
+product_template_acce19_09,ACCESORIO - 2019-09 (acce19_09),Goods,Ropa / Mujeres / Accesorios,15.57,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_j,JUMPER,Goods,Sin Categoria,53.48,0.00,True,True,True,True,Talla,32,always
+product_template_cart_g_08,CARTERA GRANDE VARIOS MODELOS,Goods,Sin Categoria,47.74,0.00,True,True,True,True,Talla,19,always
+product_template_px_nztd,LED DOWN LIGHT 30W 6000-6500K,Goods,Sin Categoria,10.00,0.00,True,True,True,True,Talla,30,always
+product_template_acce_12,BISUTERIA VARIOS MODELOS,Goods,Ropa / Mujeres / Accesorios,15.57,0.00,True,True,True,True,Talla,18,always
+product_template_w028_f9,Corbata W028-F9,Goods,Ropa / Mujeres / Pantalones,17.77,0.00,True,True,True,True,Ancho Corbata,6 cm,always
+product_template_w028_f9,Corbata W028-F9,Goods,Ropa / Mujeres / Pantalones,17.77,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_w028_f9,Corbata W028-F9,Goods,Ropa / Mujeres / Pantalones,17.77,0.00,True,True,True,True,Talla,"8,10,12,14,16",always
+product_template_xlh1639_11_apricot,ZAPATOS OBSENA,Goods,Ropa / Mujeres / Zapatos,13.38,0.00,True,True,True,True,Talla,"8,9,10",always
+product_template_xlh1639_11_apricot,ZAPATOS OBSENA,Goods,Ropa / Mujeres / Zapatos,13.38,0.00,True,True,True,True,Ancho Corbata,"6 cm,7 cm",always
+product_template_xlh1639_11_black,Corbata XLH1639-11/BLACK,Goods,Ropa / Mujeres / Zapatos,29.38,0.00,True,True,True,True,Ancho Corbata,6 cm,always
+product_template_w028_62,PANTALON BRUNO CASSINI (MUJER),Goods,Ropa / Mujeres / Pantalones,17.77,0.00,True,True,True,True,Talla,"8,10,12,14,16",always
+product_template_w028_62,PANTALON BRUNO CASSINI (MUJER),Goods,Ropa / Mujeres / Pantalones,17.77,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_w028_62,PANTALON BRUNO CASSINI (MUJER),Goods,Ropa / Mujeres / Pantalones,17.77,0.00,True,True,True,True,Ancho Corbata,6 cm,always
+product_template_sabi_fiesta,M. CARTERA DE FIESTA VARIOS MD,Goods,Sin Categoria,28.97,0.00,True,True,True,True,Talla,38,always
+product_template_s299_322,Corbata S299/322,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_s299_322,Corbata S299/322,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_s299_301,Corbata S299/301,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_s299_301,Corbata S299/301,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_s299_303,Corbata S299/303,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_s299_303,Corbata S299/303,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_pv,PANTALONETA DE NINO SOLEI,Goods,Ropa / Niños / Pantalones,23.61,0.00,True,True,True,True,Talla,42,always
+product_template_pt_rs3688_blk_m,PANTALON DE TERNO P/DAMA BRUNO CASSINI (pt_rs3688_blk_m),Goods,Ropa / Mujeres / Pantalones,40.09,0.00,True,True,True,True,Talla,L,always
+product_template_pt_rs3688_blk_m,PANTALON DE TERNO P/DAMA BRUNO CASSINI (pt_rs3688_blk_m),Goods,Ropa / Mujeres / Pantalones,40.09,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_nodim_driver,Terno NODIM-DRIVER,Goods,Sin Categoria,1.00,0.00,True,True,True,True,Talla,7,always
+product_template_m_03,Corbata M-03,Goods,Sin Categoria,6.70,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_m_03,Corbata M-03,Goods,Sin Categoria,6.70,0.00,True,True,True,True,Talla,"8,10,12",always
+product_template_g07034as_blue,RINSE BLUE,Goods,Ropa / Mujeres / Pantalones,12.90,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_g07034as_blue,RINSE BLUE,Goods,Ropa / Mujeres / Pantalones,12.90,0.00,True,True,True,True,Talla,28,always
+product_template_cv_k02_083,CAMISA M/C CUADROS - FUCHSIA,Goods,Ropa / Hombres / Camisas,17.30,0.00,True,True,True,True,Talla,S,always
+product_template_bw4624_98,Corbata BW4624/98,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_bw4624_98,Corbata BW4624/98,Goods,Ropa / Hombres / Corbatas,21.65,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_9039_bl,M. BIKINI JUNIOR BLANCO FLOR,Goods,Sin Categoria,18.31,0.00,True,True,True,True,Talla,16,always
+product_template_9039_bl,M. BIKINI JUNIOR BLANCO FLOR,Goods,Sin Categoria,18.31,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_8656bl,M.PRINCIPIANTE BLUE 08,Goods,Sin Categoria,5.27,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_8656bl,M.PRINCIPIANTE BLUE 08,Goods,Sin Categoria,5.27,0.00,True,True,True,True,Talla,12,always
+product_template_81216,CAMISAS BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,30.35,0.00,True,True,True,True,Marca,Bruno Cassini,no_variant
+product_template_81216,CAMISAS BRUNO CASSINI,Goods,Ropa / Hombres / Camisas,30.35,0.00,True,True,True,True,Ancho Corbata,7 cm,always
+product_template_43290,Terno 43290,Goods,Sin Categoria,33.83,0.00,True,True,True,True,Talla,34,always
+product_template_43500,Terno 43500,Goods,Sin Categoria,25.90,0.00,True,True,True,True,Talla,32,always
+product_template_43500,Terno 43500,Goods,Sin Categoria,25.90,0.00,True,True,True,True,Color,Multicolor,no_variant
+product_template_43500_am,BRASIER ESENCIAL ST. EVEN (43500_am),Goods,Sin Categoria,30.35,0.00,True,True,True,True,Talla,36,always
+product_template_43500_bl,BRASIER ESENCIAL ST-EVEN,Goods,Sin Categoria,30.35,0.00,True,True,True,True,Talla,32,always
+product_template_43510,Terno 43510,Goods,Sin Categoria,23.39,0.00,True,True,True,True,Talla,34,always
+product_template_43510,Terno 43510,Goods,Sin Categoria,23.39,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_43541,BRASILERA ROMANTICA,Goods,Sin Categoria,16.43,0.00,True,True,True,True,Talla,L,always
+product_template_41680,BRASIER ROMANTICO ST. EVEN,Goods,Sin Categoria,25.13,0.00,True,True,True,True,Talla,34,always
+product_template_16350,Terno 16350,Goods,Sin Categoria,25.13,0.00,True,True,True,True,Talla,34,always
+product_template_16360,"BRASSIER CHAMELA BLANCO, MORADO",Goods,Sin Categoria,26.00,0.00,True,True,True,True,Talla,34,always
+product_template_16360,"BRASSIER CHAMELA BLANCO, MORADO",Goods,Sin Categoria,26.00,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_16380,BRASSIER CHAMELA,Goods,Sin Categoria,41.65,0.00,True,True,True,True,Talla,34,always
+product_template_16834,"BOXER CHAMELA AZUL, ROSA",Goods,Sin Categoria,25.13,0.00,True,True,True,True,Talla,L,always
+product_template_16834,"BOXER CHAMELA AZUL, ROSA",Goods,Sin Categoria,25.13,0.00,True,True,True,True,Color,Azul,no_variant
+product_template_16900,BRASSIER CHAMELA ROSA,Goods,Sin Categoria,27.59,0.00,True,True,True,True,Talla,34,always
+product_template_16904,BOXER CHAMELA ROSA,Goods,Sin Categoria,16.43,0.00,True,True,True,True,Talla,M,always
+product_template_17910_bl,BRASSIER CHAMELA (BLANCO),Goods,Sin Categoria,37.80,0.00,True,True,True,True,Talla,34,always
+product_template_17910_bl,BRASSIER CHAMELA (BLANCO),Goods,Sin Categoria,37.80,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_17910_ne,BRASSIER CHAMELA (NEGRO),Goods,Sin Categoria,37.80,0.00,True,True,True,True,Talla,34,always
+product_template_17910_ne,BRASSIER CHAMELA (NEGRO),Goods,Sin Categoria,37.80,0.00,True,True,True,True,Color,Negro,no_variant
+product_template_17911_bl,BRASILERA CHAMELA (BLANCO),Goods,Sin Categoria,13.30,0.00,True,True,True,True,Talla,M,always
+product_template_17911_bl,BRASILERA CHAMELA (BLANCO),Goods,Sin Categoria,13.30,0.00,True,True,True,True,Color,Blanco,no_variant
+product_template_15290,BRASSIER CHAMELA (15290),Goods,Sin Categoria,33.83,0.00,True,True,True,True,Talla,32,always
+product_template_12110black,M.BRASSIERE CHAMELA,Goods,Sin Categoria,18.17,0.00,True,True,True,True,Talla,34,always

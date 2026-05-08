@@ -1,0 +1,23 @@
+# import_products_and_variants_report
+- Total SKUs de origen: 8218
+- Total productos madre generados: 1943
+- Total variantes/subproductos reales: 8218
+- Total productos con Marca: 4269
+- Total productos con Color: 3649
+- Total productos con Talla: 5170
+- Total productos con Ancho Corbata: 440
+- Total productos con Manga de Camisa: 244
+- Productos sin barcode: 353
+- Productos sin Internal Reference: 0
+- Confirmación: NO se crean atributos/categorías de variante, solo se usan atributos existentes.
+- Ejemplos con posibles combinaciones fantasma:
+  - adams_tmpl_camisa_18001 | Camisa 18001 | variantes reales=12 | combinaciones fantasma≈2
+  - adams_tmpl_camisa_5010 | Camisa 5010 | variantes reales=11 | combinaciones fantasma≈1
+  - adams_tmpl_camisa_11303 | Camisa 11303 | variantes reales=12 | combinaciones fantasma≈2
+  - adams_tmpl_camisa_11304 | Camisa 11304 | variantes reales=12 | combinaciones fantasma≈2
+  - adams_tmpl_camisa_5011 | Camisa 5011 | variantes reales=9 | combinaciones fantasma≈3
+  - adams_tmpl_camisa_11704 | Camisa 11704 | variantes reales=12 | combinaciones fantasma≈2
+  - adams_tmpl_camisa_1509 | Camisa 1509 | variantes reales=12 | combinaciones fantasma≈2
+  - adams_tmpl_camisa_8500 | Camisa 8500 | variantes reales=9 | combinaciones fantasma≈1
+  - adams_tmpl_camisa_8502 | Camisa 8502 | variantes reales=12 | combinaciones fantasma≈2
+  - adams_tmpl_camisa_200 | Camisa 200 | variantes reales=10 | combinaciones fantasma≈2

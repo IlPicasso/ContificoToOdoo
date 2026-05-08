@@ -1,0 +1,3 @@
+﻿Product Template External ID,Product Template Name,Internal References involucrados,Talla,Color,Manga de Camisa,Ancho Corbata,Marca,Parser Rule,Parse Status,Reason,Stock Contifico
+product_template_cha_milano_blanco,CHALECO MILANO BLANCO,"CHA-MILANO BLANCO-L,CHA-MILANO-BLANCO-L",L,Blanco,,,,hyphen_size,PARSED,DUPLICATE_VARIANT_COMBINATION,1
+product_template_lb_601_7w_rd,"ROUND, COB, ADJUSTABLE LIGHT 7W 3000-3500K","LB-601-7W (RD),LB-601-7W/RD",,,,,,fallback,UNPARSED,DUPLICATE_VARIANT_COMBINATION,1
