@@ -306,6 +306,79 @@ def test_merger_case_insensitive_name_match(tmp_path: Path):
     assert result["matched"] == 1
 
 
+def test_merger_primary_key_by_tmpl_id(tmp_path: Path):
+    """When Phase 2 CSV and Odoo export share __import__.* template IDs, match by that key."""
+    odoo_export = _make_odoo_export(tmp_path, [
+        {
+            "id": "__export__.product_product_9511",
+            "product_tmpl_id/id": "__import__.product_template_9511tw",
+            "product_tmpl_id/name": "BLUSA CQ BY CQ",
+            "product_template_variant_value_ids": "Talla: S",
+        },
+    ])
+    phase2_csv = _make_phase2_csv(tmp_path, [
+        {
+            "product_tmpl_id/id": "__import__.product_template_9511tw",
+            "Internal Reference": "9511TW-S",
+            "Barcode": "",
+            "Name": "BLUSA CQ BY CQ",
+            "Variant Values": "Talla: S",
+            "Sales Price": "46.88",
+            "Cost": "0.00",
+        },
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+    )
+
+    assert result["matched"] == 1
+    assert result["matched_by_tmpl_id"] == 1
+    assert result["matched_by_name"] == 0
+    out = _read_csv(tmp_path / "odoo_phase2_with_odoo_ids.csv")
+    assert out[0]["id"] == "__export__.product_product_9511"
+    assert out[0]["match_method"] == "tmpl_id"
+
+
+def test_merger_fallback_to_name_when_tmpl_id_differs(tmp_path: Path):
+    """Falls back to name matching when template IDs don't match (__export__ vs __import__)."""
+    odoo_export = _make_odoo_export(tmp_path, [
+        {
+            "id": "__export__.product_product_42",
+            "product_tmpl_id/id": "__export__.product_template_42_abc123",
+            "product_tmpl_id/name": "CORBATA TEST",
+            "product_template_variant_value_ids": "Talla: 7 cm",
+        },
+    ])
+    phase2_csv = _make_phase2_csv(tmp_path, [
+        {
+            "product_tmpl_id/id": "__import__.product_template_corb_test",
+            "Internal Reference": "CORB-7",
+            "Barcode": "",
+            "Name": "CORBATA TEST",
+            "Variant Values": "Talla: 7 cm",
+            "Sales Price": "21.65",
+            "Cost": "8.00",
+        },
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+    )
+
+    assert result["matched"] == 1
+    assert result["matched_by_tmpl_id"] == 0
+    assert result["matched_by_name"] == 1
+    out = _read_csv(tmp_path / "odoo_phase2_with_odoo_ids.csv")
+    assert out[0]["match_method"] == "name"
+
+
 def test_merger_empty_phase2_produces_empty_output(tmp_path: Path):
     odoo_export = _make_odoo_export(tmp_path, [
         {

@@ -501,7 +501,9 @@ $('executeMerger').addEventListener('click', async () => {
     if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
     show('mergerSummaryOut', data);
     renderMergerLinks(runId, data.files);
-    setMergerStatus(`Merger completado. Matcheados: ${data.matched} · Sin par: ${data.unmatched} · Odoo sin usar: ${data.unused_odoo_rows}`);
+    const byId = data.matched_by_tmpl_id ?? 0;
+    const byName = data.matched_by_name ?? 0;
+    setMergerStatus(`Merger completado. Matcheados: ${data.matched} (${byId} por ID, ${byName} por nombre) · Sin par: ${data.unmatched} · Odoo sin usar: ${data.unused_odoo_rows}`);
     // Pre-fill run_id en Stock si está vacío
     if (!$('stockRunId').value.trim()) $('stockRunId').value = runId;
   } catch(e) {
