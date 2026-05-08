@@ -1155,10 +1155,13 @@ class OdooMigrationService:
         ]
 
         matched_cols = ["id", "product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost"]
+        minimal_cols = ["id", "Internal Reference", "Barcode", "Sales Price", "Cost"]
         unmatched_cols = ["product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost", "match_failure_reason"]
         unused_cols = ["odoo_ext_id", "tmpl_name", "variant_values", "reason"]
 
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
+        # Minimal CSV: only id + fields to update — no Name/Variant Values to avoid Odoo relational field validation
+        self._write_csv(output_folder / "odoo_phase2_with_odoo_ids_minimal.csv", minimal_cols, matched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unused_odoo.csv", unused_cols, unused_odoo_rows)
 

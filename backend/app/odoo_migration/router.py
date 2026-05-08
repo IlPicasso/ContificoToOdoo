@@ -347,6 +347,7 @@ def download_file(run_id: str, filename: str):
         "odoo_phase2_missing_stock_references.csv",
         "odoo_phase2_csv_format_errors.csv",
         "odoo_phase2_with_odoo_ids.csv",
+        "odoo_phase2_with_odoo_ids_minimal.csv",
         "odoo_phase2_merger_unmatched.csv",
         "odoo_phase2_merger_unused_odoo.csv",
         "odoo_phase1_template_renames.csv",
@@ -393,6 +394,7 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
         **result,
         "files": {
             "phase2_with_odoo_ids": f"{base}/odoo_phase2_with_odoo_ids.csv",
+            "phase2_with_odoo_ids_minimal": f"{base}/odoo_phase2_with_odoo_ids_minimal.csv",
             "unmatched": f"{base}/odoo_phase2_merger_unmatched.csv",
             "unused_odoo": f"{base}/odoo_phase2_merger_unused_odoo.csv",
         },

@@ -344,9 +344,10 @@ function renderMergerLinks(runId, files) {
   title.textContent = 'Archivos generados por el merger';
   section.appendChild(title);
   const MERGER_FILES = [
-    { key: 'phase2_with_odoo_ids', label: '⭐ odoo_phase2_with_odoo_ids.csv — importar en Odoo (UPDATE garantizado)', isImport: true },
-    { key: 'unmatched',            label: 'Variantes sin par en Odoo (merger_unmatched)', isImport: false },
-    { key: 'unused_odoo',          label: 'Variantes Odoo sin par en Fase 2 (merger_unused_odoo)', isImport: false },
+    { key: 'phase2_with_odoo_ids_minimal', label: '⭐ IMPORTAR ESTE — odoo_phase2_with_odoo_ids_minimal.csv (id + SKU + Barcode, sin campos relacionales)', isImport: true },
+    { key: 'phase2_with_odoo_ids',         label: 'Versión completa con Name/Variant Values (solo referencia)', isImport: false },
+    { key: 'unmatched',                    label: 'Variantes sin par en Odoo (merger_unmatched)', isImport: false },
+    { key: 'unused_odoo',                  label: 'Variantes Odoo sin par en Fase 2 (merger_unused_odoo)', isImport: false },
   ];
   MERGER_FILES.forEach(({ key, label, isImport }) => {
     const path = files[key];

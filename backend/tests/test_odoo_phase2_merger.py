@@ -232,6 +232,48 @@ def test_merger_output_has_id_as_first_column(tmp_path: Path):
     assert header[0] == "id", f"First column must be 'id', got: {header[0]}"
 
 
+def test_merger_minimal_csv_has_no_relational_columns(tmp_path: Path):
+    """The minimal CSV must only have id, Internal Reference, Barcode, Sales Price, Cost.
+    No Name or Variant Values — those trigger Odoo relational field validation errors."""
+    odoo_export = _make_odoo_export(tmp_path, [
+        {
+            "id": "__export__.product_product_99",
+            "product_tmpl_id/id": "__export__.product_template_99",
+            "product_tmpl_id/name": "CORBATA NAVY",
+            "product_template_variant_value_ids": "Ancho Corbata: 7 cm",
+        },
+    ])
+    phase2_csv = _make_phase2_csv(tmp_path, [
+        {
+            "product_tmpl_id/id": "__import__.product_template_navy",
+            "Internal Reference": "NAV-007",
+            "Barcode": "NAV-007",
+            "Name": "CORBATA NAVY",
+            "Variant Values": "Ancho Corbata: 7 cm",
+            "Sales Price": "21.65",
+            "Cost": "8.00",
+        },
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+    )
+
+    minimal_path = tmp_path / "odoo_phase2_with_odoo_ids_minimal.csv"
+    assert minimal_path.exists(), "Minimal CSV must be generated"
+    rows = _read_csv(minimal_path)
+    assert len(rows) == 1
+    assert rows[0]["id"] == "__export__.product_product_99"
+    assert rows[0]["Internal Reference"] == "NAV-007"
+    assert rows[0]["Barcode"] == "NAV-007"
+    assert "Name" not in rows[0], "Minimal CSV must not have Name column"
+    assert "Variant Values" not in rows[0], "Minimal CSV must not have Variant Values column"
+    assert "product_tmpl_id/id" not in rows[0], "Minimal CSV must not have product_tmpl_id/id column"
+
+
 def test_merger_case_insensitive_name_match(tmp_path: Path):
     """Template name matching is case-insensitive."""
     odoo_export = _make_odoo_export(tmp_path, [
