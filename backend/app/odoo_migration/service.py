@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.4"
+EXPORTER_VERSION = "1.5.5"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -73,7 +73,7 @@ class OdooMigrationService:
     PRODUCT_PAGE_SERVER_RETRIES = 3
     PRODUCT_PAGE_RETRY_BACKOFF_BASE_SECONDS = 0.8
 
-    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration", *, page_delay_seconds: float = 1.0, page_retry_attempts: int | None = None, page_retry_backoff_base_seconds: float | None = None, page_retry_jitter_seconds: float = 0.4, strict_duplicate_errors: bool = False):
+    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration", *, page_delay_seconds: float = 1.0, page_retry_attempts: int | None = None, page_retry_backoff_base_seconds: float | None = None, page_retry_jitter_seconds: float = 0.4, strict_duplicate_errors: bool = True, fallback_orphan_variants_to_simple: bool = True):
         self.client = client; self.output_root = Path(output_root)
         self.page_delay_seconds = max(0.0, float(page_delay_seconds))
         self.page_retry_attempts = int(page_retry_attempts or self.PRODUCT_PAGE_SERVER_RETRIES)
@@ -83,6 +83,7 @@ class OdooMigrationService:
         self._warehouse_by_code = {str(w.get("codigo","")).upper(): w for w in WAREHOUSE_CATALOG}
         self._warehouse_by_name = {str(w.get("nombre","")).upper(): w for w in WAREHOUSE_CATALOG}
         self.strict_duplicate_errors = bool(strict_duplicate_errors)
+        self.fallback_orphan_variants_to_simple = bool(fallback_orphan_variants_to_simple)
 
     def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, include_additional_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
@@ -291,6 +292,7 @@ class OdooMigrationService:
             "total_errores_reales": len(phase1['erows']),
             "total_duplicados_ignorados": int(phase1['counts'].get('duplicates_ignored', 0)),
             "strict_duplicate_errors": bool(self.strict_duplicate_errors),
+            "fallback_orphan_variants_to_simple": bool(self.fallback_orphan_variants_to_simple),
             # --- Auditoría de calidad de datos ---
             "total_simple_products": len(simple_rows),
             "total_templates_con_atributos": len({r.get("External ID", "") for r in with_attr_rows}),
@@ -558,9 +560,26 @@ class OdooMigrationService:
                 continue
             if not variant_values:
                 validation_rows.append({"issue_type":"Empty Variant Values","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Variant has no valid attributes"})
-                validation_rows.append({"issue_type":"Variant has no valid attributes","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Excluded from phase 2 variant import"})
-                if canonical_name or name in template_names:
-                    orphaned_skus.append({"Internal Reference": sku, "Barcode": barcode, "Product Template Name": import_name, "Attempted Variant Values": ", ".join(invalid_attrs) if invalid_attrs else "", "Reason": "All attribute values rejected — not in Odoo catalog" if invalid_attrs else "No attribute values parsed"})
+                if self.fallback_orphan_variants_to_simple:
+                    validation_rows.append({"issue_type":"Variant fallback to simple","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"No valid variant attributes; exported as simple product"})
+                    simple_rows.append({
+                        "External ID": ext_id or f"product_template_{normalize_sku_for_group(sku).lower()}",
+                        "Name": import_name or sku,
+                        "Product Type": "Goods",
+                        "Product Category": "All / ADAMS / Sin categoría",
+                        "Sales Price": sales_price,
+                        "Cost": cost,
+                        "Can be Sold": "True",
+                        "Can be Purchased": "True",
+                        "is_storable": "True",
+                        "available_in_pos": "True",
+                        "Internal Reference": sku,
+                        "Barcode": barcode,
+                    })
+                else:
+                    validation_rows.append({"issue_type":"Variant has no valid attributes","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":"","source_sku":sku,"reason":"Excluded from phase 2 variant import"})
+                    if canonical_name or name in template_names:
+                        orphaned_skus.append({"Internal Reference": sku, "Barcode": barcode, "Product Template Name": import_name, "Attempted Variant Values": ", ".join(invalid_attrs) if invalid_attrs else "", "Reason": "All attribute values rejected — not in Odoo catalog" if invalid_attrs else "No attribute values parsed"})
                 continue
             if not canonical_name and name not in template_names:
                 validation_rows.append({"issue_type":"Product Template Name not found in Fase 1 with attributes","product_template_external_id":ext_id,"product_template_name":name,"internal_reference":sku,"barcode":barcode,"variant_values":variant_values,"source_sku":sku,"reason":"Template name not present in odoo_product_templates_with_attributes.csv"})
