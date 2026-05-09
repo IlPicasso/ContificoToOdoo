@@ -467,6 +467,87 @@ def test_merger_fallback_to_name_when_tmpl_id_differs(tmp_path: Path):
     assert out[0]["match_method"] == "name"
 
 
+def test_merger_unmatched_emits_simples_for_unmatched_csv(tmp_path: Path):
+    """Unmatched Phase 2 rows must be emitted as simple product templates so the SKU
+    survives the migration even when the variant didn't match in Odoo."""
+    odoo_export = _make_odoo_export(tmp_path, [
+        {
+            "id": "__export__.product_product_1",
+            "product_tmpl_id/id": "__export__.product_template_1",
+            "product_tmpl_id/name": "CAMISA A",
+            "product_template_variant_value_ids": "Talla: 15",
+        },
+    ])
+    phase2_csv = _make_phase2_csv(tmp_path, [
+        {
+            "product_tmpl_id/id": "__import__.product_template_b",
+            "Internal Reference": "CB-M",
+            "Barcode": "BARCODE-CB-M",
+            "Name": "CAMISA B",
+            "Variant Values": "Talla: M",
+            "Sales Price": "50.00",
+            "Cost": "20.00",
+        },
+        {
+            "product_tmpl_id/id": "__import__.product_template_c",
+            "Internal Reference": "CC-L",
+            "Barcode": "",
+            "Name": "CAMISA C",
+            "Variant Values": "Talla: L",
+            "Sales Price": "60.00",
+            "Cost": "25.00",
+        },
+    ])
+
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+    )
+
+    assert result["unmatched"] == 2
+    assert result["simples_for_unmatched"] == 2
+
+    rows = _read_csv(tmp_path / "odoo_phase2_simples_for_unmatched.csv")
+    assert len(rows) == 2
+    by_sku = {r["Internal Reference"]: r for r in rows}
+    # Internal Reference preserved
+    assert "CB-M" in by_sku
+    assert "CC-L" in by_sku
+    # Display name combines template name + variant values
+    assert by_sku["CB-M"]["Name"] == "CAMISA B Talla: M"
+    # Barcode falls back to SKU when missing
+    assert by_sku["CB-M"]["Barcode"] == "BARCODE-CB-M"
+    assert by_sku["CC-L"]["Barcode"] == "CC-L"
+    # Required Odoo template flags
+    assert by_sku["CB-M"]["Product Type"] == "Goods"
+    assert by_sku["CB-M"]["is_storable"] == "True"
+
+
+def test_merger_simples_for_unmatched_dedupes_by_sku(tmp_path: Path):
+    """When the same SKU appears more than once in unmatched, only one simple row is emitted."""
+    odoo_export = _make_odoo_export(tmp_path, [])
+    phase2_csv = _make_phase2_csv(tmp_path, [
+        {
+            "product_tmpl_id/id": "__import__.t1", "Internal Reference": "DUP-1", "Barcode": "DUP-1",
+            "Name": "DUP", "Variant Values": "Talla: M", "Sales Price": "10.00", "Cost": "5.00",
+        },
+        {
+            "product_tmpl_id/id": "__import__.t2", "Internal Reference": "DUP-1", "Barcode": "DUP-1",
+            "Name": "DUP", "Variant Values": "Talla: L", "Sales Price": "10.00", "Cost": "5.00",
+        },
+    ])
+    service = OdooMigrationService(client=None)  # type: ignore[arg-type]
+    result = service.merge_phase2_with_odoo_export(
+        odoo_export_csv=odoo_export,
+        phase2_csv=phase2_csv,
+        output_folder=tmp_path,
+    )
+    assert result["unmatched"] == 2
+    assert result["simples_for_unmatched"] == 1
+
+
 def test_merger_empty_phase2_produces_empty_output(tmp_path: Path):
     odoo_export = _make_odoo_export(tmp_path, [
         {

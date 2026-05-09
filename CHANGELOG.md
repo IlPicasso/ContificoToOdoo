@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.66 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.12.
+- Diagnóstico de Phase 1 corrupta detectada en producción: re-importar `odoo_product_templates_with_attributes.csv` apila `attribute_line_ids` en Odoo y dispara cartesianos fantasma (790 plantillas con Talla×Talla y/o Manga×Manga, 22,876 variantes sin SKU). Documentado en `docs/odoo_import_templates/wipe_reimport/RUNBOOK.md`.
+- Nuevo output del merger Fase 2: `odoo_phase2_simples_for_unmatched.csv` — los SKUs Fase 2 que no matchean ninguna variante en Odoo se emiten como `product.template` simples para no perderlos en la migración.
+- Nuevo campo `simples_for_unmatched` en la respuesta de `/runs/{run_id}/phase2/merge`.
+- Nuevos archivos de wipe-and-reimport en `docs/odoo_import_templates/wipe_reimport/` para limpiar el estado actual de Odoo: `archive_imported_product_templates.csv`, `archive_all_product_products.csv`, `archive_variants_without_default_code.csv`, `diagnostic_templates_with_duplicate_attributes.csv`.
+
 ## 1.0.57 - 2026-05-09
 - Exportador Odoo actualizado a versión 1.5.3.
 - Nuevo comportamiento por defecto para duplicados en Fase 1: se conserva la primera ocurrencia y se ignoran duplicados posteriores (sin bloquear la migración).

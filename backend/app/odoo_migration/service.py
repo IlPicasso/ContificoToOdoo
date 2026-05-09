@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.11"
+EXPORTER_VERSION = "1.5.12"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -1456,6 +1456,42 @@ class OdooMigrationService:
         unmatched_cols = ["product_tmpl_id/id", "Internal Reference", "Barcode", "Name", "Variant Values", "Sales Price", "Cost", "match_failure_reason"]
         simples_unmatched_cols = ["External ID", "Internal Reference", "match_failure_reason"]
         unused_cols = ["odoo_ext_id", "tmpl_id", "tmpl_name", "variant_values", "reason"]
+        simples_for_unmatched_cols = [
+            "External ID", "Name", "Product Type", "Product Category",
+            "Sales Price", "Cost", "Can be Sold", "Can be Purchased",
+            "is_storable", "available_in_pos", "Internal Reference", "Barcode",
+        ]
+
+        # Build a simple-product import CSV from the unmatched variant rows so the
+        # operator can complete the migration in one extra Odoo import. Each
+        # unmatched variant becomes its own product.template (Goods, simple), and
+        # the SKU is preserved as Internal Reference. Without this file, those
+        # SKUs would be dropped silently after the merger.
+        simples_for_unmatched: list[dict[str, str]] = []
+        seen_unmatched_skus: set[str] = set()
+        for row in unmatched_rows:
+            sku = str(row.get("Internal Reference") or "").strip()
+            if not sku or sku in seen_unmatched_skus:
+                continue
+            seen_unmatched_skus.add(sku)
+            barcode = str(row.get("Barcode") or "").strip() or sku
+            name = str(row.get("Name") or "").strip() or sku
+            variant_values = str(row.get("Variant Values") or "").strip()
+            display_name = f"{name} {variant_values}".strip() if variant_values else name
+            simples_for_unmatched.append({
+                "External ID": f"product_template_unmatched_{sku.lower().replace('/', '_').replace(' ', '_')}",
+                "Name": display_name,
+                "Product Type": "Goods",
+                "Product Category": "All / ADAMS / Sin categoría",
+                "Sales Price": str(row.get("Sales Price") or "0.00"),
+                "Cost": str(row.get("Cost") or "0.00"),
+                "Can be Sold": "True",
+                "Can be Purchased": "True",
+                "is_storable": "True",
+                "available_in_pos": "True",
+                "Internal Reference": sku,
+                "Barcode": barcode,
+            })
 
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
         # Minimal CSV: only id + fields to update — no Name/Variant Values to avoid Odoo relational field validation
@@ -1466,6 +1502,7 @@ class OdooMigrationService:
         self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_unmatched.csv", simples_unmatched_cols, simple_unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unused_odoo.csv", unused_cols, unused_odoo_rows)
+        self._write_csv(output_folder / "odoo_phase2_simples_for_unmatched.csv", simples_for_unmatched_cols, simples_for_unmatched)
 
         return {
             "total_phase2_rows": len(matched_rows) + len(unmatched_rows),
@@ -1478,6 +1515,7 @@ class OdooMigrationService:
             "unused_odoo_rows": len(unused_odoo_rows),
             "simple_matched": len(simple_matched_rows),
             "simple_unmatched": len(simple_unmatched_rows),
+            "simples_for_unmatched": len(simples_for_unmatched),
         }
 
     @staticmethod
