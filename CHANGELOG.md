@@ -16,3 +16,30 @@
 - Duplicados en Fase 1 vuelven a modo estricto por defecto (`strict_duplicate_errors=True`) para no ocultar problemas de calidad de datos.
 - Nuevo fallback para Fase 2: variantes sin atributos válidos pueden exportarse como simples (`fallback_orphan_variants_to_simple=True`) en lugar de perderse.
 - Se añade `fallback_orphan_variants_to_simple` al `run_summary.json`.
+
+## 1.0.60 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.6.
+- Se agrega guardarraíl en Fase 2 para detectar y deduplicar por (`product_tmpl_id/id`, `Variant Values`) antes de exportar `odoo_product_variant_internal_references.csv`.
+- Se reportan nuevas validaciones de riesgo para prevenir el error de unicidad de Odoo `product_product_combination_unique`.
+- Se genera en `docs/odoo_import_templates/Last` un CSV saneado de variantes (`odoo_product_variant_internal_references_clean.csv`) listo para importación segura.
+
+## 1.0.61 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.7.
+- Se elimina el artefacto pesado `odoo_product_variant_internal_references_clean.csv` del repo (debe generarse por corrida, no versionarse).
+- Nuevo script `backend/build_safe_variant_update_csv.py` para construir un CSV de actualización segura por `id` + `Internal Reference` + `Barcode` sin tocar `Variant Values` (evita que Odoo recalcule `combination_indices=''`).
+
+## 1.0.62 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.8.
+- Se elimina el flujo apoyado en `docs/odoo_import_templates/Last` para artefactos auxiliares; la operación queda centrada en archivos del `run_id` generado desde frontend.
+- Descarga de archivos de run mejorada: se reemplaza whitelist rígida por validación segura de ruta/extensión (`.csv`, `.log`, `.md`, `.json`) para evitar que archivos generados en nuevas fases aparezcan pero no se puedan descargar.
+- Se agregan a la respuesta estándar de archivos los outputs `odoo_phase2_simples_minimal.csv` y `odoo_phase2_simples_unmatched.csv` cuando existan.
+
+## 1.0.63 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.9.
+- Se agrega salida alias en cada `run_id`: `odoo_product_variant_update_by_id_safe.csv` (mismo contenido que `odoo_phase2_with_odoo_ids_minimal.csv`) para facilitar operación.
+- Se expone este archivo en los links del frontend/API (`_build_files` y respuesta de `/runs/{run_id}/phase2/merge`).
+
+## 1.0.64 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.10.
+- Se genera `odoo_product_variant_update_by_id_safe.csv` desde el momento de creación del run (placeholder con header), para que siempre exista en descargas aun antes de ejecutar `/phase2/merge`.
+- Al ejecutar `/phase2/merge`, ese archivo se rellena con las filas matched por `id` para importación segura.
