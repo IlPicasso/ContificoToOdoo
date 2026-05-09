@@ -16,3 +16,9 @@
 - Duplicados en Fase 1 vuelven a modo estricto por defecto (`strict_duplicate_errors=True`) para no ocultar problemas de calidad de datos.
 - Nuevo fallback para Fase 2: variantes sin atributos válidos pueden exportarse como simples (`fallback_orphan_variants_to_simple=True`) en lugar de perderse.
 - Se añade `fallback_orphan_variants_to_simple` al `run_summary.json`.
+
+## 1.0.60 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.6.
+- Se agrega guardarraíl en Fase 2 para detectar y deduplicar por (`product_tmpl_id/id`, `Variant Values`) antes de exportar `odoo_product_variant_internal_references.csv`.
+- Se reportan nuevas validaciones de riesgo para prevenir el error de unicidad de Odoo `product_product_combination_unique`.
+- Se genera en `docs/odoo_import_templates/Last` un CSV saneado de variantes (`odoo_product_variant_internal_references_clean.csv`) listo para importación segura.
