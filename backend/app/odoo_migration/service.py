@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.6"
+EXPORTER_VERSION = "1.5.9"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -1445,6 +1445,8 @@ class OdooMigrationService:
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
         # Minimal CSV: only id + fields to update — no Name/Variant Values to avoid Odoo relational field validation
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids_minimal.csv", minimal_cols, matched_rows)
+        # Alias operativo solicitado por negocio para importación segura por id
+        self._write_csv(output_folder / "odoo_product_variant_update_by_id_safe.csv", minimal_cols, matched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_minimal.csv", simples_minimal_cols, simple_matched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_unmatched.csv", simples_unmatched_cols, simple_unmatched_rows)
