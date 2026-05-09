@@ -38,3 +38,8 @@
 - Exportador Odoo actualizado a versión 1.5.9.
 - Se agrega salida alias en cada `run_id`: `odoo_product_variant_update_by_id_safe.csv` (mismo contenido que `odoo_phase2_with_odoo_ids_minimal.csv`) para facilitar operación.
 - Se expone este archivo en los links del frontend/API (`_build_files` y respuesta de `/runs/{run_id}/phase2/merge`).
+
+## 1.0.64 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.10.
+- Se genera `odoo_product_variant_update_by_id_safe.csv` desde el momento de creación del run (placeholder con header), para que siempre exista en descargas aun antes de ejecutar `/phase2/merge`.
+- Al ejecutar `/phase2/merge`, ese archivo se rellena con las filas matched por `id` para importación segura.

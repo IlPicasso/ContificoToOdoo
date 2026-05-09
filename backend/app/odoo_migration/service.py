@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.9"
+EXPORTER_VERSION = "1.5.10"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -250,6 +250,8 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
         self._write_phase2_variant_internal_reference_outputs(folder=folder, variant_map_rows=o19_variant_map_rows, with_attr_rows=with_attr_rows, simple_rows=simple_rows, stock_rows=o19_stock_rows)
         self._write_internal_reference_update_csv(folder=folder, simple_rows=simple_rows, variant_map_rows=o19_variant_map_rows, variant_rows_raw=phase1.get("variant_rows", []))
+        # Placeholder: archivo de actualización segura por id (se completa en /phase2/merge)
+        self._write_csv(folder / "odoo_product_variant_update_by_id_safe.csv", ["id", "Internal Reference", "Barcode", "Sales Price", "Cost"], [])
         barcode_index: dict[str, list[str]] = {}
         for r in o19_variant_map_rows:
             bc = str(r.get("Barcode") or r.get("Internal Reference") or "").strip()
