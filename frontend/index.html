@@ -13,7 +13,6 @@
 
       <section class="tabs">
         <button class="tab-btn active" data-tab="export">Exportar</button>
-        <button class="tab-btn" data-tab="nueva">Nueva Importación</button>
         <button class="tab-btn" data-tab="merger">Merger Variantes</button>
         <button class="tab-btn" data-tab="stock">Stock</button>
         <button class="tab-btn" data-tab="compare">Comparador</button>
@@ -40,27 +39,6 @@
         <pre id="migrationSummaryOut"></pre>
         <div id="warningsPanel" class="warnings-panel hidden"></div>
         <div id="migrationLinks"></div>
-      </section>
-
-      <section id="tab-nueva" class="tab-panel card">
-        <h2>Nueva Importación — Pipeline Limpio</h2>
-        <p class="muted">Sube un archivo <code>raw.log</code> (o JSON con productos de Contífico). Se generan 4 archivos numerados listos para importar en Odoo <strong>sin necesidad de merger</strong> — el SKU (Internal Reference) ya viene en <code>02_product_product.csv</code>.</p>
-        <p class="muted"><strong>Orden de importación:</strong> 1. <code>03_product_attribute.csv</code> (atributos) → 2. <code>01_product_template.csv</code> (plantillas) → 3. <code>02_product_product.csv</code> (variantes + SKU).</p>
-        <div class="form-row">
-          <label>Archivo raw.log / JSON</label>
-          <input id="nuevaRawFile" type="file" accept=".log,.json,.txt" />
-        </div>
-        <div class="form-row">
-          <label><input id="nuevaIncludeZeroStock" type="checkbox" /> Incluir productos con stock 0</label>
-        </div>
-        <div class="form-row">
-          <label><input id="nuevaIncludeStock" type="checkbox" /> Generar 04_stock_quant.csv (stock inicial)</label>
-        </div>
-        <button id="runNuevaPipeline">Ejecutar nueva pipeline</button>
-        <p id="nuevaStatus" class="muted"></p>
-        <pre id="nuevaSummaryOut"></pre>
-        <div id="nuevaValidationPanel" class="hidden"></div>
-        <div id="nuevaLinks"></div>
       </section>
 
       <section id="tab-merger" class="tab-panel card">
