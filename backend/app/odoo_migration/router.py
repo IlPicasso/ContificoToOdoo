@@ -246,68 +246,6 @@ async def process_raw_upload(
     }
 
 
-@router.post("/products-stock/export-phase1-new")
-async def export_phase1_new(
-    file: UploadFile = File(...),
-    include_zero_stock: bool = Query(default=False),
-    include_stock: bool = Query(default=False),
-    contifico_client: ContificoClient = Depends(get_contifico_client),
-):
-    """New pipeline: upload a raw.log file → generate 4 numbered Odoo-import CSVs.
-
-    Unlike the old pipeline, this sets Internal Reference directly on product.product
-    (file 02), eliminating the need for a Phase 2 merger step.
-    """
-    from datetime import datetime
-    raw = await file.read()
-    text = raw.decode("utf-8-sig", errors="ignore")
-    products: list[dict] = []
-    for line in text.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            payload = json.loads(line)
-        except Exception:
-            continue
-        if isinstance(payload, dict) and isinstance(payload.get("response"), list):
-            products.extend([x for x in payload["response"] if isinstance(x, dict)])
-        elif isinstance(payload, list):
-            products.extend([x for x in payload if isinstance(x, dict)])
-        elif isinstance(payload, dict) and "codigo" in payload:
-            products.append(payload)
-
-    if not products:
-        raise HTTPException(status_code=400, detail="No se detectaron productos válidos en el archivo.")
-
-    service = _build_service(contifico_client)
-    ts = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    output_folder = _output_root() / ts
-
-    result = service.export_phase1_new(
-        products=products,
-        output_folder=output_folder,
-        include_zero_stock=include_zero_stock,
-        include_stock=include_stock,
-    )
-    run_id = ts
-
-    # Build download URLs for the new numbered files
-    base = f"/odoo-migration/runs/{run_id}/files"
-    file_urls: dict[str, list[str]] = {}
-    for role, filenames in result.get("output_files", {}).items():
-        file_urls[role] = [f"{base}/{fn}" for fn in filenames]
-
-    return {
-        "run_id": run_id,
-        "source": "new_pipeline",
-        "detected_products": len(products),
-        "folder": str(output_folder),
-        "files": file_urls,
-        **{k: v for k, v in result.items() if k != "output_files"},
-    }
-
-
 @router.post("/products-stock/export-jobs")
 def start_export_job(
     page_size: int = Query(default=100, ge=1, le=500),
@@ -423,13 +361,7 @@ def download_file(run_id: str, filename: str):
         "odoo_phase1_template_renames.csv",
         "odoo_phase2_orphaned_skus.csv",
     }
-    # Also allow new numbered pipeline files (01_product_template*.csv, 02_*, 03_*, 04_*)
-    import re as _re
-    _new_pipeline_pattern = _re.compile(
-        r"^0[1-4]_(?:product_template|product_product|product_attribute|stock_quant)"
-        r"(?:_part\d+_of_\d+)?\.csv$"
-    )
-    if filename not in allowed and not _new_pipeline_pattern.match(filename) and filename not in {"validation_report.json"}:
+    if filename not in allowed:
         raise HTTPException(status_code=400, detail="Archivo no permitido")
     file_path = _output_root() / run_id / filename
     if not file_path.exists() or not file_path.is_file():
