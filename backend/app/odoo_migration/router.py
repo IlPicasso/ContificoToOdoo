@@ -55,6 +55,7 @@ def _build_files(run_id: str) -> dict[str, str]:
         "fase2_merged_unused_odoo_csv": f"{base}/odoo_phase2_merger_unused_odoo.csv",
         "fase2_merged_simples_unmatched_csv": f"{base}/odoo_phase2_simples_unmatched.csv",
         "fase2_merged_simples_minimal_csv": f"{base}/odoo_phase2_simples_minimal.csv",
+        "fase2_merged_simples_for_unmatched_csv": f"{base}/odoo_phase2_simples_for_unmatched.csv",
         "fase2_variant_update_by_id_safe_csv": f"{base}/odoo_product_variant_update_by_id_safe.csv",
         # === Reportes de calidad (no importar) ===
         "reporte_errores_csv": f"{base}/migration_errors.csv",
@@ -427,6 +428,7 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
             "phase2_with_odoo_ids_minimal": f"{base}/odoo_phase2_with_odoo_ids_minimal.csv",
             "phase2_variant_update_by_id_safe": f"{base}/odoo_product_variant_update_by_id_safe.csv",
             "simples_minimal": f"{base}/odoo_phase2_simples_minimal.csv",
+            "simples_for_unmatched": f"{base}/odoo_phase2_simples_for_unmatched.csv",
             "unmatched": f"{base}/odoo_phase2_merger_unmatched.csv",
             "simples_unmatched": f"{base}/odoo_phase2_simples_unmatched.csv",
             "unused_odoo": f"{base}/odoo_phase2_merger_unused_odoo.csv",
