@@ -1,0 +1,21 @@
+{
+  "raw_items": 24717,
+  "raw_duplicate_sku_keys": 515,
+  "raw_duplicate_barcode_keys": 520,
+  "migration_errors_by_type": {
+    "SKU duplicado": 427,
+    "Código de barras duplicado": 1
+  },
+  "phase2_issues_by_type": {
+    "Empty Variant Values": 1975,
+    "Variant has no valid attributes": 1975,
+    "Invalid attribute value — not in Odoo catalog": 541,
+    "Stock SKU not found after Phase 2 mapping": 261
+  },
+  "recommendations": [
+    "Mantener exclusión de stock 0 para limpieza (regla vigente).",
+    "Conservar excepción por grupo/código madre con stock > 0 para incluir variantes.",
+    "Revisar catálogo de atributos Odoo para bajar Empty Variant Values/Invalid attribute value.",
+    "Corregir SKUs/barcodes duplicados desde origen para evitar ambigüedad operativa."
+  ]
+}
