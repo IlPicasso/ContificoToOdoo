@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.2"
+EXPORTER_VERSION = "1.5.4"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -73,7 +73,7 @@ class OdooMigrationService:
     PRODUCT_PAGE_SERVER_RETRIES = 3
     PRODUCT_PAGE_RETRY_BACKOFF_BASE_SECONDS = 0.8
 
-    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration", *, page_delay_seconds: float = 1.0, page_retry_attempts: int | None = None, page_retry_backoff_base_seconds: float | None = None, page_retry_jitter_seconds: float = 0.4):
+    def __init__(self, client: ContificoClient, output_root: str | Path = "backend/data/odoo_migration", *, page_delay_seconds: float = 1.0, page_retry_attempts: int | None = None, page_retry_backoff_base_seconds: float | None = None, page_retry_jitter_seconds: float = 0.4, strict_duplicate_errors: bool = False):
         self.client = client; self.output_root = Path(output_root)
         self.page_delay_seconds = max(0.0, float(page_delay_seconds))
         self.page_retry_attempts = int(page_retry_attempts or self.PRODUCT_PAGE_SERVER_RETRIES)
@@ -82,6 +82,7 @@ class OdooMigrationService:
         self._warehouse_by_id = {w.get("id"): w for w in WAREHOUSE_CATALOG if w.get("id")}
         self._warehouse_by_code = {str(w.get("codigo","")).upper(): w for w in WAREHOUSE_CATALOG}
         self._warehouse_by_name = {str(w.get("nombre","")).upper(): w for w in WAREHOUSE_CATALOG}
+        self.strict_duplicate_errors = bool(strict_duplicate_errors)
 
     def generate_products_and_stock_csv(self, *, page_size=200, max_pages=200, export_stock: bool = False, include_additional_attributes: bool = False, progress_callback: Callable[[dict[str, Any]], None] | None = None) -> MigrationOutput:
         self._validate_templates()
@@ -288,6 +289,8 @@ class OdooMigrationService:
             "total_ubicaciones_no_mapeadas": 0,
             "total_productos_excluidos_stock_0": len(phase1['zrows']),
             "total_errores_reales": len(phase1['erows']),
+            "total_duplicados_ignorados": int(phase1['counts'].get('duplicates_ignored', 0)),
+            "strict_duplicate_errors": bool(self.strict_duplicate_errors),
             # --- Auditoría de calidad de datos ---
             "total_simple_products": len(simple_rows),
             "total_templates_con_atributos": len({r.get("External ID", "") for r in with_attr_rows}),
@@ -326,7 +329,7 @@ class OdooMigrationService:
 
     def _phase1_prepare_products(self, *, products: list[dict[str, Any]], folder: Path, snapshot_path: Path, errors_csv: Path, mapping_csv: Path, excluded_zero_csv: Path, product_csv: Path, include_additional_attributes: bool = False, export_stock: bool = False, progress_callback=None) -> dict[str, Any]:
         prows=[]; mrows=[]; erows=[]; zrows=[]; variant_rows=[]; unmapped_categories={} 
-        seen_sku=set(); seen_barcode=set(); counts={"ok":0,"manual_review":0,"error":0,"excluded_zero_stock":0}
+        seen_sku=set(); seen_barcode=set(); counts={"ok":0,"manual_review":0,"error":0,"excluded_zero_stock":0,"duplicates_ignored":0}
         group_totals = {}; prepared=[]; stock_state=[]
         for item in products:
             sku=str(item.get('codigo') or '').strip(); name=str(item.get('nombre') or '')
@@ -370,9 +373,19 @@ class OdooMigrationService:
                     state='manual_review'; confidence='0.65'; counts['manual_review'] += 1
                 else: counts['ok'] += 1
                 if sku in seen_sku:
-                    erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='SKU duplicado',sugerencia='Depurar duplicados',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
+                    if self.strict_duplicate_errors:
+                        erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='SKU duplicado',sugerencia='Depurar duplicados',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1
+                    else:
+                        counts['duplicates_ignored'] += 1
+                        mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado=prod_name,categoria_odoo_detectada=category,talla_detectada=talla,manga_detectada=manga,ancho_corbata_detectado=ancho,marca_detectada=brand,color_detectado=color,barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='duplicate_sku_ignored',confidence='1.00',parser_rule='duplicate_keep_first'))
+                    continue
                 if barcode and barcode in seen_barcode:
-                    erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='Código de barras duplicado',sugerencia='Depurar barcode',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1; continue
+                    if self.strict_duplicate_errors:
+                        erows.append(build_error_row(sku=sku,nombre_contifico=name,problema='Código de barras duplicado',sugerencia='Depurar barcode',raw_categoria_id=categoria_id,raw_marca_nombre=marca_raw,raw_codigo_barra=barcode)); counts['error'] +=1
+                    else:
+                        counts['duplicates_ignored'] += 1
+                        mrows.append(build_mapping_report_row(sku=sku,nombre_contifico=name,producto_madre_detectado=prod_name,categoria_odoo_detectada=category,talla_detectada=talla,manga_detectada=manga,ancho_corbata_detectado=ancho,marca_detectada=brand,color_detectado=color,barcode=barcode,precio=f"{price:.2f}",costo=f"{cost:.2f}",stock_bpu=f"{stock_map['BPU']:.2f}",stock_tur=f"{stock_map['TUR']:.2f}",stock_bat=f"{stock_map['BAT']:.2f}",stock_total_contifico=f"{stock_total:.2f}",estado='duplicate_barcode_ignored',confidence='1.00',parser_rule='duplicate_keep_first'))
+                    continue
                 seen_sku.add(sku); seen_barcode.add(barcode)
                 pvalues=build_product_values(talla=talla,manga=manga,ancho_corbata=ancho,marca=brand if include_additional_attributes else '',color=color if include_additional_attributes else '')
                 prows.append({"External ID": build_external_id(sku),"Name": prod_name,"Product Type":"Goods", "Internal Reference":sku,"Barcode":barcode,"Sales Price":f"{price:.2f}","Cost":f"{cost:.2f}","Weight":"0.0","Sales Description":f"Categoría sugerida: {category}","Product Values":pvalues})
