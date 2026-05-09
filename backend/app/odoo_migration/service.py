@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.5"
+EXPORTER_VERSION = "1.5.9"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -609,11 +609,14 @@ class OdooMigrationService:
         sku_counts = {}
         barcode_counts = {}
         key_counts = {}
+        template_combo_counts = {}
         for r in variant_rows:
             sku_counts[r["Internal Reference"]] = sku_counts.get(r["Internal Reference"], 0) + 1
             barcode_counts[r["Barcode"]] = barcode_counts.get(r["Barcode"], 0) + 1
             k=(r["Name"], r["Variant Values"])
             key_counts[k] = key_counts.get(k, 0) + 1
+            template_combo = (r["product_tmpl_id/id"], r["Variant Values"])
+            template_combo_counts[template_combo] = template_combo_counts.get(template_combo, 0) + 1
 
         duplicate_key_rows = []
         for r in variant_rows:
@@ -625,6 +628,24 @@ class OdooMigrationService:
             if key_counts.get(key,0)>1:
                 validation_rows.append({"issue_type":"Duplicate Name + Variant Values","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"Variant key duplicated"})
                 duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":sku,"barcode":bc,"source_sku":sku,"reason":"Duplicate Name + Variant Values"})
+            template_combo = (r["product_tmpl_id/id"], r["Variant Values"])
+            if template_combo_counts.get(template_combo, 0) > 1:
+                validation_rows.append({"issue_type":"Duplicate product_tmpl_id + Variant Values","product_template_external_id":str(r.get("product_tmpl_id/id") or "").replace("__import__.", ""),"product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"Would violate Odoo unique constraint product_product_combination_unique"})
+                duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":sku,"barcode":bc,"source_sku":sku,"reason":"Duplicate product_tmpl_id + Variant Values"})
+
+        # Hard safety net for Odoo constraint:
+        # product_product_combination_unique requires one row per (template, variant values).
+        deduped_variant_rows = []
+        seen_template_combo: set[tuple[str, str]] = set()
+        for r in variant_rows:
+            template_combo = (r["product_tmpl_id/id"], r["Variant Values"])
+            if template_combo in seen_template_combo:
+                validation_rows.append({"issue_type":"Dropped duplicate product_tmpl_id + Variant Values","product_template_external_id":str(r.get("product_tmpl_id/id") or "").replace("__import__.", ""),"product_template_name":r["Name"],"internal_reference":r["Internal Reference"],"barcode":r["Barcode"],"variant_values":r["Variant Values"],"source_sku":r["Internal Reference"],"reason":"Safety dedupe applied before CSV export"})
+                duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":r["Internal Reference"],"barcode":r["Barcode"],"source_sku":r["Internal Reference"],"reason":"Dropped duplicate product_tmpl_id + Variant Values"})
+                continue
+            seen_template_combo.add(template_combo)
+            deduped_variant_rows.append(r)
+        variant_rows = deduped_variant_rows
 
         simple_skus = {str(r.get("Internal Reference") or "").strip() for r in simple_rows if str(r.get("Internal Reference") or "").strip()}
         variant_skus = {r["Internal Reference"] for r in variant_rows}
@@ -1424,6 +1445,8 @@ class OdooMigrationService:
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
         # Minimal CSV: only id + fields to update — no Name/Variant Values to avoid Odoo relational field validation
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids_minimal.csv", minimal_cols, matched_rows)
+        # Alias operativo solicitado por negocio para importación segura por id
+        self._write_csv(output_folder / "odoo_product_variant_update_by_id_safe.csv", minimal_cols, matched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_minimal.csv", simples_minimal_cols, simple_matched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_unmatched.csv", simples_unmatched_cols, simple_unmatched_rows)
