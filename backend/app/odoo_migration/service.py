@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.5"
+EXPORTER_VERSION = "1.5.13"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -250,6 +250,8 @@ class OdooMigrationService:
         self._write_csv(folder / "odoo_external_id_conflicts.csv", ["external_id","source_sku","source_id","source_name","category","price","classification","reason"], external_id_conflicts)
         self._write_phase2_variant_internal_reference_outputs(folder=folder, variant_map_rows=o19_variant_map_rows, with_attr_rows=with_attr_rows, simple_rows=simple_rows, stock_rows=o19_stock_rows)
         self._write_internal_reference_update_csv(folder=folder, simple_rows=simple_rows, variant_map_rows=o19_variant_map_rows, variant_rows_raw=phase1.get("variant_rows", []))
+        # Placeholder: archivo de actualización segura por id (se completa en /phase2/merge)
+        self._write_csv(folder / "odoo_product_variant_update_by_id_safe.csv", ["id", "Internal Reference", "Barcode", "Sales Price", "Cost"], [])
         barcode_index: dict[str, list[str]] = {}
         for r in o19_variant_map_rows:
             bc = str(r.get("Barcode") or r.get("Internal Reference") or "").strip()
@@ -609,11 +611,14 @@ class OdooMigrationService:
         sku_counts = {}
         barcode_counts = {}
         key_counts = {}
+        template_combo_counts = {}
         for r in variant_rows:
             sku_counts[r["Internal Reference"]] = sku_counts.get(r["Internal Reference"], 0) + 1
             barcode_counts[r["Barcode"]] = barcode_counts.get(r["Barcode"], 0) + 1
             k=(r["Name"], r["Variant Values"])
             key_counts[k] = key_counts.get(k, 0) + 1
+            template_combo = (r["product_tmpl_id/id"], r["Variant Values"])
+            template_combo_counts[template_combo] = template_combo_counts.get(template_combo, 0) + 1
 
         duplicate_key_rows = []
         for r in variant_rows:
@@ -625,6 +630,24 @@ class OdooMigrationService:
             if key_counts.get(key,0)>1:
                 validation_rows.append({"issue_type":"Duplicate Name + Variant Values","product_template_external_id":"","product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"Variant key duplicated"})
                 duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":sku,"barcode":bc,"source_sku":sku,"reason":"Duplicate Name + Variant Values"})
+            template_combo = (r["product_tmpl_id/id"], r["Variant Values"])
+            if template_combo_counts.get(template_combo, 0) > 1:
+                validation_rows.append({"issue_type":"Duplicate product_tmpl_id + Variant Values","product_template_external_id":str(r.get("product_tmpl_id/id") or "").replace("__import__.", ""),"product_template_name":r["Name"],"internal_reference":sku,"barcode":bc,"variant_values":r["Variant Values"],"source_sku":sku,"reason":"Would violate Odoo unique constraint product_product_combination_unique"})
+                duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":sku,"barcode":bc,"source_sku":sku,"reason":"Duplicate product_tmpl_id + Variant Values"})
+
+        # Hard safety net for Odoo constraint:
+        # product_product_combination_unique requires one row per (template, variant values).
+        deduped_variant_rows = []
+        seen_template_combo: set[tuple[str, str]] = set()
+        for r in variant_rows:
+            template_combo = (r["product_tmpl_id/id"], r["Variant Values"])
+            if template_combo in seen_template_combo:
+                validation_rows.append({"issue_type":"Dropped duplicate product_tmpl_id + Variant Values","product_template_external_id":str(r.get("product_tmpl_id/id") or "").replace("__import__.", ""),"product_template_name":r["Name"],"internal_reference":r["Internal Reference"],"barcode":r["Barcode"],"variant_values":r["Variant Values"],"source_sku":r["Internal Reference"],"reason":"Safety dedupe applied before CSV export"})
+                duplicate_key_rows.append({"product_template_name":r["Name"],"variant_values":r["Variant Values"],"internal_reference":r["Internal Reference"],"barcode":r["Barcode"],"source_sku":r["Internal Reference"],"reason":"Dropped duplicate product_tmpl_id + Variant Values"})
+                continue
+            seen_template_combo.add(template_combo)
+            deduped_variant_rows.append(r)
+        variant_rows = deduped_variant_rows
 
         simple_skus = {str(r.get("Internal Reference") or "").strip() for r in simple_rows if str(r.get("Internal Reference") or "").strip()}
         variant_skus = {r["Internal Reference"] for r in variant_rows}
@@ -676,16 +699,36 @@ class OdooMigrationService:
             if str(vr.get("sku") or "").strip()
         }
 
+        def _normalize_barcode_with_sku(*, sku: str, barcode: str) -> str:
+            """Fix common source typo where size suffix uses letter O after slash.
+            Example: SKU 512961-025/36 with barcode 512961-025/O36 -> 512961-025/36.
+            """
+            bc = str(barcode or "").strip()
+            s = str(sku or "").strip()
+            if not bc or not s:
+                return bc
+            m = re.search(r"/(\\d+)$", s)
+            if not m:
+                return bc
+            size = m.group(1)
+            prefix = s[: -len(size)]  # keeps trailing slash
+            bad_prefix = f"{prefix}O"
+            if bc.startswith(bad_prefix):
+                tail = bc[len(bad_prefix):]
+                if tail == size:
+                    return f"{prefix}{size}"
+            return bc
+
         # Pre-scan barcodes to detect conflicts before writing anything
         barcode_index: dict[str, list[str]] = {}
         for row in simple_rows:
             sku = str(row.get("Internal Reference") or "").strip()
-            bc = str(row.get("Barcode") or "").strip()
+            bc = _normalize_barcode_with_sku(sku=sku, barcode=str(row.get("Barcode") or "").strip())
             if bc and sku:
                 barcode_index.setdefault(bc, []).append(sku)
         for row in variant_map_rows:
             sku = str(row.get("Internal Reference") or "").strip()
-            bc = str(row.get("Barcode") or "").strip()
+            bc = _normalize_barcode_with_sku(sku=sku, barcode=str(row.get("Barcode") or "").strip())
             if bc and sku:
                 barcode_index.setdefault(bc, []).append(sku)
         conflicted_barcodes: set[str] = {bc for bc, skus in barcode_index.items() if len(set(skus)) > 1}
@@ -698,7 +741,7 @@ class OdooMigrationService:
             if not sku or sku in seen_skus:
                 continue
             seen_skus.add(sku)
-            bc = str(row.get("Barcode") or "").strip()
+            bc = _normalize_barcode_with_sku(sku=sku, barcode=str(row.get("Barcode") or "").strip())
             update_rows.append({
                 "External ID": str(row.get("External ID") or "").strip(),
                 "Name": str(row.get("Name") or "").strip(),
@@ -714,7 +757,7 @@ class OdooMigrationService:
             if not sku or sku in seen_skus:
                 continue
             seen_skus.add(sku)
-            bc = str(row.get("Barcode") or "").strip()
+            bc = _normalize_barcode_with_sku(sku=sku, barcode=str(row.get("Barcode") or "").strip())
             values = [
                 f"{attr}: {str(row.get(attr) or '').strip()}"
                 for attr in attr_order
@@ -1322,12 +1365,14 @@ class OdooMigrationService:
         #   fallback: (norm_name, norm_variant_values) — used when template IDs don't match
         tmpl_id_lookup: dict[tuple, str] = {}   # primary: (tmpl_id, frozenset_variants) → pp_ext_id
         name_lookup: dict[tuple, str] = {}       # fallback: (norm_name, frozenset_variants) → pp_ext_id
+        sku_lookup: dict[str, str] = {}          # fallback 2: sku/default_code -> pp_ext_id
         odoo_pp_to_key: dict[str, tuple] = {}   # pp_ext_id → primary key (for used-tracking)
         all_odoo_rows: list[dict[str, str]] = []
 
         with odoo_export_csv.open("r", newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 pp_ext_id = str(row.get("id") or "").strip()
+                sku = str(row.get("default_code") or "").strip()
                 tmpl_id = str(row.get("product_tmpl_id/id") or "").strip()
                 tmpl_name = str(row.get("product_tmpl_id/name") or "").strip()
                 variant_vals = str(row.get("product_template_variant_value_ids") or "").strip()
@@ -1341,6 +1386,8 @@ class OdooMigrationService:
                 if tmpl_name:
                     fallback_key = (_norm_name(tmpl_name), norm_vars)
                     name_lookup[fallback_key] = pp_ext_id
+                if sku:
+                    sku_lookup.setdefault(sku.casefold(), pp_ext_id)
                 all_odoo_rows.append({"pp_ext_id": pp_ext_id, "tmpl_id": tmpl_id, "tmpl_name": tmpl_name, "variant_values": variant_vals})
 
         # Process Phase 2 CSV and match each row — try primary key first, then fallback
@@ -1349,6 +1396,7 @@ class OdooMigrationService:
         odoo_keys_used: set[str] = set()  # set of pp_ext_ids that were matched
         matched_by_tmpl_id = 0
         matched_by_name = 0
+        matched_by_sku = 0
 
         with phase2_csv.open("r", newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
@@ -1375,6 +1423,14 @@ class OdooMigrationService:
                     if pp_ext_id:
                         match_method = "name"
                         matched_by_name += 1
+                # Fallback 2: match by SKU/default_code from Odoo export.
+                if pp_ext_id is None:
+                    sku_key = str(row.get("Internal Reference") or "").strip().casefold()
+                    if sku_key:
+                        pp_ext_id = sku_lookup.get(sku_key)
+                        if pp_ext_id:
+                            match_method = "sku"
+                            matched_by_sku += 1
 
                 if pp_ext_id:
                     odoo_keys_used.add(pp_ext_id)
@@ -1424,6 +1480,8 @@ class OdooMigrationService:
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids.csv", matched_cols, matched_rows)
         # Minimal CSV: only id + fields to update — no Name/Variant Values to avoid Odoo relational field validation
         self._write_csv(output_folder / "odoo_phase2_with_odoo_ids_minimal.csv", minimal_cols, matched_rows)
+        # Alias operativo solicitado por negocio para importación segura por id
+        self._write_csv(output_folder / "odoo_product_variant_update_by_id_safe.csv", minimal_cols, matched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_minimal.csv", simples_minimal_cols, simple_matched_rows)
         self._write_csv(output_folder / "odoo_phase2_merger_unmatched.csv", unmatched_cols, unmatched_rows)
         self._write_csv(output_folder / "odoo_phase2_simples_unmatched.csv", simples_unmatched_cols, simple_unmatched_rows)
@@ -1435,6 +1493,7 @@ class OdooMigrationService:
             "unmatched": len(unmatched_rows),
             "matched_by_tmpl_id": matched_by_tmpl_id,
             "matched_by_name": matched_by_name,
+            "matched_by_sku": matched_by_sku,
             "total_odoo_rows": len(all_odoo_rows),
             "unused_odoo_rows": len(unused_odoo_rows),
             "simple_matched": len(simple_matched_rows),

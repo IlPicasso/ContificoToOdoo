@@ -53,6 +53,9 @@ def _build_files(run_id: str) -> dict[str, str]:
         "fase2_merged_with_odoo_ids_csv": f"{base}/odoo_phase2_with_odoo_ids.csv",
         "fase2_merged_unmatched_csv": f"{base}/odoo_phase2_merger_unmatched.csv",
         "fase2_merged_unused_odoo_csv": f"{base}/odoo_phase2_merger_unused_odoo.csv",
+        "fase2_merged_simples_unmatched_csv": f"{base}/odoo_phase2_simples_unmatched.csv",
+        "fase2_merged_simples_minimal_csv": f"{base}/odoo_phase2_simples_minimal.csv",
+        "fase2_variant_update_by_id_safe_csv": f"{base}/odoo_product_variant_update_by_id_safe.csv",
         # === Reportes de calidad (no importar) ===
         "reporte_errores_csv": f"{base}/migration_errors.csv",
         "reporte_mapping_csv": f"{base}/mapping_report.csv",
@@ -309,63 +312,16 @@ def list_runs(limit: int = Query(default=10, ge=1, le=100)):
 
 @router.get("/runs/{run_id}/files/{filename}")
 def download_file(run_id: str, filename: str):
-    allowed = {
-        "product_product.csv",
-        "initial_stock.csv",
-        "stock_quant.csv",
-        "stock_quant_legacy.csv",
-        "migration_errors.csv",
-        "mapping_report.csv",
-        "excluded_zero_stock.csv",
-        "debug.log",
-        "raw.log",
-        "stock_errors.csv",
-        "01_product_templates_with_existing_attributes.csv",
-        "02_variant_update_map.csv",
-        "03_stock_quant_by_variant.csv",
-        "04_missing_attribute_values_report.csv",
-        "import_products_and_variants_report.md",
-        "unmapped_categories.csv",
-        "run_summary.json",
-        "odoo_external_id_conflicts.csv",
-        "odoo_barcode_conflicts.csv",
-        "odoo_missing_products_for_stock.csv",
-        "odoo_duplicate_variant_combinations.csv",
-        "odoo_import_validation_report.csv",
-        "odoo_attribute_rejections.csv",
-        "odoo_product_templates_with_attributes.csv",
-        "odoo_product_templates_simple.csv",
-        "odoo_stock_quant.csv",
-        "odoo_variant_sku_mapping.csv",
-        "odoo_product_templates.csv",
-        "product_internal_reference_update.csv",
-        "product_internal_reference_barcode_conflicts.csv",
-        "odoo_product_variant_internal_references.csv",
-        "odoo_product_variant_internal_references_no_barcode.csv",
-        "odoo_phase2_variant_internal_reference_validation.csv",
-        "odoo_phase2_duplicate_variant_keys.csv",
-        "odoo_phase2_missing_stock_references.csv",
-        "odoo_phase2_csv_format_errors.csv",
-        "odoo_compare_only_in_contifico.csv",
-        "odoo_compare_only_in_odoo.csv",
-        "odoo_compare_in_both.csv",
-        "odoo_missing_simple_for_import.csv",
-        "odoo_missing_templates_with_attributes.csv",
-        "odoo_missing_variants_phase2.csv",
-        "odoo_phase2_with_odoo_ids.csv",
-        "odoo_phase2_with_odoo_ids_minimal.csv",
-        "odoo_phase2_simples_minimal.csv",
-        "odoo_phase2_merger_unmatched.csv",
-        "odoo_phase2_simples_unmatched.csv",
-        "odoo_phase2_merger_unused_odoo.csv",
-        "odoo_phase1_template_renames.csv",
-        "odoo_phase2_orphaned_skus.csv",
-    }
-    if filename not in allowed:
-        raise HTTPException(status_code=400, detail="Archivo no permitido")
-    file_path = _output_root() / run_id / filename
+    if "/" in filename or "\\" in filename or filename.startswith("."):
+        raise HTTPException(status_code=400, detail="Nombre de archivo inválido")
+    file_path = (_output_root() / run_id / filename).resolve()
+    run_root = (_output_root() / run_id).resolve()
+    if run_root not in file_path.parents:
+        raise HTTPException(status_code=400, detail="Ruta de archivo inválida")
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    if file_path.suffix.lower() not in {".csv", ".log", ".md", ".json"}:
+        raise HTTPException(status_code=400, detail="Tipo de archivo no permitido")
     media_type = "text/plain; charset=utf-8" if filename.endswith(('.log', '.md')) else "text/csv; charset=utf-8"
     return FileResponse(path=file_path, filename=filename, media_type=media_type)
 
@@ -440,7 +396,7 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
     instead of creating duplicates.
 
     Expected Odoo export columns:
-      id | id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
+      id | default_code | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
     """
     run_folder = _output_root() / run_id
     if not run_folder.exists():
@@ -469,6 +425,7 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
         "files": {
             "phase2_with_odoo_ids": f"{base}/odoo_phase2_with_odoo_ids.csv",
             "phase2_with_odoo_ids_minimal": f"{base}/odoo_phase2_with_odoo_ids_minimal.csv",
+            "phase2_variant_update_by_id_safe": f"{base}/odoo_product_variant_update_by_id_safe.csv",
             "simples_minimal": f"{base}/odoo_phase2_simples_minimal.csv",
             "unmatched": f"{base}/odoo_phase2_merger_unmatched.csv",
             "simples_unmatched": f"{base}/odoo_phase2_simples_unmatched.csv",
