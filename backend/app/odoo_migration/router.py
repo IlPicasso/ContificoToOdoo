@@ -396,7 +396,7 @@ async def merge_phase2_with_odoo_export(run_id: str, file: UploadFile = File(...
     instead of creating duplicates.
 
     Expected Odoo export columns:
-      id | id | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
+      id | default_code | product_tmpl_id/id | product_tmpl_id/name | product_template_variant_value_ids
     """
     run_folder = _output_root() / run_id
     if not run_folder.exists():

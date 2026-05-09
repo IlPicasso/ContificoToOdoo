@@ -56,7 +56,7 @@ INTERNAL_REF_UPDATE_COLUMNS = [
 INTERNAL_REF_CONFLICT_COLUMNS = [
     "barcode", "conflicting_internal_references", "count", "reason",
 ]
-EXPORTER_VERSION = "1.5.10"
+EXPORTER_VERSION = "1.5.11"
 
 
 def _to_odoo_bool(value: Any) -> str:
@@ -1345,12 +1345,14 @@ class OdooMigrationService:
         #   fallback: (norm_name, norm_variant_values) — used when template IDs don't match
         tmpl_id_lookup: dict[tuple, str] = {}   # primary: (tmpl_id, frozenset_variants) → pp_ext_id
         name_lookup: dict[tuple, str] = {}       # fallback: (norm_name, frozenset_variants) → pp_ext_id
+        sku_lookup: dict[str, str] = {}          # fallback 2: sku/default_code -> pp_ext_id
         odoo_pp_to_key: dict[str, tuple] = {}   # pp_ext_id → primary key (for used-tracking)
         all_odoo_rows: list[dict[str, str]] = []
 
         with odoo_export_csv.open("r", newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 pp_ext_id = str(row.get("id") or "").strip()
+                sku = str(row.get("default_code") or "").strip()
                 tmpl_id = str(row.get("product_tmpl_id/id") or "").strip()
                 tmpl_name = str(row.get("product_tmpl_id/name") or "").strip()
                 variant_vals = str(row.get("product_template_variant_value_ids") or "").strip()
@@ -1364,6 +1366,8 @@ class OdooMigrationService:
                 if tmpl_name:
                     fallback_key = (_norm_name(tmpl_name), norm_vars)
                     name_lookup[fallback_key] = pp_ext_id
+                if sku:
+                    sku_lookup.setdefault(sku.casefold(), pp_ext_id)
                 all_odoo_rows.append({"pp_ext_id": pp_ext_id, "tmpl_id": tmpl_id, "tmpl_name": tmpl_name, "variant_values": variant_vals})
 
         # Process Phase 2 CSV and match each row — try primary key first, then fallback
@@ -1372,6 +1376,7 @@ class OdooMigrationService:
         odoo_keys_used: set[str] = set()  # set of pp_ext_ids that were matched
         matched_by_tmpl_id = 0
         matched_by_name = 0
+        matched_by_sku = 0
 
         with phase2_csv.open("r", newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
@@ -1398,6 +1403,14 @@ class OdooMigrationService:
                     if pp_ext_id:
                         match_method = "name"
                         matched_by_name += 1
+                # Fallback 2: match by SKU/default_code from Odoo export.
+                if pp_ext_id is None:
+                    sku_key = str(row.get("Internal Reference") or "").strip().casefold()
+                    if sku_key:
+                        pp_ext_id = sku_lookup.get(sku_key)
+                        if pp_ext_id:
+                            match_method = "sku"
+                            matched_by_sku += 1
 
                 if pp_ext_id:
                     odoo_keys_used.add(pp_ext_id)
@@ -1460,6 +1473,7 @@ class OdooMigrationService:
             "unmatched": len(unmatched_rows),
             "matched_by_tmpl_id": matched_by_tmpl_id,
             "matched_by_name": matched_by_name,
+            "matched_by_sku": matched_by_sku,
             "total_odoo_rows": len(all_odoo_rows),
             "unused_odoo_rows": len(unused_odoo_rows),
             "simple_matched": len(simple_matched_rows),

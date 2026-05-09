@@ -43,3 +43,8 @@
 - Exportador Odoo actualizado a versión 1.5.10.
 - Se genera `odoo_product_variant_update_by_id_safe.csv` desde el momento de creación del run (placeholder con header), para que siempre exista en descargas aun antes de ejecutar `/phase2/merge`.
 - Al ejecutar `/phase2/merge`, ese archivo se rellena con las filas matched por `id` para importación segura.
+
+## 1.0.65 - 2026-05-09
+- Exportador Odoo actualizado a versión 1.5.11.
+- Mejora crítica en `/phase2/merge`: si no hay match por `(template_id + variant_values)` ni por `(template_name + variant_values)`, ahora se aplica fallback por SKU (`Internal Reference` ↔ `default_code` del export de Odoo).
+- Esto evita casos de `odoo_product_variant_update_by_id_safe.csv` vacío cuando Odoo exporta variantes con `product_template_variant_value_ids` distintos o vacíos.
