@@ -335,28 +335,26 @@ function renderNuevaLinks(files) {
   el.innerHTML = '';
   if (!files || typeof files !== 'object') return;
   const LABELS = {
-    '01_product_template': '01 Plantillas de producto (importar 2do)',
-    '02_product_product':  '02 Variantes + SKU (importar 3ro)',
-    '03_product_attribute': '03 Atributos (importar 1ro)',
-    '04_stock_quant':      '04 Stock inicial (importar 4to)',
+    '01_product_attribute': '01 Atributos — importar primero',
+    '02_product_template':  '02 Plantillas de producto — importar segundo',
+    '03_product_product':   '03 Variantes + SKU — importar tercero',
+    '04_stock_quant':       '04 Stock inicial — importar cuarto (opcional)',
   };
   const wrap = document.createElement('div');
   wrap.className = 'phase-section';
   const h3 = document.createElement('h3');
-  h3.textContent = 'Archivos generados';
+  h3.textContent = 'Archivos generados (en orden de importación)';
   wrap.appendChild(h3);
-  for (const [role, urls] of Object.entries(files)) {
+  for (const [role, url] of Object.entries(files)) {
+    if (!url) continue;
     const label = LABELS[role] || role;
-    if (!Array.isArray(urls)) continue;
-    urls.forEach(url => {
-      const fname = url.split('/').pop();
-      const a = document.createElement('a');
-      a.href = `${base()}${url}`;
-      a.textContent = `${label} — ${fname}`;
-      a.className = 'file-link';
-      a.target = '_blank';
-      wrap.appendChild(a);
-    });
+    const fname = url.split('/').pop();
+    const a = document.createElement('a');
+    a.href = `${base()}${url}`;
+    a.textContent = `${label} — ${fname}`;
+    a.className = 'file-link';
+    a.target = '_blank';
+    wrap.appendChild(a);
   }
   el.appendChild(wrap);
 }

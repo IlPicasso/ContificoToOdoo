@@ -45,7 +45,7 @@
       <section id="tab-nueva" class="tab-panel card">
         <h2>Nueva Importación — Pipeline Limpio</h2>
         <p class="muted">Sube un archivo <code>raw.log</code> (o JSON con productos de Contífico). Se generan 4 archivos numerados listos para importar en Odoo <strong>sin necesidad de merger</strong> — el SKU (Internal Reference) ya viene en <code>02_product_product.csv</code>.</p>
-        <p class="muted"><strong>Orden de importación:</strong> 1. <code>03_product_attribute.csv</code> (atributos) → 2. <code>01_product_template.csv</code> (plantillas) → 3. <code>02_product_product.csv</code> (variantes + SKU).</p>
+        <p class="muted"><strong>Orden de importación:</strong> 1. <code>01_product_attribute.csv</code> → 2. <code>02_product_template.csv</code> → 3. <code>03_product_product.csv</code> → 4. <code>04_stock_quant.csv</code> (opcional).</p>
         <div class="form-row">
           <label>Archivo raw.log / JSON</label>
           <input id="nuevaRawFile" type="file" accept=".log,.json,.txt" />

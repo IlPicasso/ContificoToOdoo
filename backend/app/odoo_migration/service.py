@@ -1486,7 +1486,6 @@ class OdooMigrationService:
         options = GeneratorOptions(
             output_folder=output_folder,
             include_stock=include_stock,
-            max_rows_per_part=500,
         )
         output_files = _generate_all(groups, report, options)
 

@@ -293,10 +293,11 @@ async def export_phase1_new(
     run_id = ts
 
     # Build download URLs for the new numbered files
-    base = f"/odoo-migration/runs/{run_id}/files"
-    file_urls: dict[str, list[str]] = {}
-    for role, filenames in result.get("output_files", {}).items():
-        file_urls[role] = [f"{base}/{fn}" for fn in filenames]
+    base_url = f"/odoo-migration/runs/{run_id}/files"
+    file_urls = {
+        role: f"{base_url}/{fname}"
+        for role, fname in result.get("output_files", {}).items()
+    }
 
     return {
         "run_id": run_id,
@@ -426,8 +427,7 @@ def download_file(run_id: str, filename: str):
     # Also allow new numbered pipeline files (01_product_template*.csv, 02_*, 03_*, 04_*)
     import re as _re
     _new_pipeline_pattern = _re.compile(
-        r"^0[1-4]_(?:product_template|product_product|product_attribute|stock_quant)"
-        r"(?:_part\d+_of_\d+)?\.csv$"
+        r"^0[1-4]_(?:product_attribute|product_template|product_product|stock_quant)\.csv$"
     )
     if filename not in allowed and not _new_pipeline_pattern.match(filename) and filename not in {"validation_report.json"}:
         raise HTTPException(status_code=400, detail="Archivo no permitido")

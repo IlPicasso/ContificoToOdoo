@@ -87,7 +87,6 @@ VARIANT_CREATING_ATTRIBUTES = {"Talla", "Manga de Camisa", "Ancho Corbata"}
 class GeneratorOptions:
     output_folder: Path
     include_stock: bool = False
-    max_rows_per_part: int = 500
     default_tax: str = "IVA 15%"
     default_product_type: str = "Goods"
 
@@ -96,40 +95,34 @@ def generate_all(
     groups: list[TemplateGroup],
     report: ValidationReport,
     options: GeneratorOptions,
-) -> dict[str, list[str]]:
-    """Generate all four numbered CSV files.
+) -> dict[str, str]:
+    """Generate four numbered CSV files in import order.
 
-    Returns a dict mapping file role → list of filenames written (may be multiple parts).
+    File naming matches the required Odoo import sequence:
+      01_product_attribute.csv  — import first (attribute definitions)
+      02_product_template.csv   — import second (templates/product.template)
+      03_product_product.csv    — import third (variants with Internal Reference)
+      04_stock_quant.csv        — import fourth (optional: initial stock)
+
+    Returns a dict mapping file role → filename written.
     """
     folder = options.output_folder
     folder.mkdir(parents=True, exist_ok=True)
 
     template_rows, product_rows, attr_rows, stock_rows = _build_rows(groups, options)
 
-    output: dict[str, list[str]] = {}
+    _write_csv(folder / "01_product_attribute.csv", ATTRIBUTE_COLUMNS, attr_rows)
+    _write_csv(folder / "02_product_template.csv", TEMPLATE_COLUMNS, template_rows)
+    _write_csv(folder / "03_product_product.csv", PRODUCT_PRODUCT_COLUMNS, product_rows)
+    _write_csv(folder / "04_stock_quant.csv", STOCK_QUANT_COLUMNS, stock_rows if options.include_stock else [])
 
-    output["01_product_template"] = _write_parts(
-        folder, "01_product_template", TEMPLATE_COLUMNS, template_rows,
-        group_key="External ID", max_rows=options.max_rows_per_part,
-    )
-    output["02_product_product"] = _write_parts(
-        folder, "02_product_product", PRODUCT_PRODUCT_COLUMNS, product_rows,
-        group_key="Product Template/External ID", max_rows=options.max_rows_per_part,
-    )
-    # Attribute catalog — usually small, no need to split
-    _write_csv(folder / "03_product_attribute.csv", ATTRIBUTE_COLUMNS, attr_rows)
-    output["03_product_attribute"] = ["03_product_attribute.csv"]
+    output = {
+        "01_product_attribute": "01_product_attribute.csv",
+        "02_product_template": "02_product_template.csv",
+        "03_product_product": "03_product_product.csv",
+        "04_stock_quant": "04_stock_quant.csv",
+    }
 
-    if options.include_stock and stock_rows:
-        output["04_stock_quant"] = _write_parts(
-            folder, "04_stock_quant", STOCK_QUANT_COLUMNS, stock_rows,
-            group_key="Product / External ID", max_rows=options.max_rows_per_part,
-        )
-    else:
-        _write_csv(folder / "04_stock_quant.csv", STOCK_QUANT_COLUMNS, [])
-        output["04_stock_quant"] = ["04_stock_quant.csv"]
-
-    # Write run summary
     _write_run_summary(folder, groups, report, output)
 
     return output
@@ -255,57 +248,6 @@ def _emit_stock_rows(grp: TemplateGroup, out: list[dict]) -> None:
 
 # ── File writing ──────────────────────────────────────────────────────────────
 
-def _write_parts(
-    folder: Path,
-    stem: str,
-    columns: list[str],
-    rows: list[dict],
-    group_key: str,
-    max_rows: int,
-) -> list[str]:
-    """Write rows split into numbered parts, keeping same group_key together."""
-    if not rows:
-        fname = f"{stem}.csv"
-        _write_csv(folder / fname, columns, [])
-        return [fname]
-
-    # Group consecutive rows by group_key
-    groups: list[list[dict]] = []
-    current_key: str | None = None
-    current: list[dict] = []
-    for row in rows:
-        key = str(row.get(group_key) or "")
-        if key != current_key:
-            if current:
-                groups.append(current)
-            current = [row]
-            current_key = key
-        else:
-            current.append(row)
-    if current:
-        groups.append(current)
-
-    # Pack groups into parts
-    parts: list[list[dict]] = []
-    part: list[dict] = []
-    for grp in groups:
-        if part and len(part) + len(grp) > max_rows:
-            parts.append(part)
-            part = list(grp)
-        else:
-            part.extend(grp)
-    if part:
-        parts.append(part)
-
-    total = len(parts)
-    filenames: list[str] = []
-    for i, part_rows in enumerate(parts, start=1):
-        fname = f"{stem}_part{i:02d}_of_{total:02d}.csv" if total > 1 else f"{stem}.csv"
-        _write_csv(folder / fname, columns, part_rows)
-        filenames.append(fname)
-    return filenames
-
-
 def _write_csv(path: Path, columns: list[str], rows: list[dict]) -> None:
     with path.open("w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
@@ -317,7 +259,7 @@ def _write_run_summary(
     folder: Path,
     groups: list[TemplateGroup],
     report: ValidationReport,
-    output_files: dict[str, list[str]],
+    output_files: dict[str, str],
 ) -> None:
     total_variants = sum(len(g.variants) for g in groups)
     summary = {
