@@ -163,6 +163,38 @@
           <div id="stockCompareLinks" class="phase-section"></div>
           <div id="stockComparePreviews"></div>
         </details>
+
+        <hr style="margin:20px 0;border:none;border-top:2px solid #e5e7eb" />
+
+        <!-- ── Sección C: comparador de códigos de barra ── -->
+        <details open>
+          <summary class="section-summary">C. Comparador de Códigos de Barra</summary>
+          <p class="muted" style="margin-top:8px">Compara barcodes entre Odoo y Contífico usando el <code>raw.log</code> (campo <code>codigo_barra</code>). También detecta barcodes que coinciden pero con SKU distinto.</p>
+
+          <div class="stock-compare-grid">
+            <div>
+              <label>Export de Odoo — CSV con columna <code>barcode</code></label>
+              <p class="muted-small">Formatos aceptados: <code>Internal Reference | barcode</code> o <code>default_code | barcode</code></p>
+              <input id="bcCompareOdooFile" type="file" accept=".csv,text/csv" />
+            </div>
+            <div>
+              <label>Contífico — <code>raw.log</code></label>
+              <p class="muted-small">Archivo <code>raw.log</code> de la API (contiene el campo <code>codigo_barra</code>)</p>
+              <input id="bcCompareCtfFile" type="file" accept=".log,.json,.txt" />
+            </div>
+          </div>
+
+          <label class="checkbox-label">
+            <input id="bcFilterZeroStock" type="checkbox" checked />
+            Ignorar barcodes con stock = 0 en Contífico (contar como "Coincide stock 0")
+          </label>
+          <button id="executeBcCompare">Comparar barcodes</button>
+          <p id="bcCompareStatus" class="muted"></p>
+
+          <div id="bcCompareStats" class="compare-stats hidden"></div>
+          <div id="bcCompareLinks" class="phase-section"></div>
+          <div id="bcComparePreviews"></div>
+        </details>
       </section>
 
       <section id="tab-preview" class="tab-panel">
