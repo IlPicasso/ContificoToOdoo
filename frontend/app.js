@@ -427,10 +427,12 @@ $('executeSkuCompare').addEventListener('click', async () => {
     $('generateMissingSection').classList.add('hidden');
     setCompareStatus('Comparando SKUs...');
 
+    const filterZero = $('skuFilterZeroStock')?.checked ?? true;
     const form = new FormData();
     form.append('odoo_file', odooInput.files[0]);
     form.append('contifico_file', ctfInput.files[0]);
     form.append('source_type', sourceType);
+    form.append('filter_zero_stock', filterZero ? 'true' : 'false');
 
     const resp = await fetch(`${base()}/odoo-migration/compare-skus`, { method: 'POST', body: form });
     const text = await resp.text();
@@ -440,7 +442,8 @@ $('executeSkuCompare').addEventListener('click', async () => {
     renderCompareStats(data);
     renderComparePreviews(data);
     renderCompareLinks(data.files);
-    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}`);
+    const skippedMsg = data.skipped_zero_stock > 0 ? ` · Ignorados (stock 0): ${data.skipped_zero_stock}` : '';
+    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}${skippedMsg}`);
   } catch(e) {
     setCompareStatus(`Error: ${e.message}`);
     showErr(e);

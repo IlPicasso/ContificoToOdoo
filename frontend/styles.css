@@ -69,3 +69,5 @@ details>summary{user-select:none}
 .mode-btn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:6px 14px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-radius:4px 4px 0 0;transition:color .15s,border-color .15s}
 .mode-btn.active{color:#1d4ed8;border-bottom-color:#1d4ed8;background:#eff6ff}
 .mode-btn:hover:not(.active){color:#374151;background:#f9fafb}
+.checkbox-label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:#374151;margin:8px 0;cursor:pointer}
+.checkbox-label input[type=checkbox]{width:15px;height:15px;cursor:pointer}
