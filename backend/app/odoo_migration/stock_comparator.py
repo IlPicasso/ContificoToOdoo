@@ -314,6 +314,7 @@ def compare_skus(
     contifico_path: Path,
     source_type: str,
     output_folder: Path,
+    filter_zero_stock: bool = False,
 ) -> dict[str, Any]:
     """Compare SKU presence between Odoo and Contifico (no qty comparison).
 
@@ -321,6 +322,7 @@ def compare_skus(
     or in both. Writes three CSVs in output_folder.
 
     source_type: 'csv_simple' | 'csv_bodegas' | 'raw_log'
+    filter_zero_stock: when True, Contifico SKUs with qty == 0 are excluded.
     """
     output_folder.mkdir(parents=True, exist_ok=True)
 
@@ -333,7 +335,14 @@ def compare_skus(
         raise ValueError(f"source_type inválido: {source_type!r}. Usa: {list(loaders)}")
 
     odoo = load_odoo_skus(odoo_path)
-    contifico = loaders[source_type](contifico_path)
+    contifico_raw = loaders[source_type](contifico_path)
+
+    skipped_zero = 0
+    if filter_zero_stock:
+        contifico = {k: v for k, v in contifico_raw.items() if v.get("qty", 0) != 0}
+        skipped_zero = len(contifico_raw) - len(contifico)
+    else:
+        contifico = contifico_raw
 
     contifico_keys = set(contifico.keys())
     odoo_keys = set(odoo.keys())
@@ -392,6 +401,7 @@ def compare_skus(
         "in_both": len(both_keys),
         "only_in_contifico": len(only_contifico_keys),
         "only_in_odoo": len(only_odoo_keys),
+        "skipped_zero_stock": skipped_zero,
         "source_type": source_type,
         "preview_only_contifico": [r["SKU"] for r in only_c_rows[:30]],
         "preview_only_odoo": [r["SKU"] for r in only_o_rows[:30]],

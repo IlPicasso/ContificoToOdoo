@@ -620,6 +620,7 @@ async def compare_skus_endpoint(
         "csv_bodegas",
         description="Tipo de fuente Contífico: csv_simple | csv_bodegas | raw_log",
     ),
+    filter_zero_stock: bool = Form(False, description="Ignorar productos de Contífico con stock 0"),
 ):
     """Compara la presencia de SKUs entre Odoo y Contífico sin necesidad de run_id.
 
@@ -657,6 +658,7 @@ async def compare_skus_endpoint(
             contifico_path=contifico_path,
             source_type=source_type,
             output_folder=output_folder,
+            filter_zero_stock=filter_zero_stock,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
