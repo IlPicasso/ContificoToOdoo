@@ -357,10 +357,14 @@ function renderCompareStats(data) {
   // Support both field naming conventions (run-based vs standalone)
   const ctfTotal  = data.contifico_total_skus ?? data.contifico_total ?? 0;
   const odooTotal = data.odoo_total_skus ?? data.odoo_total ?? 0;
+  const zeroCard  = (data.coincide_zero_stock > 0)
+    ? `<div class="stat-card stat-card--zero"><div class="stat-num">${data.coincide_zero_stock}</div><div class="stat-lbl">Stock 0 (ambos)</div></div>`
+    : '';
   el.innerHTML = `
     <div class="stat-card stat-card--total"><div class="stat-num">${ctfTotal}</div><div class="stat-lbl">SKUs Contífico</div></div>
     <div class="stat-card stat-card--total"><div class="stat-num">${odooTotal}</div><div class="stat-lbl">SKUs Odoo</div></div>
     <div class="stat-card stat-card--both"><div class="stat-num">${data.in_both}</div><div class="stat-lbl">Coinciden</div></div>
+    ${zeroCard}
     <div class="stat-card stat-card--contifico"><div class="stat-num">${data.only_in_contifico}</div><div class="stat-lbl">Faltan en Odoo</div></div>
     <div class="stat-card stat-card--odoo"><div class="stat-num">${data.only_in_odoo}</div><div class="stat-lbl">Solo en Odoo</div></div>
   `;
@@ -372,9 +376,10 @@ function renderComparePreviews(data) {
   if (!el) return;
   el.innerHTML = '';
   const sections = [
-    { key: 'preview_only_contifico', label: `Faltan en Odoo — ${data.only_in_contifico} SKUs` },
+    { key: 'preview_only_contifico', label: `Faltan en Odoo (stock > 0) — ${data.only_in_contifico} SKUs` },
+    { key: 'preview_zero_both',      label: `Coinciden stock 0 (ausentes en Odoo, sin stock) — ${data.coincide_zero_stock ?? 0} SKUs` },
     { key: 'preview_only_odoo',      label: `Solo en Odoo — ${data.only_in_odoo} SKUs` },
-    { key: 'preview_in_both',        label: `Coinciden — ${data.in_both} SKUs` },
+    { key: 'preview_in_both',        label: `Coinciden en ambos — ${data.in_both} SKUs` },
   ];
   sections.forEach(({ key, label }) => {
     const items = data[key] || [];
@@ -391,7 +396,7 @@ function renderComparePreviews(data) {
   });
 }
 
-function renderCompareLinks(files) {
+function renderCompareLinks(files, data) {
   const el = $('compareLinks');
   if (!el || !files) return;
   el.innerHTML = '';
@@ -400,7 +405,8 @@ function renderCompareLinks(files) {
   title.textContent = 'Descargar resultados';
   el.appendChild(title);
   const COMPARE_FILES = [
-    { key: 'only_in_contifico', label: 'Faltan en Odoo — SKUs solo en Contífico' },
+    { key: 'only_in_contifico', label: 'Faltan en Odoo — stock > 0 en Contífico (brecha real)' },
+    { key: 'zero_both',         label: 'Coinciden stock 0 — ausentes en Odoo, sin stock en Contífico' },
     { key: 'only_in_odoo',      label: 'Solo en Odoo — no están en Contífico' },
     { key: 'in_both',           label: 'Coinciden en ambos sistemas' },
   ];
@@ -441,9 +447,9 @@ $('executeSkuCompare').addEventListener('click', async () => {
 
     renderCompareStats(data);
     renderComparePreviews(data);
-    renderCompareLinks(data.files);
-    const skippedMsg = data.skipped_zero_stock > 0 ? ` · Ignorados (stock 0): ${data.skipped_zero_stock}` : '';
-    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}${skippedMsg}`);
+    renderCompareLinks(data.files, data);
+    const zeroMsg = data.coincide_zero_stock > 0 ? ` · Stock 0 (ambos): ${data.coincide_zero_stock}` : '';
+    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both}${zeroMsg} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}`);
   } catch(e) {
     setCompareStatus(`Error: ${e.message}`);
     showErr(e);
@@ -473,7 +479,7 @@ $('executeCompare').addEventListener('click', async () => {
     if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
     renderCompareStats(data);
     renderComparePreviews(data);
-    renderCompareLinks(data.files);
+    renderCompareLinks(data.files, data);
     setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}`);
     if (data.only_in_contifico > 0) $('generateMissingSection').classList.remove('hidden');
   } catch(e) {
