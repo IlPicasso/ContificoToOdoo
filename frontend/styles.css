@@ -63,3 +63,9 @@ details>summary{user-select:none}
 .stock-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:8px 0 12px}
 @media(max-width:700px){.stock-compare-grid{grid-template-columns:1fr}}
 .muted-small{font-size:11px;color:#6b7280;margin:2px 0 6px}
+
+/* Mode toggle tabs (Sección A) */
+.mode-tabs{display:flex;gap:6px;margin:10px 0 14px;border-bottom:2px solid #e5e7eb;padding-bottom:0}
+.mode-btn{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:6px 14px;font-size:13px;font-weight:600;color:#6b7280;cursor:pointer;border-radius:4px 4px 0 0;transition:color .15s,border-color .15s}
+.mode-btn.active{color:#1d4ed8;border-bottom-color:#1d4ed8;background:#eff6ff}
+.mode-btn:hover:not(.active){color:#374151;background:#f9fafb}

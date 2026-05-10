@@ -13,7 +13,7 @@ from ..dependencies import get_contifico_client
 from ..config import get_settings
 from .rules import CATEGORY_ALIASES
 from .service import OdooMigrationService
-from .stock_comparator import compare_stock
+from .stock_comparator import compare_stock, compare_skus
 from .stock_worker import StockWorker
 
 router = APIRouter(prefix="/odoo-migration", tags=["Odoo Migration"])
@@ -591,6 +591,96 @@ def download_compare_file(job_id: str, filename: str):
     """Descarga uno de los CSVs generados por el comparador de stock."""
     safe_name = Path(filename).name  # strip any path traversal
     file_path = _compare_output_root() / job_id / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(
+        path=file_path,
+        filename=safe_name,
+        media_type="text/csv; charset=utf-8",
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Comparador de SKUs standalone (Sección A sin run_id)
+# ──────────────────────────────────────────────────────────────────────────────
+
+SKU_COMPARE_JOBS: dict[str, dict] = {}
+SKU_COMPARE_LOCK = Lock()
+
+
+def _sku_compare_root() -> Path:
+    return Path("backend/data/odoo_migration/sku_compare")
+
+
+@router.post("/compare-skus")
+async def compare_skus_endpoint(
+    odoo_file: UploadFile = File(..., description="Export de inventario Odoo (CSV)"),
+    contifico_file: UploadFile = File(..., description="Archivo de inventario Contífico"),
+    source_type: str = Form(
+        "csv_bodegas",
+        description="Tipo de fuente Contífico: csv_simple | csv_bodegas | raw_log",
+    ),
+):
+    """Compara la presencia de SKUs entre Odoo y Contífico sin necesidad de run_id.
+
+    Responde qué productos **faltan en Odoo** (solo en Contífico) y cuáles
+    **sobran en Odoo** (no vienen de Contífico).
+
+    **source_type**:
+    - `csv_simple`  → ReporteSaldosInventario.csv
+    - `csv_bodegas` → ReporteSaldosInventarioPorBodega.csv
+    - `raw_log`     → raw.log (respuestas JSON de la API de Contífico)
+
+    Genera tres CSVs:
+    - `sku_compare_only_contifico.csv`  – faltan en Odoo (importar)
+    - `sku_compare_only_odoo.csv`       – sobran en Odoo (revisar)
+    - `sku_compare_in_both.csv`         – presentes en ambos
+    """
+    if source_type not in ("csv_simple", "csv_bodegas", "raw_log"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"source_type inválido: {source_type!r}. Usa: csv_simple | csv_bodegas | raw_log",
+        )
+
+    job_id = uuid4().hex[:12]
+    output_folder = _sku_compare_root() / job_id
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    odoo_path = output_folder / "odoo_upload.csv"
+    contifico_path = output_folder / f"contifico_upload_{source_type}"
+    odoo_path.write_bytes(await odoo_file.read())
+    contifico_path.write_bytes(await contifico_file.read())
+
+    try:
+        result = compare_skus(
+            odoo_path=odoo_path,
+            contifico_path=contifico_path,
+            source_type=source_type,
+            output_folder=output_folder,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    with SKU_COMPARE_LOCK:
+        SKU_COMPARE_JOBS[job_id] = {"job_id": job_id, **result}
+
+    base = f"/odoo-migration/compare-skus/{job_id}/files"
+    return {
+        "job_id": job_id,
+        **result,
+        "files": {
+            "only_in_contifico": f"{base}/sku_compare_only_contifico.csv",
+            "only_in_odoo":      f"{base}/sku_compare_only_odoo.csv",
+            "in_both":           f"{base}/sku_compare_in_both.csv",
+        },
+    }
+
+
+@router.get("/compare-skus/{job_id}/files/{filename}")
+def download_sku_compare_file(job_id: str, filename: str):
+    """Descarga uno de los CSVs generados por el comparador de SKUs standalone."""
+    safe_name = Path(filename).name
+    file_path = _sku_compare_root() / job_id / safe_name
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(
