@@ -629,6 +629,117 @@ $('executeStockCompare').addEventListener('click', async () => {
   }
 });
 
+// ── Comparador de Códigos de Barra (Sección C) ──────────────────────────────
+
+function setBcCompareStatus(msg) { const el=$('bcCompareStatus'); if(el) el.textContent=msg||''; }
+
+function renderBcCompareStats(data) {
+  const el = $('bcCompareStats');
+  if (!el) return;
+  const zeroCard = (data.coincide_zero_stock > 0)
+    ? `<div class="stat-card stat-card--zero"><div class="stat-num">${data.coincide_zero_stock}</div><div class="stat-lbl">Stock 0 (ambos)</div></div>`
+    : '';
+  const mismatchCard = (data.sku_mismatch > 0)
+    ? `<div class="stat-card stat-card--warn"><div class="stat-num">${data.sku_mismatch}</div><div class="stat-lbl">SKU distinto</div></div>`
+    : '';
+  el.innerHTML = `
+    <div class="stat-card stat-card--total"><div class="stat-num">${data.contifico_total_barcodes}</div><div class="stat-lbl">Barcodes Ctf</div></div>
+    <div class="stat-card stat-card--total"><div class="stat-num">${data.odoo_total_barcodes}</div><div class="stat-lbl">Barcodes Odoo</div></div>
+    <div class="stat-card stat-card--both"><div class="stat-num">${data.in_both}</div><div class="stat-lbl">Coinciden</div></div>
+    ${mismatchCard}
+    ${zeroCard}
+    <div class="stat-card stat-card--contifico"><div class="stat-num">${data.only_in_contifico}</div><div class="stat-lbl">Faltan en Odoo</div></div>
+    <div class="stat-card stat-card--odoo"><div class="stat-num">${data.only_in_odoo}</div><div class="stat-lbl">Solo en Odoo</div></div>
+  `;
+  el.classList.remove('hidden');
+}
+
+function renderBcCompareLinks(files) {
+  const el = $('bcCompareLinks');
+  if (!el || !files) return;
+  el.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'phase-title';
+  title.textContent = 'Descargar reportes de barcodes';
+  el.appendChild(title);
+  const FILES = [
+    { key: 'only_in_contifico', label: 'Faltan en Odoo — barcode en Ctf con stock > 0 (barcode_compare_only_contifico.csv)' },
+    { key: 'zero_both',         label: 'Coinciden stock 0 — barcode en Ctf sin stock, ausentes en Odoo (barcode_compare_zero_both.csv)' },
+    { key: 'only_in_odoo',      label: 'Solo en Odoo — barcode no encontrado en Ctf (barcode_compare_only_odoo.csv)' },
+    { key: 'in_both',           label: 'Coinciden — con columna SKU Match para detectar discrepancias (barcode_compare_in_both.csv)' },
+  ];
+  FILES.forEach(({ key, label }) => {
+    const path = files[key];
+    if (!path) return;
+    el.appendChild(makeLink(`${base()}${path}`, label, false));
+  });
+}
+
+function renderBcComparePreviews(data) {
+  const el = $('bcComparePreviews');
+  if (!el) return;
+  el.innerHTML = '';
+  const sections = [
+    { key: 'preview_only_contifico', label: `Faltan en Odoo (stock > 0) — ${data.only_in_contifico} barcodes` },
+    { key: 'preview_sku_mismatch',   label: `Barcode coincide pero SKU distinto — ${data.sku_mismatch} barcodes` },
+    { key: 'preview_zero_both',      label: `Coinciden stock 0 — ${data.coincide_zero_stock ?? 0} barcodes` },
+    { key: 'preview_only_odoo',      label: `Solo en Odoo — ${data.only_in_odoo} barcodes` },
+  ];
+  sections.forEach(({ key, label }) => {
+    const items = data[key] || [];
+    if (!items.length) return;
+    const details = document.createElement('details');
+    details.className = 'compare-preview';
+    const summary = document.createElement('summary');
+    summary.textContent = label + (items.length === 30 ? ' (mostrando primeros 30)' : '');
+    details.appendChild(summary);
+    const ul = document.createElement('ul');
+    items.forEach(bc => { const li = document.createElement('li'); li.textContent = bc; ul.appendChild(li); });
+    details.appendChild(ul);
+    el.appendChild(details);
+  });
+}
+
+$('executeBcCompare').addEventListener('click', async () => {
+  try {
+    const odooInput = $('bcCompareOdooFile');
+    if (!odooInput?.files?.[0]) throw new Error('Debes seleccionar el archivo de inventario de Odoo.');
+    const ctfInput = $('bcCompareCtfFile');
+    if (!ctfInput?.files?.[0]) throw new Error('Debes seleccionar el raw.log de Contífico.');
+    const filterZero = $('bcFilterZeroStock')?.checked ?? true;
+
+    $('executeBcCompare').disabled = true;
+    $('bcCompareStats').classList.add('hidden');
+    $('bcComparePreviews').innerHTML = '';
+    $('bcCompareLinks').innerHTML = '';
+    setBcCompareStatus('Comparando barcodes...');
+
+    const form = new FormData();
+    form.append('odoo_file', odooInput.files[0]);
+    form.append('contifico_file', ctfInput.files[0]);
+    form.append('filter_zero_stock', filterZero ? 'true' : 'false');
+
+    const resp = await fetch(`${base()}/odoo-migration/compare-barcodes`, { method: 'POST', body: form });
+    const text = await resp.text();
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+
+    renderBcCompareStats(data);
+    renderBcCompareLinks(data.files);
+    renderBcComparePreviews(data);
+    const zeroMsg    = data.coincide_zero_stock > 0 ? ` · Stock 0 (ambos): ${data.coincide_zero_stock}` : '';
+    const mismatchMsg = data.sku_mismatch > 0       ? ` · SKU distinto: ${data.sku_mismatch}` : '';
+    setBcCompareStatus(
+      `Comparación completada. Coinciden: ${data.in_both}${mismatchMsg}${zeroMsg} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}`
+    );
+  } catch(e) {
+    setBcCompareStatus(`Error: ${e.message}`);
+    showErr(e);
+  } finally {
+    $('executeBcCompare').disabled = false;
+  }
+});
+
 // ── Merger Variantes ────────────────────────────────────────────────────────
 
 function setMergerStatus(msg) { const el=$('mergerStatus'); if(el) el.textContent=msg||''; }

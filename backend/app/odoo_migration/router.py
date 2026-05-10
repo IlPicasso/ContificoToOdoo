@@ -13,7 +13,7 @@ from ..dependencies import get_contifico_client
 from ..config import get_settings
 from .rules import CATEGORY_ALIASES
 from .service import OdooMigrationService
-from .stock_comparator import compare_stock, compare_skus
+from .stock_comparator import compare_stock, compare_skus, compare_barcodes
 from .stock_worker import StockWorker
 
 router = APIRouter(prefix="/odoo-migration", tags=["Odoo Migration"])
@@ -685,6 +685,90 @@ def download_sku_compare_file(job_id: str, filename: str):
     """Descarga uno de los CSVs generados por el comparador de SKUs standalone."""
     safe_name = Path(filename).name
     file_path = _sku_compare_root() / job_id / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(
+        path=file_path,
+        filename=safe_name,
+        media_type="text/csv; charset=utf-8",
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Comparador de códigos de barra (Sección C)
+# ──────────────────────────────────────────────────────────────────────────────
+
+BC_COMPARE_JOBS: dict[str, dict] = {}
+BC_COMPARE_LOCK = Lock()
+
+
+def _bc_compare_root() -> Path:
+    return Path("backend/data/odoo_migration/barcode_compare")
+
+
+@router.post("/compare-barcodes")
+async def compare_barcodes_endpoint(
+    odoo_file: UploadFile = File(..., description="Export de inventario Odoo (CSV con columna barcode)"),
+    contifico_file: UploadFile = File(..., description="raw.log de Contífico (contiene codigo_barra)"),
+    filter_zero_stock: bool = Form(False, description="Tratar barcodes con stock 0 en Contífico ausentes en Odoo como 'coincide stock 0'"),
+):
+    """Compara códigos de barra entre Odoo y Contífico.
+
+    Fuente Contífico: **raw.log** (campo `codigo_barra`).
+    Fuente Odoo: CSV con columna `barcode` (cualquier export que la incluya).
+
+    Clasifica cada barcode en:
+    - **in_both**          → presente en ambos (detecta también SKU distinto)
+    - **only_in_contifico** → en Contífico con stock > 0, ausente en Odoo
+    - **coincide_zero_stock** → en Contífico con stock = 0, ausente en Odoo (cuando filtro activo)
+    - **only_in_odoo**     → en Odoo, ausente en Contífico
+
+    Genera cuatro CSVs:
+    - `barcode_compare_in_both.csv`        – coinciden (incluye columna SKU Match)
+    - `barcode_compare_only_contifico.csv` – faltan en Odoo (stock > 0)
+    - `barcode_compare_only_odoo.csv`      – sobran en Odoo
+    - `barcode_compare_zero_both.csv`      – stock 0 en Contífico, ausentes en Odoo
+    """
+    job_id = uuid4().hex[:12]
+    output_folder = _bc_compare_root() / job_id
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    odoo_path = output_folder / "odoo_upload.csv"
+    ctf_path  = output_folder / "contifico_raw.log"
+    odoo_path.write_bytes(await odoo_file.read())
+    ctf_path.write_bytes(await contifico_file.read())
+
+    try:
+        result = compare_barcodes(
+            odoo_path=odoo_path,
+            contifico_path=ctf_path,
+            output_folder=output_folder,
+            filter_zero_stock=filter_zero_stock,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    with BC_COMPARE_LOCK:
+        BC_COMPARE_JOBS[job_id] = {"job_id": job_id, **result}
+
+    base = f"/odoo-migration/compare-barcodes/{job_id}/files"
+    return {
+        "job_id": job_id,
+        **result,
+        "files": {
+            "in_both":           f"{base}/barcode_compare_in_both.csv",
+            "only_in_contifico": f"{base}/barcode_compare_only_contifico.csv",
+            "only_in_odoo":      f"{base}/barcode_compare_only_odoo.csv",
+            "zero_both":         f"{base}/barcode_compare_zero_both.csv",
+        },
+    }
+
+
+@router.get("/compare-barcodes/{job_id}/files/{filename}")
+def download_barcode_compare_file(job_id: str, filename: str):
+    """Descarga uno de los CSVs generados por el comparador de barcodes."""
+    safe_name = Path(filename).name
+    file_path = _bc_compare_root() / job_id / safe_name
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(

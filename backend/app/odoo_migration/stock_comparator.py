@@ -557,3 +557,190 @@ def compare_stock(
         "preview_only_contifico": [only_c_rows[i]["SKU"] for i in range(min(30, len(only_c_rows)))],
         "preview_only_odoo": [only_o_rows[i]["SKU"] for i in range(min(30, len(only_o_rows)))],
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Barcode loader helpers
+# ──────────────────────────────────────────────────────────────────────────────
+
+def load_odoo_barcodes(path: Path) -> dict[str, dict]:
+    """Return {barcode: {barcode, sku, name, qty}} from an Odoo inventory export.
+
+    Rows without a barcode are skipped.
+    """
+    result: dict[str, dict] = {}
+    with _open_csv(path) as f:
+        reader = csv.DictReader(f)
+        headers = reader.fieldnames or []
+
+        if "Internal Reference" in headers:
+            sku_col, name_col, bc_col = "Internal Reference", "name_odoo", "barcode"
+        elif "default_code" in headers:
+            sku_col, name_col, bc_col = "default_code", "name", "barcode"
+        else:
+            raise ValueError(
+                f"Formato Odoo no reconocido. Se esperaba 'Internal Reference' o 'default_code'. "
+                f"Columnas: {headers}"
+            )
+
+        for row in reader:
+            bc = str(row.get(bc_col) or "").strip()
+            if not bc:
+                continue
+            if bc not in result:
+                result[bc] = {
+                    "barcode": bc,
+                    "sku": str(row.get(sku_col) or "").strip(),
+                    "name": str(row.get(name_col) or "").strip(),
+                    "qty": _parse_qty(row.get("qty_available") or "0"),
+                }
+    return result
+
+
+def load_contifico_barcodes_from_raw_log(path: Path) -> dict[str, dict]:
+    """Return {barcode: {barcode, sku, name, qty, marca}} from raw.log.
+
+    Products without a barcode (codigo_barra empty) are skipped.
+    """
+    result: dict[str, dict] = {}
+    with _open_csv(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            products = obj.get("response", []) if isinstance(obj, dict) else []
+            for p in products:
+                if not isinstance(p, dict):
+                    continue
+                bc = str(p.get("codigo_barra") or "").strip()
+                if not bc:
+                    continue
+                if bc not in result:
+                    result[bc] = {
+                        "barcode": bc,
+                        "sku": str(p.get("codigo") or "").strip(),
+                        "name": str(p.get("nombre") or "").strip(),
+                        "qty": float(p.get("cantidad_stock") or 0),
+                        "marca": str(p.get("marca_nombre") or "").strip(),
+                    }
+    return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Barcode comparator (Sección C)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compare_barcodes(
+    *,
+    odoo_path: Path,
+    contifico_path: Path,
+    output_folder: Path,
+    filter_zero_stock: bool = False,
+) -> dict[str, Any]:
+    """Compare barcodes between Odoo and Contifico (raw.log).
+
+    Classifies each barcode into:
+      - in_both          : barcode present in both (also flags SKU mismatch)
+      - only_contifico   : barcode in Contífico with stock > 0, absent from Odoo
+      - zero_both        : barcode in Contífico with stock = 0, absent from Odoo
+      - only_odoo        : barcode in Odoo, absent from Contífico
+
+    'zero_both' is only populated when filter_zero_stock=True; otherwise those
+    barcodes are included in only_contifico.
+    """
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    odoo = load_odoo_barcodes(odoo_path)
+    ctf  = load_contifico_barcodes_from_raw_log(contifico_path)
+
+    ctf_keys  = set(ctf.keys())
+    odoo_keys = set(odoo.keys())
+
+    raw_only_ctf = ctf_keys - odoo_keys
+    only_odoo_keys = sorted(odoo_keys - ctf_keys)
+    both_keys      = sorted(ctf_keys & odoo_keys)
+
+    if filter_zero_stock:
+        only_ctf_keys  = sorted(k for k in raw_only_ctf if ctf[k]["qty"] != 0)
+        zero_both_keys = sorted(k for k in raw_only_ctf if ctf[k]["qty"] == 0)
+    else:
+        only_ctf_keys  = sorted(raw_only_ctf)
+        zero_both_keys = []
+
+    # In-both rows: flag SKU mismatch
+    both_rows = sorted(
+        [
+            {
+                "Barcode": bc,
+                "SKU Contifico": ctf[bc]["sku"],
+                "SKU Odoo":      odoo[bc]["sku"],
+                "SKU Match":     "SI" if ctf[bc]["sku"].casefold() == odoo[bc]["sku"].casefold() else "NO",
+                "Nombre Contifico": ctf[bc]["name"],
+                "Nombre Odoo":      odoo[bc]["name"],
+                "Stock Contifico":  ctf[bc]["qty"],
+                "Stock Odoo":       odoo[bc]["qty"],
+            }
+            for bc in both_keys
+        ],
+        key=lambda r: r["Barcode"],
+    )
+    sku_mismatch_count = sum(1 for r in both_rows if r["SKU Match"] == "NO")
+
+    def _ctf_bc_row(bc: str) -> dict:
+        return {
+            "Barcode": bc,
+            "SKU Contifico": ctf[bc]["sku"],
+            "Nombre Contifico": ctf[bc]["name"],
+            "Marca": ctf[bc].get("marca", ""),
+            "Stock Contifico": ctf[bc]["qty"],
+        }
+
+    only_ctf_rows  = [_ctf_bc_row(bc) for bc in only_ctf_keys]
+    zero_both_rows = [_ctf_bc_row(bc) for bc in zero_both_keys]
+
+    only_odoo_rows = sorted(
+        [
+            {
+                "Barcode": bc,
+                "SKU Odoo":   odoo[bc]["sku"],
+                "Nombre Odoo": odoo[bc]["name"],
+                "Stock Odoo":  odoo[bc]["qty"],
+            }
+            for bc in only_odoo_keys
+        ],
+        key=lambda r: r["Barcode"],
+    )
+
+    def write_csv(filepath: Path, rows: list[dict]) -> None:
+        if not rows:
+            filepath.write_text("(sin datos)\n", encoding="utf-8")
+            return
+        with filepath.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    write_csv(output_folder / "barcode_compare_in_both.csv",         both_rows)
+    write_csv(output_folder / "barcode_compare_only_contifico.csv",  only_ctf_rows)
+    write_csv(output_folder / "barcode_compare_only_odoo.csv",       only_odoo_rows)
+    write_csv(output_folder / "barcode_compare_zero_both.csv",       zero_both_rows)
+
+    return {
+        "contifico_total_barcodes": len(ctf),
+        "odoo_total_barcodes":      len(odoo),
+        "in_both":                  len(both_keys),
+        "sku_mismatch":             sku_mismatch_count,
+        "only_in_contifico":        len(only_ctf_keys),
+        "coincide_zero_stock":      len(zero_both_keys),
+        "only_in_odoo":             len(only_odoo_keys),
+        "filter_zero_stock":        filter_zero_stock,
+        "preview_only_contifico":   [r["Barcode"] for r in only_ctf_rows[:30]],
+        "preview_zero_both":        [r["Barcode"] for r in zero_both_rows[:30]],
+        "preview_only_odoo":        [r["Barcode"] for r in only_odoo_rows[:30]],
+        "preview_in_both":          [r["Barcode"] for r in both_rows[:30]],
+        "preview_sku_mismatch":     [r["Barcode"] for r in both_rows if r["SKU Match"] == "NO"][:30],
+    }
