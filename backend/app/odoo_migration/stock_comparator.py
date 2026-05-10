@@ -335,32 +335,39 @@ def compare_skus(
         raise ValueError(f"source_type inválido: {source_type!r}. Usa: {list(loaders)}")
 
     odoo = load_odoo_skus(odoo_path)
-    contifico_raw = loaders[source_type](contifico_path)
-
-    skipped_zero = 0
-    if filter_zero_stock:
-        contifico = {k: v for k, v in contifico_raw.items() if v.get("qty", 0) != 0}
-        skipped_zero = len(contifico_raw) - len(contifico)
-    else:
-        contifico = contifico_raw
+    contifico = loaders[source_type](contifico_path)
 
     contifico_keys = set(contifico.keys())
     odoo_keys = set(odoo.keys())
 
-    only_contifico_keys = sorted(contifico_keys - odoo_keys)
+    raw_only_contifico = contifico_keys - odoo_keys
     only_odoo_keys = sorted(odoo_keys - contifico_keys)
     both_keys = sorted(contifico_keys & odoo_keys)
 
-    only_c_rows = [
-        {
+    # Split "only in Contifico" into real gaps (stock > 0) vs zero-stock-both
+    # (stock = 0 in Contifico and absent from Odoo → both sides agree on no stock)
+    if filter_zero_stock:
+        only_contifico_keys = sorted(
+            k for k in raw_only_contifico if contifico[k].get("qty", 0) != 0
+        )
+        zero_both_keys = sorted(
+            k for k in raw_only_contifico if contifico[k].get("qty", 0) == 0
+        )
+    else:
+        only_contifico_keys = sorted(raw_only_contifico)
+        zero_both_keys = []
+
+    def _ctf_row(k: str) -> dict:
+        return {
             "SKU": contifico[k]["sku"],
             "Nombre Contifico": contifico[k].get("name", ""),
             "Categoria": contifico[k].get("categoria", ""),
             "Marca": contifico[k].get("marca", ""),
             "Stock Contifico": contifico[k].get("qty", 0),
         }
-        for k in only_contifico_keys
-    ]
+
+    only_c_rows  = [_ctf_row(k) for k in only_contifico_keys]
+    zero_b_rows  = [_ctf_row(k) for k in zero_both_keys]
 
     only_o_rows = [
         {
@@ -394,6 +401,7 @@ def compare_skus(
     write_csv(output_folder / "sku_compare_only_contifico.csv", only_c_rows)
     write_csv(output_folder / "sku_compare_only_odoo.csv", only_o_rows)
     write_csv(output_folder / "sku_compare_in_both.csv", both_rows)
+    write_csv(output_folder / "sku_compare_zero_both.csv", zero_b_rows)
 
     return {
         "contifico_total_skus": len(contifico),
@@ -401,11 +409,13 @@ def compare_skus(
         "in_both": len(both_keys),
         "only_in_contifico": len(only_contifico_keys),
         "only_in_odoo": len(only_odoo_keys),
-        "skipped_zero_stock": skipped_zero,
+        "coincide_zero_stock": len(zero_both_keys),
+        "filter_zero_stock": filter_zero_stock,
         "source_type": source_type,
         "preview_only_contifico": [r["SKU"] for r in only_c_rows[:30]],
         "preview_only_odoo": [r["SKU"] for r in only_o_rows[:30]],
         "preview_in_both": [r["SKU"] for r in both_rows[:30]],
+        "preview_zero_both": [r["SKU"] for r in zero_b_rows[:30]],
     }
 
 

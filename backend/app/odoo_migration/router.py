@@ -633,9 +633,10 @@ async def compare_skus_endpoint(
     - `raw_log`     → raw.log (respuestas JSON de la API de Contífico)
 
     Genera tres CSVs:
-    - `sku_compare_only_contifico.csv`  – faltan en Odoo (importar)
+    - `sku_compare_only_contifico.csv`  – faltan en Odoo con stock > 0 (brecha real)
     - `sku_compare_only_odoo.csv`       – sobran en Odoo (revisar)
     - `sku_compare_in_both.csv`         – presentes en ambos
+    - `sku_compare_zero_both.csv`       – stock 0 en Contífico y ausentes en Odoo (coinciden sin stock)
     """
     if source_type not in ("csv_simple", "csv_bodegas", "raw_log"):
         raise HTTPException(
@@ -674,6 +675,7 @@ async def compare_skus_endpoint(
             "only_in_contifico": f"{base}/sku_compare_only_contifico.csv",
             "only_in_odoo":      f"{base}/sku_compare_only_odoo.csv",
             "in_both":           f"{base}/sku_compare_in_both.csv",
+            "zero_both":         f"{base}/sku_compare_zero_both.csv",
         },
     }
 
