@@ -563,24 +563,59 @@ def compare_stock(
 # Barcode loader helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
+def _find_barcode_col(headers: list[str]) -> str | None:
+    """Return the actual barcode column name (case/accent insensitive)."""
+    candidates = {"barcode", "codigo_barra", "código de barras", "codigo de barras",
+                  "barras", "ean", "upc"}
+    for h in headers:
+        if _normalize_header(h).lower() in candidates or "barcode" in h.lower():
+            return h
+    return None
+
+
+def _find_sku_col(headers: list[str]) -> str | None:
+    candidates = {
+        "internal reference", "internal_reference", "default_code",
+        "sku", "codigo", "código", "referencia interna",
+    }
+    for h in headers:
+        if _normalize_header(h).lower() in candidates:
+            return h
+    # Fallback: column explicitly labelled "Product / Internal Reference"
+    for h in headers:
+        if "internal reference" in h.lower():
+            return h
+    return None
+
+
+def _find_name_col(headers: list[str]) -> str | None:
+    candidates = {"name", "nombre", "name_odoo", "product", "producto"}
+    for h in headers:
+        if _normalize_header(h).lower() in candidates:
+            return h
+    return None
+
+
 def load_odoo_barcodes(path: Path) -> dict[str, dict]:
     """Return {barcode: {barcode, sku, name, qty}} from an Odoo inventory export.
 
-    Rows without a barcode are skipped.
+    Column detection is flexible: accepts any column whose name contains
+    'barcode', 'codigo_barra', 'EAN', etc.  Rows without a barcode are skipped.
     """
     result: dict[str, dict] = {}
     with _open_csv(path) as f:
         reader = csv.DictReader(f)
-        headers = reader.fieldnames or []
+        headers = list(reader.fieldnames or [])
 
-        if "Internal Reference" in headers:
-            sku_col, name_col, bc_col = "Internal Reference", "name_odoo", "barcode"
-        elif "default_code" in headers:
-            sku_col, name_col, bc_col = "default_code", "name", "barcode"
-        else:
+        bc_col   = _find_barcode_col(headers)
+        sku_col  = _find_sku_col(headers)
+        name_col = _find_name_col(headers)
+
+        if bc_col is None:
             raise ValueError(
-                f"Formato Odoo no reconocido. Se esperaba 'Internal Reference' o 'default_code'. "
-                f"Columnas: {headers}"
+                f"No se encontró columna de barcode en el archivo Odoo. "
+                f"Columnas detectadas: {headers}. "
+                f"Se esperaba alguna variante de 'barcode', 'Barcode', 'codigo_barra'."
             )
 
         for row in reader:
@@ -590,9 +625,9 @@ def load_odoo_barcodes(path: Path) -> dict[str, dict]:
             if bc not in result:
                 result[bc] = {
                     "barcode": bc,
-                    "sku": str(row.get(sku_col) or "").strip(),
-                    "name": str(row.get(name_col) or "").strip(),
-                    "qty": _parse_qty(row.get("qty_available") or "0"),
+                    "sku":  str(row.get(sku_col)  or "").strip() if sku_col  else "",
+                    "name": str(row.get(name_col) or "").strip() if name_col else "",
+                    "qty":  _parse_qty(row.get("qty_available") or row.get("qty") or "0"),
                 }
     return result
 

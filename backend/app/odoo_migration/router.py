@@ -748,6 +748,16 @@ async def compare_barcodes_endpoint(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    if result["odoo_total_barcodes"] == 0:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "El archivo de Odoo no contiene barcodes. "
+                "Asegúrate de exportar product.product con la columna 'barcode' o 'Barcode' incluida, "
+                "y que los valores no estén vacíos."
+            ),
+        )
+
     with BC_COMPARE_LOCK:
         BC_COMPARE_JOBS[job_id] = {"job_id": job_id, **result}
 
