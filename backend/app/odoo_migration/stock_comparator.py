@@ -264,6 +264,142 @@ def load_contifico_raw_log(path: Path) -> dict[str, dict]:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Odoo SKU loader (no qty needed for presence comparison)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def load_odoo_skus(path: Path) -> dict[str, dict]:
+    """Return {sku_lower: {sku, name, barcode}} from an Odoo product export.
+
+    Accepts the same formats as load_odoo_stock but ignores qty_available.
+    Also accepts the minimal format: Internal Reference | name_odoo | barcode
+    """
+    result: dict[str, dict] = {}
+    with _open_csv(path) as f:
+        reader = csv.DictReader(f)
+        headers = reader.fieldnames or []
+
+        if "Internal Reference" in headers:
+            sku_col, name_col, bc_col = "Internal Reference", "name_odoo", "barcode"
+        elif "default_code" in headers:
+            sku_col, name_col, bc_col = "default_code", "name", "barcode"
+        else:
+            raise ValueError(
+                f"Formato Odoo no reconocido. "
+                f"Se esperaba 'Internal Reference' o 'default_code'. "
+                f"Columnas encontradas: {headers}"
+            )
+
+        for row in reader:
+            sku = str(row.get(sku_col) or "").strip()
+            if not sku:
+                continue
+            key = sku.casefold()
+            if key not in result:
+                result[key] = {
+                    "sku": sku,
+                    "name": str(row.get(name_col) or "").strip(),
+                    "barcode": str(row.get(bc_col) or "").strip(),
+                    "qty": _parse_qty(row.get("qty_available") or "0"),
+                }
+    return result
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SKU presence comparator (Sección A)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def compare_skus(
+    *,
+    odoo_path: Path,
+    contifico_path: Path,
+    source_type: str,
+    output_folder: Path,
+) -> dict[str, Any]:
+    """Compare SKU presence between Odoo and Contifico (no qty comparison).
+
+    Returns which SKUs are only in Contifico (missing from Odoo), only in Odoo,
+    or in both. Writes three CSVs in output_folder.
+
+    source_type: 'csv_simple' | 'csv_bodegas' | 'raw_log'
+    """
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    loaders = {
+        "csv_simple": load_contifico_simple,
+        "csv_bodegas": load_contifico_bodegas,
+        "raw_log": load_contifico_raw_log,
+    }
+    if source_type not in loaders:
+        raise ValueError(f"source_type inválido: {source_type!r}. Usa: {list(loaders)}")
+
+    odoo = load_odoo_skus(odoo_path)
+    contifico = loaders[source_type](contifico_path)
+
+    contifico_keys = set(contifico.keys())
+    odoo_keys = set(odoo.keys())
+
+    only_contifico_keys = sorted(contifico_keys - odoo_keys)
+    only_odoo_keys = sorted(odoo_keys - contifico_keys)
+    both_keys = sorted(contifico_keys & odoo_keys)
+
+    only_c_rows = [
+        {
+            "SKU": contifico[k]["sku"],
+            "Nombre Contifico": contifico[k].get("name", ""),
+            "Categoria": contifico[k].get("categoria", ""),
+            "Marca": contifico[k].get("marca", ""),
+            "Stock Contifico": contifico[k].get("qty", 0),
+        }
+        for k in only_contifico_keys
+    ]
+
+    only_o_rows = [
+        {
+            "SKU": odoo[k]["sku"],
+            "Nombre Odoo": odoo[k].get("name", ""),
+            "Barcode": odoo[k].get("barcode", ""),
+            "Stock Odoo": odoo[k].get("qty", 0),
+        }
+        for k in only_odoo_keys
+    ]
+
+    both_rows = [
+        {
+            "SKU": contifico[k]["sku"],
+            "Nombre Contifico": contifico[k].get("name", ""),
+            "Nombre Odoo": odoo[k].get("name", ""),
+            "Barcode Odoo": odoo[k].get("barcode", ""),
+        }
+        for k in both_keys
+    ]
+
+    def write_csv(filepath: Path, rows: list[dict]) -> None:
+        if not rows:
+            filepath.write_text("(sin datos)\n", encoding="utf-8")
+            return
+        with filepath.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+
+    write_csv(output_folder / "sku_compare_only_contifico.csv", only_c_rows)
+    write_csv(output_folder / "sku_compare_only_odoo.csv", only_o_rows)
+    write_csv(output_folder / "sku_compare_in_both.csv", both_rows)
+
+    return {
+        "contifico_total_skus": len(contifico),
+        "odoo_total_skus": len(odoo),
+        "in_both": len(both_keys),
+        "only_in_contifico": len(only_contifico_keys),
+        "only_in_odoo": len(only_odoo_keys),
+        "source_type": source_type,
+        "preview_only_contifico": [r["SKU"] for r in only_c_rows[:30]],
+        "preview_only_odoo": [r["SKU"] for r in only_o_rows[:30]],
+        "preview_in_both": [r["SKU"] for r in both_rows[:30]],
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Main comparator
 # ──────────────────────────────────────────────────────────────────────────────
 

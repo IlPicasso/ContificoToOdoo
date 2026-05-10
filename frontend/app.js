@@ -331,19 +331,38 @@ function activateTab(name) {
 }
 document.querySelectorAll('.tab-btn').forEach((btn)=>btn.addEventListener('click',()=>activateTab(btn.dataset.tab)));
 
-// ── Comparador de inventario ────────────────────────────────────────────────
+// ── Comparador de inventario (Sección A) ────────────────────────────────────
 
 function setCompareStatus(msg) { const el=$('compareStatus'); if(el) el.textContent=msg||''; }
+
+// Mode toggle (archivos vs run_id)
+let _skuMode = 'files';
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    _skuMode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b === btn));
+    $('skuModeFilesPanel').classList.toggle('hidden', _skuMode !== 'files');
+    $('skuModeRunPanel').classList.toggle('hidden', _skuMode !== 'run');
+    $('generateMissingSection').classList.add('hidden');
+    $('compareStats').classList.add('hidden');
+    $('comparePreviews').innerHTML = '';
+    $('compareLinks').innerHTML = '';
+    setCompareStatus('');
+  });
+});
 
 function renderCompareStats(data) {
   const el = $('compareStats');
   if (!el) return;
+  // Support both field naming conventions (run-based vs standalone)
+  const ctfTotal  = data.contifico_total_skus ?? data.contifico_total ?? 0;
+  const odooTotal = data.odoo_total_skus ?? data.odoo_total ?? 0;
   el.innerHTML = `
-    <div class="stat-card stat-card--total"><div class="stat-num">${data.contifico_total}</div><div class="stat-lbl">Contífico</div></div>
-    <div class="stat-card stat-card--total"><div class="stat-num">${data.odoo_total}</div><div class="stat-lbl">Odoo</div></div>
+    <div class="stat-card stat-card--total"><div class="stat-num">${ctfTotal}</div><div class="stat-lbl">SKUs Contífico</div></div>
+    <div class="stat-card stat-card--total"><div class="stat-num">${odooTotal}</div><div class="stat-lbl">SKUs Odoo</div></div>
     <div class="stat-card stat-card--both"><div class="stat-num">${data.in_both}</div><div class="stat-lbl">Coinciden</div></div>
-    <div class="stat-card stat-card--contifico"><div class="stat-num">${data.only_in_contifico}</div><div class="stat-lbl">Solo Contífico</div></div>
-    <div class="stat-card stat-card--odoo"><div class="stat-num">${data.only_in_odoo}</div><div class="stat-lbl">Solo Odoo</div></div>
+    <div class="stat-card stat-card--contifico"><div class="stat-num">${data.only_in_contifico}</div><div class="stat-lbl">Faltan en Odoo</div></div>
+    <div class="stat-card stat-card--odoo"><div class="stat-num">${data.only_in_odoo}</div><div class="stat-lbl">Solo en Odoo</div></div>
   `;
   el.classList.remove('hidden');
 }
@@ -353,11 +372,11 @@ function renderComparePreviews(data) {
   if (!el) return;
   el.innerHTML = '';
   const sections = [
-    { key: 'preview_only_contifico', label: `Solo en Contífico — ${data.only_in_contifico} SKUs (en extracción pero no en Odoo)`, cls: 'stat-card--contifico' },
-    { key: 'preview_only_odoo',      label: `Solo en Odoo — ${data.only_in_odoo} SKUs (en Odoo pero no en extracción)`,   cls: 'stat-card--odoo' },
-    { key: 'preview_in_both',        label: `Coinciden — ${data.in_both} SKUs`,                                             cls: 'stat-card--both' },
+    { key: 'preview_only_contifico', label: `Faltan en Odoo — ${data.only_in_contifico} SKUs` },
+    { key: 'preview_only_odoo',      label: `Solo en Odoo — ${data.only_in_odoo} SKUs` },
+    { key: 'preview_in_both',        label: `Coinciden — ${data.in_both} SKUs` },
   ];
-  sections.forEach(({ key, label, cls }) => {
+  sections.forEach(({ key, label }) => {
     const items = data[key] || [];
     if (!items.length) return;
     const details = document.createElement('details');
@@ -381,17 +400,56 @@ function renderCompareLinks(files) {
   title.textContent = 'Descargar resultados';
   el.appendChild(title);
   const COMPARE_FILES = [
-    { key: 'only_in_contifico', label: 'Solo en Contífico (faltan importar en Odoo)', isImport: false },
-    { key: 'only_in_odoo',      label: 'Solo en Odoo (no vienen de esta extracción)',  isImport: false },
-    { key: 'in_both',           label: 'Coinciden en ambos sistemas',                  isImport: false },
+    { key: 'only_in_contifico', label: 'Faltan en Odoo — SKUs solo en Contífico' },
+    { key: 'only_in_odoo',      label: 'Solo en Odoo — no están en Contífico' },
+    { key: 'in_both',           label: 'Coinciden en ambos sistemas' },
   ];
-  COMPARE_FILES.forEach(({ key, label, isImport }) => {
+  COMPARE_FILES.forEach(({ key, label }) => {
     const path = files[key];
     if (!path) return;
-    el.appendChild(makeLink(`${base()}${path}`, label, isImport));
+    el.appendChild(makeLink(`${base()}${path}`, label, false));
   });
 }
 
+// Modo archivos directos — llama a /compare-skus
+$('executeSkuCompare').addEventListener('click', async () => {
+  try {
+    const odooInput = $('skuCompareOdooFile');
+    if (!odooInput?.files?.[0]) throw new Error('Debes seleccionar el archivo de inventario de Odoo.');
+    const ctfInput = $('skuCompareContificoFile');
+    if (!ctfInput?.files?.[0]) throw new Error('Debes seleccionar el archivo de inventario de Contífico.');
+    const sourceType = $('skuCompareSourceType').value;
+
+    $('executeSkuCompare').disabled = true;
+    $('compareStats').classList.add('hidden');
+    $('comparePreviews').innerHTML = '';
+    $('compareLinks').innerHTML = '';
+    $('generateMissingSection').classList.add('hidden');
+    setCompareStatus('Comparando SKUs...');
+
+    const form = new FormData();
+    form.append('odoo_file', odooInput.files[0]);
+    form.append('contifico_file', ctfInput.files[0]);
+    form.append('source_type', sourceType);
+
+    const resp = await fetch(`${base()}/odoo-migration/compare-skus`, { method: 'POST', body: form });
+    const text = await resp.text();
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+
+    renderCompareStats(data);
+    renderComparePreviews(data);
+    renderCompareLinks(data.files);
+    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}`);
+  } catch(e) {
+    setCompareStatus(`Error: ${e.message}`);
+    showErr(e);
+  } finally {
+    $('executeSkuCompare').disabled = false;
+  }
+});
+
+// Modo run_id — llama a /runs/{id}/compare-inventory (comportamiento original)
 $('executeCompare').addEventListener('click', async () => {
   try {
     const runId = $('compareRunId').value.trim();
@@ -413,7 +471,7 @@ $('executeCompare').addEventListener('click', async () => {
     renderCompareStats(data);
     renderComparePreviews(data);
     renderCompareLinks(data.files);
-    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Solo Contífico: ${data.only_in_contifico} · Solo Odoo: ${data.only_in_odoo}`);
+    setCompareStatus(`Comparación completada. Coinciden: ${data.in_both} · Faltan en Odoo: ${data.only_in_contifico} · Solo en Odoo: ${data.only_in_odoo}`);
     if (data.only_in_contifico > 0) $('generateMissingSection').classList.remove('hidden');
   } catch(e) {
     setCompareStatus(`Error: ${e.message}`);

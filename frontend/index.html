@@ -73,15 +73,47 @@
       <section id="tab-compare" class="tab-panel card">
         <h2>Comparador de Inventario</h2>
 
-        <!-- ── Sección A: comparador de SKUs (requiere run) ── -->
+        <!-- ── Sección A: comparador de SKUs ── -->
         <details open>
           <summary class="section-summary">A. Comparador de SKUs (presencia/ausencia)</summary>
-          <p class="muted" style="margin-top:8px">Compara los SKUs generados en una extracción Contífico contra los <code>default_code</code> de Odoo. No compara cantidades.</p>
-          <label>Run ID de la extracción Contífico</label>
-          <input id="compareRunId" placeholder="Run ID generado en Exportar" />
-          <label>Export de Odoo — <code>product.product</code> CSV (<code>default_code | name | barcode | qty_available</code>)</label>
-          <input id="compareOdooFile" type="file" accept=".csv,text/csv" />
-          <button id="executeCompare">Comparar SKUs</button>
+          <p class="muted" style="margin-top:8px">Qué productos tiene Contífico que <strong>faltan en Odoo</strong>, y cuáles están en Odoo pero no en Contífico. No compara cantidades.</p>
+
+          <!-- Selector de modo -->
+          <div class="mode-tabs">
+            <button class="mode-btn active" data-mode="files" id="skuModeFiles">Subir archivos directamente</button>
+            <button class="mode-btn" data-mode="run" id="skuModeRun">Usar Run ID (extracción previa)</button>
+          </div>
+
+          <!-- Modo A: archivos directos -->
+          <div id="skuModeFilesPanel">
+            <div class="stock-compare-grid">
+              <div>
+                <label>Export de Odoo — inventario CSV</label>
+                <p class="muted-small">Columnas: <code>Internal Reference</code> o <code>default_code</code></p>
+                <input id="skuCompareOdooFile" type="file" accept=".csv,text/csv" />
+              </div>
+              <div>
+                <label>Fuente Contífico</label>
+                <select id="skuCompareSourceType">
+                  <option value="csv_bodegas">ReporteSaldosInventarioPorBodega.csv (recomendado)</option>
+                  <option value="csv_simple">ReporteSaldosInventario.csv</option>
+                  <option value="raw_log">raw.log (respuestas JSON de API)</option>
+                </select>
+                <input id="skuCompareContificoFile" type="file" accept=".csv,.log,.json,.txt,text/csv" />
+              </div>
+            </div>
+            <button id="executeSkuCompare">Comparar SKUs</button>
+          </div>
+
+          <!-- Modo B: run_id (modo original) -->
+          <div id="skuModeRunPanel" class="hidden">
+            <label>Run ID de la extracción Contífico</label>
+            <input id="compareRunId" placeholder="Run ID generado en Exportar" />
+            <label>Export de Odoo — <code>product.product</code> CSV (<code>default_code | name | barcode | qty_available</code>)</label>
+            <input id="compareOdooFile" type="file" accept=".csv,text/csv" />
+            <button id="executeCompare">Comparar SKUs (por Run)</button>
+          </div>
+
           <p id="compareStatus" class="muted"></p>
           <div id="compareStats" class="compare-stats hidden"></div>
           <div id="compareLinks" class="phase-section"></div>
@@ -89,7 +121,7 @@
           <div id="generateMissingSection" class="hidden">
             <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb" />
             <h3 style="margin:0 0 4px">Generar importación de faltantes</h3>
-            <p class="muted">Genera CSVs filtrados listos para importar en Odoo con solo los productos que faltan.</p>
+            <p class="muted">Solo disponible con Run ID. Genera CSVs filtrados listos para importar en Odoo con los productos que faltan.</p>
             <button id="generateMissingImport">Generar CSVs de importación</button>
             <p id="generateMissingStatus" class="muted"></p>
             <div id="generateMissingLinks"></div>
