@@ -53,3 +53,13 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .warning-item--error{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
 .warning-item--warn{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
 .warning-item--info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+
+/* Stock comparator */
+.stat-card--warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+.stat-card--delta{background:#f5f3ff;border:1px solid #ddd6fe;color:#4c1d95}
+.section-summary{cursor:pointer;font-size:16px;font-weight:600;padding:4px 0;list-style:none}
+.section-summary::-webkit-details-marker{display:none}
+details>summary{user-select:none}
+.stock-compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:8px 0 12px}
+@media(max-width:700px){.stock-compare-grid{grid-template-columns:1fr}}
+.muted-small{font-size:11px;color:#6b7280;margin:2px 0 6px}

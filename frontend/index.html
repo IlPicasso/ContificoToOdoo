@@ -72,24 +72,61 @@
 
       <section id="tab-compare" class="tab-panel card">
         <h2>Comparador de Inventario</h2>
-        <p class="muted">Sube el export de <code>product.product</code> de Odoo (<code>default_code | name | barcode | qty_available</code>) para comparar contra los SKUs de la extracción de Contífico.</p>
-        <label>Run ID de la extracción Contífico</label>
-        <input id="compareRunId" placeholder="Run ID generado en Exportar" />
-        <label>Export de Odoo (product.product CSV)</label>
-        <input id="compareOdooFile" type="file" accept=".csv,text/csv" />
-        <button id="executeCompare">Comparar inventarios</button>
-        <p id="compareStatus" class="muted"></p>
-        <div id="compareStats" class="compare-stats hidden"></div>
-        <div id="compareLinks" class="phase-section"></div>
-        <div id="comparePreviews"></div>
-        <div id="generateMissingSection" class="hidden">
-          <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb" />
-          <h3 style="margin:0 0 4px">Generar importación de faltantes</h3>
-          <p class="muted">Genera CSVs filtrados listos para importar en Odoo con solo los productos que faltan.</p>
-          <button id="generateMissingImport">Generar CSVs de importación</button>
-          <p id="generateMissingStatus" class="muted"></p>
-          <div id="generateMissingLinks"></div>
-        </div>
+
+        <!-- ── Sección A: comparador de SKUs (requiere run) ── -->
+        <details open>
+          <summary class="section-summary">A. Comparador de SKUs (presencia/ausencia)</summary>
+          <p class="muted" style="margin-top:8px">Compara los SKUs generados en una extracción Contífico contra los <code>default_code</code> de Odoo. No compara cantidades.</p>
+          <label>Run ID de la extracción Contífico</label>
+          <input id="compareRunId" placeholder="Run ID generado en Exportar" />
+          <label>Export de Odoo — <code>product.product</code> CSV (<code>default_code | name | barcode | qty_available</code>)</label>
+          <input id="compareOdooFile" type="file" accept=".csv,text/csv" />
+          <button id="executeCompare">Comparar SKUs</button>
+          <p id="compareStatus" class="muted"></p>
+          <div id="compareStats" class="compare-stats hidden"></div>
+          <div id="compareLinks" class="phase-section"></div>
+          <div id="comparePreviews"></div>
+          <div id="generateMissingSection" class="hidden">
+            <hr style="margin:16px 0;border:none;border-top:1px solid #e5e7eb" />
+            <h3 style="margin:0 0 4px">Generar importación de faltantes</h3>
+            <p class="muted">Genera CSVs filtrados listos para importar en Odoo con solo los productos que faltan.</p>
+            <button id="generateMissingImport">Generar CSVs de importación</button>
+            <p id="generateMissingStatus" class="muted"></p>
+            <div id="generateMissingLinks"></div>
+          </div>
+        </details>
+
+        <hr style="margin:20px 0;border:none;border-top:2px solid #e5e7eb" />
+
+        <!-- ── Sección B: comparador de cantidades de stock ── -->
+        <details open>
+          <summary class="section-summary">B. Comparador de Stock (cantidades)</summary>
+          <p class="muted" style="margin-top:8px">Compara las cantidades de stock entre Odoo y Contífico. No necesita Run ID — sube directamente los dos archivos.</p>
+
+          <div class="stock-compare-grid">
+            <div>
+              <label>Export de Odoo — inventario CSV</label>
+              <p class="muted-small">Formatos aceptados: <code>Internal Reference | qty_available</code> o <code>default_code | qty_available</code></p>
+              <input id="stockCompareOdooFile" type="file" accept=".csv,text/csv" />
+            </div>
+            <div>
+              <label>Archivo de Contífico</label>
+              <select id="stockCompareSourceType">
+                <option value="csv_bodegas">ReporteSaldosInventarioPorBodega.csv (recomendado)</option>
+                <option value="csv_simple">ReporteSaldosInventario.csv</option>
+                <option value="raw_log">raw.log (respuestas JSON de API)</option>
+              </select>
+              <input id="stockCompareContificoFile" type="file" accept=".csv,.log,.json,.txt,text/csv" />
+            </div>
+          </div>
+
+          <button id="executeStockCompare">Comparar stock</button>
+          <p id="stockCompareStatus" class="muted"></p>
+
+          <div id="stockCompareStats" class="compare-stats hidden"></div>
+          <div id="stockCompareLinks" class="phase-section"></div>
+          <div id="stockComparePreviews"></div>
+        </details>
       </section>
 
       <section id="tab-preview" class="tab-panel">

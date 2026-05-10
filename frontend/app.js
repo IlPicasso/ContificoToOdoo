@@ -456,6 +456,112 @@ $('generateMissingImport').addEventListener('click', async () => {
   }
 });
 
+// ── Comparador de Stock (cantidades) ────────────────────────────────────────
+
+function setStockCompareStatus(msg) { const el=$('stockCompareStatus'); if(el) el.textContent=msg||''; }
+
+function renderStockCompareStats(data) {
+  const el = $('stockCompareStats');
+  if (!el) return;
+  const deltaSign = data.delta_global >= 0 ? '+' : '';
+  el.innerHTML = `
+    <div class="stat-card stat-card--total"><div class="stat-num">${data.contifico_total_skus}</div><div class="stat-lbl">SKUs Contífico</div></div>
+    <div class="stat-card stat-card--total"><div class="stat-num">${data.odoo_total_skus}</div><div class="stat-lbl">SKUs Odoo</div></div>
+    <div class="stat-card stat-card--both"><div class="stat-num">${data.match}</div><div class="stat-lbl">Stock igual</div></div>
+    <div class="stat-card stat-card--warn"><div class="stat-num">${data.differ}</div><div class="stat-lbl">Stock diferente</div></div>
+    <div class="stat-card stat-card--contifico"><div class="stat-num">${data.only_in_contifico}</div><div class="stat-lbl">Solo Contífico</div></div>
+    <div class="stat-card stat-card--odoo"><div class="stat-num">${data.only_in_odoo}</div><div class="stat-lbl">Solo Odoo</div></div>
+    <div class="stat-card stat-card--delta"><div class="stat-num">${deltaSign}${data.delta_global}</div><div class="stat-lbl">Delta global (Odoo−Ctf)</div></div>
+  `;
+  el.classList.remove('hidden');
+}
+
+function renderStockCompareLinks(files) {
+  const el = $('stockCompareLinks');
+  if (!el || !files) return;
+  el.innerHTML = '';
+  const title = document.createElement('div');
+  title.className = 'phase-title';
+  title.textContent = 'Descargar reportes de comparación de stock';
+  el.appendChild(title);
+  const FILES = [
+    { key: 'differ',            label: 'Stock DIFERENTE — diferencias a revisar (stock_compare_differ.csv)' },
+    { key: 'full_comparison',   label: 'Comparación completa — todos los SKUs coincidentes (stock_compare_full.csv)' },
+    { key: 'only_in_contifico', label: 'Solo en Contífico — faltan en Odoo (stock_compare_only_contifico.csv)' },
+    { key: 'only_in_odoo',      label: 'Solo en Odoo — no están en Contífico (stock_compare_only_odoo.csv)' },
+  ];
+  FILES.forEach(({ key, label }) => {
+    const path = files[key];
+    if (!path) return;
+    el.appendChild(makeLink(`${base()}${path}`, label, false));
+  });
+}
+
+function renderStockComparePreviews(data) {
+  const el = $('stockComparePreviews');
+  if (!el) return;
+  el.innerHTML = '';
+  const sections = [
+    { key: 'preview_differ',           label: `Stock diferente — ${data.differ} SKUs`,           cls: 'stat-card--warn' },
+    { key: 'preview_only_contifico',   label: `Solo en Contífico — ${data.only_in_contifico} SKUs`, cls: 'stat-card--contifico' },
+    { key: 'preview_only_odoo',        label: `Solo en Odoo — ${data.only_in_odoo} SKUs`,        cls: 'stat-card--odoo' },
+  ];
+  sections.forEach(({ key, label }) => {
+    const items = data[key] || [];
+    if (!items.length) return;
+    const details = document.createElement('details');
+    details.className = 'compare-preview';
+    const summary = document.createElement('summary');
+    summary.textContent = label + (items.length === 30 ? ' (mostrando primeros 30)' : '');
+    details.appendChild(summary);
+    const ul = document.createElement('ul');
+    items.forEach(sku => { const li = document.createElement('li'); li.textContent = sku; ul.appendChild(li); });
+    details.appendChild(ul);
+    el.appendChild(details);
+  });
+}
+
+$('executeStockCompare').addEventListener('click', async () => {
+  try {
+    const odooInput = $('stockCompareOdooFile');
+    if (!odooInput?.files?.[0]) throw new Error('Debes seleccionar el archivo de inventario de Odoo.');
+    const ctfInput = $('stockCompareContificoFile');
+    if (!ctfInput?.files?.[0]) throw new Error('Debes seleccionar el archivo de inventario de Contífico.');
+    const sourceType = $('stockCompareSourceType').value;
+
+    $('executeStockCompare').disabled = true;
+    $('stockCompareStats').classList.add('hidden');
+    $('stockComparePreviews').innerHTML = '';
+    $('stockCompareLinks').innerHTML = '';
+    setStockCompareStatus('Comparando stock...');
+
+    const form = new FormData();
+    form.append('odoo_file', odooInput.files[0]);
+    form.append('contifico_file', ctfInput.files[0]);
+    form.append('source_type', sourceType);
+
+    const resp = await fetch(`${base()}/odoo-migration/compare-stock`, { method: 'POST', body: form });
+    const text = await resp.text();
+    let data; try { data = JSON.parse(text); } catch { data = text; }
+    if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+
+    renderStockCompareStats(data);
+    renderStockCompareLinks(data.files);
+    renderStockComparePreviews(data);
+    setStockCompareStatus(
+      `Comparación completada. ` +
+      `Stock igual: ${data.match} · Diferente: ${data.differ} · ` +
+      `Solo Contífico: ${data.only_in_contifico} · Solo Odoo: ${data.only_in_odoo} · ` +
+      `Delta global: ${data.delta_global >= 0 ? '+' : ''}${data.delta_global} unidades`
+    );
+  } catch(e) {
+    setStockCompareStatus(`Error: ${e.message}`);
+    showErr(e);
+  } finally {
+    $('executeStockCompare').disabled = false;
+  }
+});
+
 // ── Merger Variantes ────────────────────────────────────────────────────────
 
 function setMergerStatus(msg) { const el=$('mergerStatus'); if(el) el.textContent=msg||''; }
