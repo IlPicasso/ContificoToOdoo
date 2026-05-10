@@ -5,7 +5,7 @@ from pathlib import Path
 from threading import Lock, Thread
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse
 
 from ..contifico import ContificoClient
@@ -13,6 +13,7 @@ from ..dependencies import get_contifico_client
 from ..config import get_settings
 from .rules import CATEGORY_ALIASES
 from .service import OdooMigrationService
+from .stock_comparator import compare_stock
 from .stock_worker import StockWorker
 
 router = APIRouter(prefix="/odoo-migration", tags=["Odoo Migration"])
@@ -507,3 +508,93 @@ def resume_stock(run_id: str):
         raise HTTPException(status_code=404, detail='Worker no encontrado')
     w.resume(); STOCK_JOBS[run_id] = {**STOCK_JOBS.get(run_id, {}), 'status': 'running'}
     return STOCK_JOBS[run_id]
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Comparador de inventario (standalone – no requiere run_id)
+# ──────────────────────────────────────────────────────────────────────────────
+
+COMPARE_JOBS: dict[str, dict] = {}
+COMPARE_LOCK = Lock()
+
+
+def _compare_output_root() -> Path:
+    return Path("backend/data/odoo_migration/stock_compare")
+
+
+@router.post("/compare-stock")
+async def compare_stock_endpoint(
+    odoo_file: UploadFile = File(..., description="Export de inventario Odoo (CSV)"),
+    contifico_file: UploadFile = File(..., description="Archivo de inventario Contífico"),
+    source_type: str = Form(
+        "csv_bodegas",
+        description="Tipo de fuente Contífico: csv_simple | csv_bodegas | raw_log",
+    ),
+):
+    """Compara cantidades de stock entre un export de Odoo y un archivo de inventario Contífico.
+
+    **source_type**:
+    - `csv_simple`  → ReporteSaldosInventario.csv
+    - `csv_bodegas` → ReporteSaldosInventarioPorBodega.csv (incluye desglose por bodega)
+    - `raw_log`     → raw.log (respuestas JSON de la API de Contífico)
+
+    Genera cuatro CSVs:
+    - `stock_compare_full.csv`             – todos los SKUs presentes en ambos sistemas
+    - `stock_compare_differ.csv`           – solo los SKUs con diferencias de stock
+    - `stock_compare_only_contifico.csv`   – SKUs solo en Contífico (faltan en Odoo)
+    - `stock_compare_only_odoo.csv`        – SKUs solo en Odoo (faltan en Contífico)
+    """
+    if source_type not in ("csv_simple", "csv_bodegas", "raw_log"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"source_type inválido: {source_type!r}. Usa: csv_simple | csv_bodegas | raw_log",
+        )
+
+    job_id = uuid4().hex[:12]
+    output_folder = _compare_output_root() / job_id
+    output_folder.mkdir(parents=True, exist_ok=True)
+
+    # Persist uploaded files
+    odoo_path = output_folder / "odoo_upload.csv"
+    contifico_path = output_folder / f"contifico_upload_{source_type}"
+    odoo_path.write_bytes(await odoo_file.read())
+    contifico_path.write_bytes(await contifico_file.read())
+
+    try:
+        result = compare_stock(
+            odoo_path=odoo_path,
+            contifico_path=contifico_path,
+            source_type=source_type,
+            output_folder=output_folder,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    with COMPARE_LOCK:
+        COMPARE_JOBS[job_id] = {"job_id": job_id, **result}
+
+    base = f"/odoo-migration/compare-stock/{job_id}/files"
+    return {
+        "job_id": job_id,
+        **result,
+        "files": {
+            "full_comparison": f"{base}/stock_compare_full.csv",
+            "differ": f"{base}/stock_compare_differ.csv",
+            "only_in_contifico": f"{base}/stock_compare_only_contifico.csv",
+            "only_in_odoo": f"{base}/stock_compare_only_odoo.csv",
+        },
+    }
+
+
+@router.get("/compare-stock/{job_id}/files/{filename}")
+def download_compare_file(job_id: str, filename: str):
+    """Descarga uno de los CSVs generados por el comparador de stock."""
+    safe_name = Path(filename).name  # strip any path traversal
+    file_path = _compare_output_root() / job_id / safe_name
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(
+        path=file_path,
+        filename=safe_name,
+        media_type="text/csv; charset=utf-8",
+    )
